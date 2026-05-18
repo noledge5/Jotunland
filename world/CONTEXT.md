@@ -6,6 +6,9 @@ The known world's supercontinent. C-shaped, opening southward. Creates a vast in
 ## Vhaelor
 The central island within the Binnenmeer. A volcanic, rainforest-covered evolutionary pressure chamber. Extreme biodiversity, toxic flora, frequent Essenz storms, unstable weather. Origin point of many apex predator species that later migrated to the continent. Not uncivilized — isolated Stammeskulturen and coastal settlements exist — but impossible to durably control by outside powers.
 
+## Scientific Level
+Early medieval globally — no systematic science, no universities, no empirical method. Knowledge is oral, local, and practical. Regional variation: the eastern empire has proto-scholarly traditions (scribes, chroniclers, early natural philosophers in monastery-equivalents), the north explains phenomena through mythology and clan wisdom, Vhaelor's indigenous cultures hold deep empirical knowledge of local ecology and Essenz behavior passed down through ritual — accurate but unwritten. Everywhere, Essenz is partially understood through practice but not theorized. Nobody knows why Essenz storms happen, only how to survive and exploit them.
+
 ## Monster
 Not a narrative category but a biological one. Any large non-domesticated fauna capable of threatening humans. Monsters follow real ecological rules: predator-prey dynamics, territory, migration, breeding seasons, competition pressure. Apex predators originate disproportionately from Vhaelor and spread outward. Monster presence in a region is determined by biome, food chain, and Essenz concentration — not by zone designation.
 
