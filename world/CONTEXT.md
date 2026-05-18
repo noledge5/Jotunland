@@ -22,7 +22,7 @@ The seven major political entities of Avarr. Each spans hundreds of km and has i
 | **Waldreiche** | Small feudal kingdoms | x=200k–900k, y=400k–1800k |
 | **Vhaelor** | Indigenous tribal cultures | island ~x=1500k, y=1350k |
 
-Names are working titles — final names to be set during world generation.
+Names are working titles — final names to be set during world generation. Each realm contains 20–50 settlements of varying size (capital, provincial cities, towns, villages, outposts). All realms are built to Region level. City-area and zone detail is filled by the world-generation LLM. The Ostimperium is the first realm to be built to full scene level as the starting region for gameplay.
 
 ## Climate Zones
 Distributed by latitude (y-coordinate) across Avarr:
