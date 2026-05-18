@@ -29,6 +29,9 @@ Bound Essenz is stored in precious crystals and gemstones (diamonds, sapphires, 
 ## Essenz Sources
 Locations or events from which free Essenz can be harvested into storage crystals: Essenz storms (large yield, dangerous, unpredictable), volcanic vents and hot springs (steady, location-bound), freshly killed monster tissue (portable but time-sensitive — Essenz dissipates rapidly after death), and deep crystal vein formations (slow passive accumulation in-situ).
 
+## Essenz Decay
+Free Essenz not immediately bound to a crystal dissipates within minutes to hours — monster tissue must be processed quickly after a kill. Bound Essenz decay rate depends on crystal quality: low-grade crystals (cloudy quartz, rough stones) lose charge over weeks to months; high-grade crystals (pure diamond, fine sapphire) remain stable for years to decades. This makes premium gemstones both larger and more durable storage — not just bigger batteries but more reliable ones. Cheap crystals are consumables; fine stones are capital assets.
+
 ## Essenz Appearance
 Free Essenz is invisible at low concentration. At high concentration it manifests as physical phenomena: shimmer like heat distortion in air, faint blue crackling during Essenz storms, a subtle inner glow in saturated crystal veins. Bound Essenz in a charged gemstone produces a faint internal luminescence visible in low light. Essenz-saturated monster tissue has a subtly unnatural color under direct light.
 
