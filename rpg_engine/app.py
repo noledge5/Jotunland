@@ -119,6 +119,9 @@ def new_game():
 
     char_name = data['name'].strip()
     char_class = data['class'].strip()
+    api_key = data.get('api_key') or None
+    model = data.get('model') or None
+    provider = data.get('provider', 'anthropic')
 
     skills_data = _load_skills()
     valid_classes = list(skills_data['class_starting_skills'].keys())
@@ -177,7 +180,7 @@ def new_game():
     # Generate opening narration
     initial_engine_result = {"needs_roll": False, "skill_result": None, "status": "new_game"}
     context_prompt = build_context(playthrough_id, "I arrive at the Goldenes Schiff and look around.", initial_engine_result)
-    narrator_output = generate_narration(context_prompt)
+    narrator_output = generate_narration(context_prompt, api_key=api_key, model=model, provider=provider)
     narration = narrator_output.get("narration", "You stand in the Goldenes Schiff, a familiar crossroads of travelers and secrets.")
 
     # Log the opening turn
@@ -251,8 +254,13 @@ def take_turn():
     scene_name = scene_row['name'] if scene_row else current_scene_id
     conn2.close()
 
+    api_key = data.get('api_key') or None
+    model = data.get('model') or None
+    provider = data.get('provider', 'anthropic')
+
     # 2. Classify action (LLM Call #1)
-    classifier_output = classify_action(player_input, skill_list, scene_name, in_combat)
+    classifier_output = classify_action(player_input, skill_list, scene_name, in_combat,
+                                        api_key=api_key, model=model, provider=provider)
 
     # 3. Resolve mechanics
     skill_result = None
@@ -278,7 +286,7 @@ def take_turn():
     context_prompt = build_context(playthrough_id, player_input, engine_result)
 
     # 5. Generate narration (LLM Call #2)
-    narrator_output = generate_narration(context_prompt)
+    narrator_output = generate_narration(context_prompt, api_key=api_key, model=model, provider=provider)
     narration = narrator_output.get("narration", "The moment passes.")
 
     # 6. Apply narrator output to DB
@@ -311,7 +319,8 @@ def take_turn():
         recent_narrations = [t['narration'] for t in reversed(recent_turns)]
         p = conn3.execute("SELECT name, class, level FROM player WHERE playthrough_id=?", (playthrough_id,)).fetchone()
         player_summary = f"{p['name']} the {p['class']} (Level {p['level']})"
-        synopsis = generate_session_synopsis(recent_narrations, player_summary)
+        synopsis = generate_session_synopsis(recent_narrations, player_summary,
+                                              api_key=api_key, model=model, provider=provider)
         conn3.execute(
             "INSERT INTO session_log (playthrough_id, summary) VALUES (?,?)",
             (playthrough_id, synopsis)

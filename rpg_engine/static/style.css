@@ -145,6 +145,38 @@ html, body {
 .save-class { color: var(--text-muted); }
 .save-level { color: var(--accent2); min-width: 3rem; text-align: right; }
 
+/* ── API Key / Provider ───────────────────────────────── */
+.provider-btn {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text); padding: 0.4rem 0.9rem;
+  cursor: pointer; font-family: var(--font-ui); font-size: 0.85rem;
+  transition: border-color 0.15s, color 0.15s;
+}
+.provider-btn:hover { border-color: var(--accent2); }
+.provider-btn.selected { border-color: var(--accent); color: var(--accent); background: #2a2010; }
+
+#api-key {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text); padding: 0.6rem 2.4rem 0.6rem 0.8rem;
+  font-size: 0.9rem; font-family: var(--font-ui); outline: none;
+}
+#api-key:focus { border-color: var(--accent); }
+
+#key-toggle {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer; font-size: 14px;
+  opacity: 0.5; padding: 0;
+}
+#key-toggle:hover { opacity: 1; }
+
+.model-suggestion {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 3px; color: var(--text-muted); padding: 2px 7px;
+  font-size: 0.75rem; font-family: var(--font-ui); cursor: pointer;
+  white-space: nowrap;
+}
+.model-suggestion:hover { border-color: var(--accent2); color: var(--text); }
+
 /* ── Buttons ──────────────────────────────────────────── */
 .btn-primary {
   background: var(--accent);

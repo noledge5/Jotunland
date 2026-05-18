@@ -22,6 +22,22 @@
           <!-- populated by JS -->
         </div>
       </div>
+      <div class="form-group">
+        <label>LLM Provider</label>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button type="button" class="provider-btn selected" data-provider="anthropic" onclick="selectProvider('anthropic')">Anthropic</button>
+          <button type="button" class="provider-btn" data-provider="openrouter" onclick="selectProvider('openrouter')">OpenRouter</button>
+        </div>
+        <div style="position:relative;">
+          <input type="password" id="api-key" placeholder="API key (stored in browser only)" autocomplete="off">
+          <button type="button" id="key-toggle" onclick="toggleKeyVisibility()" title="Show/hide key">👁</button>
+        </div>
+        <div id="openrouter-model-row" style="margin-top:8px;display:none;">
+          <input type="text" id="or-model" placeholder="Model (e.g. anthropic/claude-sonnet-4-5)" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:0.6rem 0.8rem;font-size:0.9rem;font-family:var(--font-ui);outline:none;">
+          <div id="model-suggestions" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+        </div>
+      </div>
+
       <div id="modal-error" class="error-msg hidden"></div>
       <button id="start-btn" class="btn-primary">Begin</button>
       <div id="modal-loading" class="spinner hidden"></div>
@@ -91,11 +107,90 @@
     let state = {
       playthroughId: null,
       selectedClass: null,
-      gameState: null
+      gameState: null,
+      provider: 'anthropic',
+      apiKey: '',
+      model: ''
     };
+
+    const OPENROUTER_MODELS = [
+      'anthropic/claude-sonnet-4-5',
+      'anthropic/claude-3-5-haiku',
+      'openai/gpt-4o',
+      'openai/gpt-4o-mini',
+      'google/gemini-flash-1.5',
+      'meta-llama/llama-3.3-70b-instruct',
+      'mistralai/mistral-large',
+      'deepseek/deepseek-chat',
+    ];
+
+    // ── Provider / Key UI ──────────────────────────────────
+    function selectProvider(p) {
+      state.provider = p;
+      document.querySelectorAll('.provider-btn').forEach(b => {
+        b.classList.toggle('selected', b.dataset.provider === p);
+      });
+      const modelRow = document.getElementById('openrouter-model-row');
+      modelRow.style.display = p === 'openrouter' ? 'block' : 'none';
+      if (p === 'openrouter' && !document.getElementById('model-suggestions').children.length) {
+        renderModelSuggestions();
+      }
+      saveSettings();
+    }
+
+    function renderModelSuggestions() {
+      const el = document.getElementById('model-suggestions');
+      el.innerHTML = '';
+      OPENROUTER_MODELS.forEach(m => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'model-suggestion';
+        btn.textContent = m;
+        btn.onclick = () => { document.getElementById('or-model').value = m; saveSettings(); };
+        el.appendChild(btn);
+      });
+    }
+
+    function toggleKeyVisibility() {
+      const inp = document.getElementById('api-key');
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+    }
+
+    function saveSettings() {
+      const key = document.getElementById('api-key').value;
+      const model = document.getElementById('or-model')?.value || '';
+      state.apiKey = key;
+      state.model = model;
+      try {
+        localStorage.setItem('rpg_provider', state.provider);
+        localStorage.setItem('rpg_api_key', key);
+        localStorage.setItem('rpg_model', model);
+      } catch(e) {}
+    }
+
+    function loadSettings() {
+      try {
+        const p = localStorage.getItem('rpg_provider') || 'anthropic';
+        const k = localStorage.getItem('rpg_api_key') || '';
+        const m = localStorage.getItem('rpg_model') || '';
+        state.provider = p;
+        state.apiKey = k;
+        state.model = m;
+        document.getElementById('api-key').value = k;
+        if (document.getElementById('or-model')) document.getElementById('or-model').value = m;
+        selectProvider(p);
+      } catch(e) {}
+    }
+
+    // Save on input change
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('api-key').addEventListener('input', saveSettings);
+      document.getElementById('or-model')?.addEventListener('input', saveSettings);
+    });
 
     // ── Init ───────────────────────────────────────────────
     async function init() {
+      loadSettings();
       await loadClasses();
       await loadSaves();
     }
@@ -160,13 +255,20 @@
 
       if (!name) { showModalError('Enter a character name.'); return; }
       if (!cls) { showModalError('Select a class.'); return; }
+      saveSettings();
+      if (!state.apiKey && state.provider === 'openrouter') { showModalError('Enter an OpenRouter API key.'); return; }
 
       setModalLoading(true);
       try {
         const res = await fetch('/api/new_game', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ name, class: cls })
+          body: JSON.stringify({
+            name, class: cls,
+            api_key: state.apiKey || undefined,
+            model: state.model || undefined,
+            provider: state.provider
+          })
         });
         const data = await res.json();
         if (!res.ok) { showModalError(data.error || 'Error starting game.'); return; }
@@ -290,7 +392,13 @@
         const res = await fetch('/api/turn', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ playthrough_id: state.playthroughId, input: text })
+          body: JSON.stringify({
+            playthrough_id: state.playthroughId,
+            input: text,
+            api_key: state.apiKey || undefined,
+            model: state.model || undefined,
+            provider: state.provider
+          })
         });
         const data = await res.json();
         removeSpinner(spinner);
