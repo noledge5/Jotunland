@@ -16,7 +16,7 @@ One complete player interaction cycle: player input → engine resolution → co
 A lightweight, structured LLM call that receives the raw player input, the character's current skill list, and scene context. It decides (a) whether the action requires a dice roll at all, and (b) if so, which skill applies. Returns structured JSON: `{ "skill": "stealth", "needs_roll": true }` or `{ "needs_roll": false }`. Does not use a hardcoded action-type enum — the Skill List is the rulebook. Makes no decisions about outcomes.
 
 ## Skill List
-The canonical set of skills available in the game (e.g. Stealth, Persuasion, Lockpick, Riding). Defined once as game config. Each character has a level per skill stored in the DB. The Action Classifier maps player intent to a skill from this list — it does not invent skill names.
+The canonical set of skills available in the game (e.g. Stealth, Persuasion, Lockpick, Riding). Defined once as game config. Each character has a level per skill stored in the DB. The Action Classifier maps player intent to a skill from this list — it does not invent skill names. A character with no level in a skill may still attempt the action — they roll without a modifier. XP is awarded for every attempted action regardless of outcome.
 
 ## Mechanical Resolution
 All game outcomes — damage, skill check results, hit/miss, XP gain — are determined by the Engine using dice rolls and rules config before the LLM is ever called. The LLM receives the already-computed result and narrates it. The LLM never decides or modifies a mechanical outcome.
