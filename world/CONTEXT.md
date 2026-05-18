@@ -23,5 +23,14 @@ An Essenz ability that alters the chemical composition of matter, converting one
 ## Force Projection
 An Essenz ability that releases bound Essenz as kinetic force waves, either propelling the user in a chosen direction or moving inanimate objects without physical contact. Living matter — humans, animals, monsters — cannot be moved by Force Projection. Only inanimate objects are affected.
 
+## Essenz Storage
+Bound Essenz is stored in precious crystals and gemstones (diamonds, sapphires, rubies, etc.). A raw gemstone contains no Essenz by default but functions as a natural attractor — it slowly draws ambient free Essenz from its surroundings and accumulates it over time. Gems can also be actively charged from concentrated sources: Essenz storms, volcanic vents, hot springs, or freshly killed monsters. Storage capacity is determined by the gemstone's purity, quality, and material type — a flawless diamond holds vastly more than a cloudy quartz. This makes gemstone mining a strategic resource industry, not merely a luxury one. A gem mine is Essenz infrastructure.
+
+## Essenz Sources
+Locations or events from which free Essenz can be harvested into storage crystals: Essenz storms (large yield, dangerous, unpredictable), volcanic vents and hot springs (steady, location-bound), freshly killed monster tissue (portable but time-sensitive — Essenz dissipates rapidly after death), and deep crystal vein formations (slow passive accumulation in-situ).
+
+## Essenz Appearance
+Free Essenz is invisible at low concentration. At high concentration it manifests as physical phenomena: shimmer like heat distortion in air, faint blue crackling during Essenz storms, a subtle inner glow in saturated crystal veins. Bound Essenz in a charged gemstone produces a faint internal luminescence visible in low light. Essenz-saturated monster tissue has a subtly unnatural color under direct light.
+
 ## Essenz Users
 Individuals with the trained ability to apply Essenz beyond basic Enhancement — i.e., capable of Transmutation or Force Projection. Rare. Generally wealthy and politically powerful, because their abilities create economic advantages that compound over time. Social recognition and legal status vary by region.
