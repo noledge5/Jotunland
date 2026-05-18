@@ -69,7 +69,15 @@ The structured JSON document returned by the Narrator LLM each turn. Contains: `
 A lightweight, location-attached placeholder representing unnamed or background characters in a scene (e.g. "a group of rowdy sailors", "two hooded figures in the corner"). World-Scoped — added to the canonical world when generated. Does not have a full NPC entry. When the player actively interacts with, approaches, or observes a Group Entry, the Narrator generates a full NPC from it and the Group Entry is replaced or remains as residual background. Keeps scenes populated and immersive without bloating the DB with full NPC records for every background character.
 
 ## Coordinate System
-A 500×500 km world map with meter-precise x/y coordinates (integers, 0–500000). Every location — region, zone, scene, generated sub-location — has a fixed coordinate anchor stored in the DB. The player's current position is tracked as x/y coordinates updated each turn. The Layer system maps to coordinate ranges: Layer B = region (~100×100 km), Layer C = zone/town (~5×5 km), Layer D = scene (building/room level). The Context Builder uses player coordinates to determine which layers to load.
+A 3000×3000 km world map. Coordinates are integers in meters (0–3,000,000 per axis). Every entity — realm, region, city area, zone, scene, sub-scene — has a fixed coordinate anchor stored in the DB. Realms and regions also have bounding boxes. The player's current position is a single x/y point updated each turn. The Context Builder uses player coordinates to determine which layers to load by checking bounding boxes from largest to smallest scope.
+
+## Geographic Hierarchy
+Five nested levels of geographic scope, each with coordinate ranges:
+- **Realm** (Reich) — a kingdom or empire. Spans hundreds of km. Has a bounding box. Multiple realms exist on Avarr.
+- **Region** — a geographic sub-division of a Realm. 80–100 km across. Has a bounding box. Maps to Layer B.
+- **City Area** (Stadtgebiet) — an urban zone and its immediate surroundings. Up to 10 km across. Has a bounding box.
+- **Zone** — a district, neighborhood, or landmark within a City Area or wilderness. 1–3 km across. Maps to Layer C.
+- **Scene** — a specific building, street, clearing, or room. Precise coordinate anchor. Maps to Layer D.
 
 ## Playthrough
 A single character's run through the world. Starts with the world in its canonical default state. All Character-Scoped content (generated NPCs, World State Flags, relationship data, session synopses) belongs to exactly one Playthrough. When a new Playthrough begins, the world resets to its default — previous character's changes do not carry over.
