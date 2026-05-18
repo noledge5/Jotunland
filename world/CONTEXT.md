@@ -9,6 +9,21 @@ The large warm inner sea enclosed by Avarr's C-shape. Tropical at its inner coas
 ## Vhaelor
 The central island within the Binnenmeer. Coordinate anchor approximately x=1,500,000, y=1,350,000. Diameter ~300 km. A volcanic, rainforest-covered evolutionary pressure chamber. Extreme biodiversity, toxic flora, frequent Essenz storms, unstable weather. Origin point of many apex predator species that later migrated to the continent. Not uncivilized — isolated Stammeskulturen and coastal settlements exist — but impossible to durably control by outside powers.
 
+## Realms
+The seven major political entities of Avarr. Each spans hundreds of km and has its own government type, culture, and relationship to Essenz:
+
+| Realm | Type | Coordinates (approx.) |
+|---|---|---|
+| **Nordklans** | Clan confederation | x=400k–1800k, y=2500k–3000k |
+| **Gebirgsstaaten** | Military trade states | x=1800k–2600k, y=2000k–2900k |
+| **Ostimperium** | Empire | x=2000k–2800k, y=1200k–2200k |
+| **Steppenvölker** | Nomadic clans | x=1800k–2800k, y=400k–1000k |
+| **Binnenhandelsliga** | City-state league | x=400k–1600k, y=800k–1500k |
+| **Waldreiche** | Small feudal kingdoms | x=200k–900k, y=400k–1800k |
+| **Vhaelor** | Indigenous tribal cultures | island ~x=1500k, y=1350k |
+
+Names are working titles — final names to be set during world generation.
+
 ## Climate Zones
 Distributed by latitude (y-coordinate) across Avarr:
 - **y=2,500,000–3,000,000** — Subarctic: northern fjords, conifer forests, long winters
