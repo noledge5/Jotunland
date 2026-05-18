@@ -12,6 +12,9 @@ The authoritative record of all facts about the current game world: player stats
 ## Turn
 One complete player interaction cycle: player input → engine resolution → context assembly → LLM narration → state update.
 
+## Action Classifier
+A lightweight, structured LLM call that receives only the raw player input and returns a JSON object identifying the action type (e.g. COMBAT_ACTION, SKILL_CHECK, MOVEMENT) and relevant parameters (target, skill, item). It has no access to game state and makes no decisions about outcomes. Runs before the Engine resolves anything.
+
 ## Mechanical Resolution
 All game outcomes — damage, skill check results, hit/miss, XP gain — are determined by the Engine using dice rolls and rules config before the LLM is ever called. The LLM receives the already-computed result and narrates it. The LLM never decides or modifies a mechanical outcome.
 
