@@ -13,7 +13,10 @@ The authoritative record of all facts about the current game world: player stats
 One complete player interaction cycle: player input → engine resolution → context assembly → LLM narration → state update.
 
 ## Action Classifier
-A lightweight, structured LLM call that receives only the raw player input and returns a JSON object identifying the action type (e.g. COMBAT_ACTION, SKILL_CHECK, MOVEMENT) and relevant parameters (target, skill, item). It has no access to game state and makes no decisions about outcomes. Runs before the Engine resolves anything.
+A lightweight, structured LLM call that receives the raw player input, the character's current skill list, and scene context. It decides (a) whether the action requires a dice roll at all, and (b) if so, which skill applies. Returns structured JSON: `{ "skill": "stealth", "needs_roll": true }` or `{ "needs_roll": false }`. Does not use a hardcoded action-type enum — the Skill List is the rulebook. Makes no decisions about outcomes.
+
+## Skill List
+The canonical set of skills available in the game (e.g. Stealth, Persuasion, Lockpick, Riding). Defined once as game config. Each character has a level per skill stored in the DB. The Action Classifier maps player intent to a skill from this list — it does not invent skill names.
 
 ## Mechanical Resolution
 All game outcomes — damage, skill check results, hit/miss, XP gain — are determined by the Engine using dice rolls and rules config before the LLM is ever called. The LLM receives the already-computed result and narrates it. The LLM never decides or modifies a mechanical outcome.
