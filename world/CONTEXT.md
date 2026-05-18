@@ -9,6 +9,22 @@ The large warm inner sea enclosed by Avarr's C-shape. Tropical at its inner coas
 ## Vhaelor
 The central island within the Binnenmeer. Coordinate anchor approximately x=1,500,000, y=1,350,000. Diameter ~300 km. A volcanic, rainforest-covered evolutionary pressure chamber. Extreme biodiversity, toxic flora, frequent Essenz storms, unstable weather. Origin point of many apex predator species that later migrated to the continent. Not uncivilized — isolated Stammeskulturen and coastal settlements exist — but impossible to durably control by outside powers.
 
+## Ostimperium
+The dominant power of Avarr. Governed by a hereditary Emperor supported by appointed Provincial Governors and an advisory Senate of noble and merchant houses (consultative, no veto). Internally unstable due to constant competition between Governors for imperial favor and resources. Seat of Avarr's densest Essenz processing industry, largest cities, and most advanced proto-scholarly tradition.
+
+**Capital: Vareth** — x=2,350,000, y=1,600,000. Built at the delta of the Avar river where it meets the Binnenmeer. The largest city on the continent. Imperial palace, Senate hall, the Grand Weighing Houses (Essenz trading exchanges), military academies. Population dense, politics brutal, wealth extreme.
+
+**Regions (9):** The Ostimperium is divided into 9 provinces, each governed by an appointed Governor:
+1. **Deltaprovince** — Vareth and the river delta. Political and commercial heart.
+2. **Mittelmark** — central plains, breadbasket, large farming towns.
+3. **Nordmark** — border with the Gebirgsstaaten, fortress towns, mercenary trade.
+4. **Südküste** — southern Binnenmeer coast, fishing fleets, smuggling.
+5. **Flusstal** — upper Avar river valley, vineyards, minor nobility.
+6. **Ostmarsch** — eastern frontier, sparse, military outposts.
+7. **Seeprovinz** — archipelago of small Binnenmeer islands, naval power.
+8. **Bergrand** — foothills bordering the Gebirgsstaaten, mining towns.
+9. **Tiefebene** — deep interior plains, agricultural surplus, grain trade.
+
 ## Realms
 The seven major political entities of Avarr. Each spans hundreds of km and has its own government type, culture, and relationship to Essenz:
 
