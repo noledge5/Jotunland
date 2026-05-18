@@ -47,6 +47,9 @@ Determines the persistence scope of an NPC. Two fixed tiers:
 - **Static NPC** — World-Scoped. Pre-authored before play begins. Has a defined role in the world's political and social structure (guard captain, duke, guild master). Exists independently of any playthrough. Participates in world-level events.
 - **Generated NPC** — Character-Scoped by default. Created by the LLM during play when the Game State has no authored NPC for a situation. Can be manually promoted by the player to World-Scoped, after which they persist across playthroughs.
 
+## Location Tier
+Determines the persistence scope of a location. LLM-generated locations (a new alley, a hidden shrine, a sub-room in a warehouse) are immediately World-Scoped — they enter the canonical world and exist for all future Playthroughs. Only changes to existing locations (burned down, ownership changed, locked) are tracked as Character-Scoped World State Flags.
+
 ## NPC Schedule
 The times and locations where an NPC can be found. Stored in the DB as part of the NPC entry. The Context Builder uses the schedule to determine whether an NPC is present at the current location and time before loading them into context. An NPC not on shift is not in the scene — regardless of their home location.
 
@@ -55,6 +58,9 @@ A flag (`in_combat=true`) set in the DB when combat begins. While active, each t
 
 ## Combat Status
 The state of a combatant during or after combat. Values: `active` (fighting normally), `incapacitated` (unconscious, broken, unable to fight — not dead), `fled`, `surrendered`, `dead`. Tracked per combatant in the DB. Injuries (e.g. broken arm, leg wound) apply roll modifiers independently of HP and are also tracked in the DB.
+
+## Coordinate System
+A 500×500 km world map with meter-precise x/y coordinates (integers, 0–500000). Every location — region, zone, scene, generated sub-location — has a fixed coordinate anchor stored in the DB. The player's current position is tracked as x/y coordinates updated each turn. The Layer system maps to coordinate ranges: Layer B = region (~100×100 km), Layer C = zone/town (~5×5 km), Layer D = scene (building/room level). The Context Builder uses player coordinates to determine which layers to load.
 
 ## Playthrough
 A single character's run through the world. Starts with the world in its canonical default state. All Character-Scoped content (generated NPCs, World State Flags, relationship data, session synopses) belongs to exactly one Playthrough. When a new Playthrough begins, the world resets to its default — previous character's changes do not carry over.
