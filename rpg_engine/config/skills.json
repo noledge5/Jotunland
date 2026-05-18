@@ -1,0 +1,28 @@
+{
+  "skills": [
+    {"name": "Stealth", "description": "Moving unseen and unheard"},
+    {"name": "Persuasion", "description": "Convincing others through words"},
+    {"name": "Deception", "description": "Lying and misdirection"},
+    {"name": "Intimidation", "description": "Coercing through fear"},
+    {"name": "Lockpicking", "description": "Opening locks without keys"},
+    {"name": "Pickpocket", "description": "Taking items without notice"},
+    {"name": "Athletics", "description": "Running, climbing, swimming"},
+    {"name": "Melee", "description": "Fighting with handheld weapons"},
+    {"name": "Ranged", "description": "Fighting with bows and thrown weapons"},
+    {"name": "Riding", "description": "Controlling mounts"},
+    {"name": "Survival", "description": "Navigating and surviving wilderness"},
+    {"name": "Medicine", "description": "Treating wounds and illness"},
+    {"name": "Craft", "description": "Making and repairing items"},
+    {"name": "Knowledge", "description": "Recalling historical and world facts"},
+    {"name": "Perception", "description": "Noticing details and hidden things"},
+    {"name": "Trading", "description": "Buying and selling advantageously"},
+    {"name": "Essenz", "description": "Using and understanding Essenz"}
+  ],
+  "class_starting_skills": {
+    "Krieger": {"Melee": 3, "Athletics": 2, "Intimidation": 1},
+    "Schurke": {"Stealth": 3, "Pickpocket": 2, "Lockpicking": 2, "Deception": 1},
+    "Händler": {"Trading": 3, "Persuasion": 2, "Knowledge": 1},
+    "Essenzkundiger": {"Essenz": 3, "Knowledge": 2, "Perception": 1},
+    "Waldläufer": {"Survival": 3, "Ranged": 2, "Stealth": 1, "Medicine": 1}
+  }
+}

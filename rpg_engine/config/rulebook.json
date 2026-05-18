@@ -1,0 +1,25 @@
+{
+  "difficulty_tiers": {
+    "Trivial": 4,
+    "Easy": 8,
+    "Medium": 12,
+    "Hard": 16,
+    "Very Hard": 19,
+    "Nearly Impossible": 22
+  },
+  "critical_success_roll": 20,
+  "critical_failure_roll": 1,
+  "dice_sides": 20,
+  "xp_per_action": 5,
+  "xp_per_success": 10,
+  "xp_per_critical": 25,
+  "level_thresholds": [0, 100, 250, 500, 900, 1500, 2500, 4000, 6000, 10000],
+  "combat_status_values": ["active", "incapacitated", "fled", "surrendered", "dead"],
+  "max_time_delta_minutes": 4320,
+  "synopsis_every_n_turns": 20,
+  "max_synopses_in_context": 2,
+  "context_token_targets": {
+    "layer_a": 200, "layer_b": 300, "layer_c": 200,
+    "layer_d": 200, "layer_e": 500
+  }
+}
