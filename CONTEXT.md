@@ -37,7 +37,9 @@ Content that persists permanently across all characters and playthroughs. Includ
 Content tied to a specific character's playthrough. Includes: minor LLM-generated NPCs (e.g. a warehouse guard), character-specific relationship data, personal discoveries, playthrough-specific story events. Deleted or archived when a playthrough ends.
 
 ## NPC Tier
-Determines the persistence scope of an NPC. Major NPCs (world-authored, high narrative significance) are World-Scoped. Minor NPCs (LLM-generated during play) are Character-Scoped by default. An NPC's tier is set at creation and determines whether they survive a playthrough reset.
+Determines the persistence scope of an NPC. Two fixed tiers:
+- **Static NPC** — World-Scoped. Pre-authored before play begins. Has a defined role in the world's political and social structure (guard captain, duke, guild master). Exists independently of any playthrough. Participates in world-level events.
+- **Generated NPC** — Character-Scoped by default. Created by the LLM during play when the Game State has no authored NPC for a situation. Can be manually promoted by the player to World-Scoped, after which they persist across playthroughs.
 
 ## NPC Schedule
 The times and locations where an NPC can be found. Stored in the DB as part of the NPC entry. The Context Builder uses the schedule to determine whether an NPC is present at the current location and time before loading them into context. An NPC not on shift is not in the scene — regardless of their home location.
