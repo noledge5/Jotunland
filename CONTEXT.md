@@ -30,5 +30,11 @@ The database record for a non-player character. Always contains: name, current l
 ## Session Synopsis
 A short, LLM-generated summary produced every N turns and at session end. Stored in the DB. On the next turn or session, the last 2–3 synopses are injected into the context. Represents compressed long-term memory. Game state from the DB always overrides anything implied by the synopsis if they conflict.
 
+## Combat State
+A flag (`in_combat=true`) set in the DB when combat begins. While active, each turn the Engine automatically resolves the enemy's counter-action after the player acts. Initiative is rolled once at combat start. Combat ends when all combatants are no longer `active`.
+
+## Combat Status
+The state of a combatant during or after combat. Values: `active` (fighting normally), `incapacitated` (unconscious, broken, unable to fight — not dead), `fled`, `surrendered`, `dead`. Tracked per combatant in the DB. Injuries (e.g. broken arm, leg wound) apply roll modifiers independently of HP and are also tracked in the DB.
+
 ## World Layer
 One of five fixed context layers assembled fresh each turn by the Context Builder. Ordered by scope: A (world constants, always present) → B (region) → C (zone/town) → D (current scene) → E (active context: NPCs, player stats, last turns, engine result). Total target ~1400 tokens. Layer content is authored once when the world is built; the LLM never modifies it. Exact layer boundaries and optimal token budgets to be validated through playtesting.
