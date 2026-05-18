@@ -24,6 +24,12 @@ All game outcomes — damage, skill check results, hit/miss, XP gain — are det
 ## Rules Config
 The set of tables or data files that define game constants: weapon damage dice, armor values, skill difficulty thresholds, XP formulas. Owned entirely by the Engine. Never read by the LLM.
 
+## Rulebook
+The authoritative D20-based rule system that governs all mechanical resolution. Defines difficulty tiers (Trivial DC 4 → Easy DC 8 → Medium DC 12 → Hard DC 16 → Very Hard DC 19 → Nearly Impossible DC 22), critical outcomes (Natural 20 = critical success regardless of DC; Natural 1 = critical failure regardless of modifier), damage dice per weapon type, XP tables, and injury thresholds. The Action Classifier selects a difficulty tier by name — the Engine maps it to a DC. The LLM never sets raw DC values.
+
+## Difficulty Tier
+A named category from the Rulebook that describes how hard an action is. The Action Classifier picks the appropriate tier based on scene context (NPC stats, situation, environment). The Engine converts the tier to a DC number. Valid tiers: Trivial, Easy, Medium, Hard, Very Hard, Nearly Impossible.
+
 ## NPC Entry
 The database record for a non-player character. Always contains: name, current location, description, personality. Once the player has met an NPC (`met=true`), the entry is extended with: relation score (-100 to +100), what the NPC knows about the player, what the player knows about the NPC, shared history summary. An NPC's entry only enters the LLM context when the player is at the NPC's exact location and has either met them before or actively initiates contact. Never loaded by zone or region proximity alone.
 
