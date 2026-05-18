@@ -27,6 +27,7 @@ If no roll is needed (resting, observing, talking casually, moving between known
     if in_combat:
         system_prompt += "\n\nPLAYER IS IN COMBAT. Force needs_roll=true and use Melee or Ranged skill."
 
+    raw = ""
     try:
         response = client.messages.create(
             model=MODEL,
@@ -46,7 +47,7 @@ If no roll is needed (resting, observing, talking casually, moving between known
         return result
     except json.JSONDecodeError:
         # Try to extract JSON from response
-        match = re.search(r'\{[^{}]+\}', raw if 'raw' in dir() else '', re.DOTALL)
+        match = re.search(r'\{[^{}]+\}', raw, re.DOTALL)
         if match:
             try:
                 return json.loads(match.group())
