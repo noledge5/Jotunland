@@ -9,6 +9,16 @@ The large warm inner sea enclosed by Avarr's C-shape. Tropical at its inner coas
 ## Vhaelor
 The central island within the Binnenmeer. Coordinate anchor approximately x=1,500,000, y=1,350,000. Diameter ~300 km. A volcanic, rainforest-covered evolutionary pressure chamber. Extreme biodiversity, toxic flora, frequent Essenz storms, unstable weather. Origin point of many apex predator species that later migrated to the continent. Not uncivilized — isolated Stammeskulturen and coastal settlements exist — but impossible to durably control by outside powers.
 
+## Climate Zones
+Distributed by latitude (y-coordinate) across Avarr:
+- **y=2,500,000–3,000,000** — Subarctic: northern fjords, conifer forests, long winters
+- **y=2,000,000–2,500,000** — Cold temperate: northeastern mountain ranges, Essenz veins, isolated valleys
+- **y=1,400,000–2,000,000** — Temperate: eastern plains, fertile river valleys, dense population
+- **y=800,000–1,400,000** — Mediterranean: inner Binnenmeer coasts, warm and dry, city-state belt
+- **y=400,000–800,000** — Arid/Tropical: southeastern steppes and semi-desert; southwestern dense rainforest
+- **Binnenmeer** — Tropical at inner coasts, temperate toward outer coasts
+- **Vhaelor** — Tropical-volcanic year-round
+
 ## Scientific Level
 Early medieval globally — no systematic science, no universities, no empirical method. Knowledge is oral, local, and practical. Regional variation: the eastern empire has proto-scholarly traditions (scribes, chroniclers, early natural philosophers in monastery-equivalents), the north explains phenomena through mythology and clan wisdom, Vhaelor's indigenous cultures hold deep empirical knowledge of local ecology and Essenz behavior passed down through ritual — accurate but unwritten. Everywhere, Essenz is partially understood through practice but not theorized. Nobody knows why Essenz storms happen, only how to survive and exploit them.
 
