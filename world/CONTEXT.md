@@ -18,4 +18,10 @@ Essenz has two tiers of application:
 - **Essenz Abilities** — rare, requires trained users. Limited to two domains: **Transmutation** (altering chemical structure — converting one material into another, e.g. wood into iron) and **Force Projection** (releasing Essenz as kinetic force waves — propelling oneself in a direction or moving objects without physical contact).
 
 ## Transmutation
-An Essenz ability that alters the chemical composition of matter, converting one material into another. Not conjuration — matter must already exist. Exact limits (mass conservation, energy cost, material similarity constraints) are open and to be defined.
+An Essenz ability that alters the chemical composition of matter, converting one material into another. Rules: mass is conserved (1 kg in → 1 kg out); energy cost scales with chemical distance between source and target material (wood→charcoal is cheap, wood→iron is expensive, lead→gold is prohibitively costly); living matter cannot be transmuted. Direct creation of precious metals is possible but the Essenz cost typically exceeds the market value of the metal — unless the user has exceptional access to cheap Essenz.
+
+## Force Projection
+An Essenz ability that releases bound Essenz as kinetic force waves, either propelling the user in a chosen direction or moving inanimate objects without physical contact. Living matter — humans, animals, monsters — cannot be moved by Force Projection. Only inanimate objects are affected.
+
+## Essenz Users
+Individuals with the trained ability to apply Essenz beyond basic Enhancement — i.e., capable of Transmutation or Force Projection. Rare. Generally wealthy and politically powerful, because their abilities create economic advantages that compound over time. Social recognition and legal status vary by region.
