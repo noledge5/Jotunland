@@ -1,0 +1,113 @@
+{
+  "_desc": "Fill every field. Remove all _desc fields from your output. See GENERATION_GUIDE.md for rules.",
+
+  "world": {
+    "name": "string — the world's name",
+
+    "starting_state": {
+      "location_scene_id": "string — scene id where a new playthrough begins",
+      "coordinate": { "x": 0, "y": 0 },
+      "calendar": {
+        "year": 0,
+        "month": 1,
+        "_desc_month": "1–12",
+        "day": 1,
+        "_desc_day": "1–30",
+        "hour": 8,
+        "_desc_hour": "0–23, starting hour of first session",
+        "minute": 0
+      }
+    },
+
+    "constants": {
+      "_desc": "Layer A — always injected into every LLM prompt. ~200 tokens. World tone, era, cosmology, global political situation.",
+      "layer_a_text": "string"
+    },
+
+    "regions": [
+      {
+        "_desc": "Layer B scope. Repeat this object for each region.",
+        "id": "string — unique slug e.g. northern_reaches",
+        "name": "string",
+        "layer_b_text": "string — ~300 tokens. Climate, culture, factions, political tension, geography.",
+        "coordinate_anchor": { "x": 0, "y": 0 },
+        "bounding_box": {
+          "x_min": 0, "y_min": 0,
+          "x_max": 100000, "y_max": 100000
+        },
+
+        "zones": [
+          {
+            "_desc": "Layer C scope — town, forest, dungeon, ruin. Repeat for each zone in this region.",
+            "id": "string — unique slug e.g. ironhold_town",
+            "name": "string",
+            "type": "string — e.g. town / forest / dungeon / ruin / port / camp",
+            "layer_c_text": "string — ~200 tokens. Local situation, reputation, landmarks, inhabitants.",
+            "coordinate_anchor": { "x": 0, "y": 0 },
+            "bounding_box": {
+              "x_min": 0, "y_min": 0,
+              "x_max": 5000, "y_max": 5000
+            },
+
+            "scenes": [
+              {
+                "_desc": "Layer D scope — a specific building, street, or outdoor location. Repeat for each scene in this zone.",
+                "id": "string — unique slug e.g. ironhold_tavern",
+                "name": "string",
+                "type": "string — e.g. tavern / market / alley / gate / shrine / shop / barracks",
+                "layer_d_text": "string — ~200 tokens. Physical description, light, smell, sound, ambient mood.",
+                "coordinate_anchor": { "x": 0, "y": 0 },
+
+                "group_entries": [
+                  {
+                    "_desc": "Background characters. Remove _desc from output.",
+                    "label": "string — short identifier e.g. corner drinkers",
+                    "description": "string — one sentence of sensory/behavioral detail"
+                  }
+                ],
+
+                "sub_scenes": [
+                  {
+                    "_desc": "Rooms or sections within this scene. Optional. Repeat as needed.",
+                    "id": "string — unique slug e.g. ironhold_tavern_cellar",
+                    "name": "string",
+                    "layer_d_text": "string — ~100 tokens. More specific than parent scene.",
+                    "coordinate_anchor": { "x": 0, "y": 0 },
+                    "group_entries": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+
+    "static_npcs": [
+      {
+        "_desc": "Pre-authored World-Scoped NPCs. Repeat for each. Distribute across scenes via schedule.",
+        "id": "string — unique slug e.g. captain_mira_valdas",
+        "name": "string",
+        "role": "string — social/political role e.g. town guard captain, merchant guild head",
+        "description": "string — appearance and immediate impression in 2–3 sentences",
+        "personality": "string — 2–3 dominant traits, how they speak and behave",
+        "faction": "string or null — which faction they belong to",
+        "relation_score_default": 0,
+        "_desc_relation": "Starting relation score for all new characters. -100 (hostile) to +100 (loyal). 0 = neutral.",
+        "stats": {
+          "perception": 10,
+          "combat_skill": 10,
+          "_desc": "Relevant stats used by engine for difficulty calculations. Add or remove fields as needed."
+        },
+        "schedule": [
+          {
+            "hour_start": 8,
+            "hour_end": 18,
+            "scene_id": "string — must match a scene id defined above"
+          }
+        ],
+        "knowledge": "string — what this NPC knows about the world, their faction, local secrets. Used by LLM for consistent dialogue."
+      }
+    ]
+  }
+}
