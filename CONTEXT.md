@@ -11,3 +11,9 @@ The authoritative record of all facts about the current game world: player stats
 
 ## Turn
 One complete player interaction cycle: player input → engine resolution → context assembly → LLM narration → state update.
+
+## Mechanical Resolution
+All game outcomes — damage, skill check results, hit/miss, XP gain — are determined by the Engine using dice rolls and rules config before the LLM is ever called. The LLM receives the already-computed result and narrates it. The LLM never decides or modifies a mechanical outcome.
+
+## Rules Config
+The set of tables or data files that define game constants: weapon damage dice, armor values, skill difficulty thresholds, XP formulas. Owned entirely by the Engine. Never read by the LLM.
