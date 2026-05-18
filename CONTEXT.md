@@ -59,6 +59,12 @@ A flag (`in_combat=true`) set in the DB when combat begins. While active, each t
 ## Combat Status
 The state of a combatant during or after combat. Values: `active` (fighting normally), `incapacitated` (unconscious, broken, unable to fight — not dead), `fled`, `surrendered`, `dead`. Tracked per combatant in the DB. Injuries (e.g. broken arm, leg wound) apply roll modifiers independently of HP and are also tracked in the DB.
 
+## In-Game Clock
+A timestamp stored in the DB representing the current in-game date and time. Updated each turn by the Engine using the `time_delta` value from the Narrator Output. The LLM estimates how much time the narrated action takes and includes it in its structured output. The Engine applies the delta, then re-evaluates NPC schedules against the new time. The current in-game time is injected into the context each turn so the LLM can make consistent time estimates.
+
+## Narrator Output
+The structured JSON document returned by the Narrator LLM each turn. Contains: `narration` (prose string), `time_delta_minutes` (integer — how much in-game time passed), `generated_locations` (array of new World-Scoped location entries, empty if none), `generated_npcs` (array of new NPC entries, empty if none), `world_state_changes` (array of World State Flag updates). The Engine validates this document before applying any changes. Malformed JSON triggers a retry; persistent failure falls back to narration-only with no state changes.
+
 ## Coordinate System
 A 500×500 km world map with meter-precise x/y coordinates (integers, 0–500000). Every location — region, zone, scene, generated sub-location — has a fixed coordinate anchor stored in the DB. The player's current position is tracked as x/y coordinates updated each turn. The Layer system maps to coordinate ranges: Layer B = region (~100×100 km), Layer C = zone/town (~5×5 km), Layer D = scene (building/room level). The Context Builder uses player coordinates to determine which layers to load.
 
