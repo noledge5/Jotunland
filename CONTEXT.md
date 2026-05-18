@@ -56,5 +56,11 @@ A flag (`in_combat=true`) set in the DB when combat begins. While active, each t
 ## Combat Status
 The state of a combatant during or after combat. Values: `active` (fighting normally), `incapacitated` (unconscious, broken, unable to fight — not dead), `fled`, `surrendered`, `dead`. Tracked per combatant in the DB. Injuries (e.g. broken arm, leg wound) apply roll modifiers independently of HP and are also tracked in the DB.
 
+## Playthrough
+A single character's run through the world. Starts with the world in its canonical default state. All Character-Scoped content (generated NPCs, World State Flags, relationship data, session synopses) belongs to exactly one Playthrough. When a new Playthrough begins, the world resets to its default — previous character's changes do not carry over.
+
+## World State Flag
+A Character-Scoped boolean or value stored in the DB that records how a World-Scoped entity has changed during a Playthrough (e.g. `tavern_burned=true`, `warehouse_owner=killed`). The Context Builder checks these flags and dynamically overrides or extends the static World Layer text when assembling the prompt. Flags are reset when a new Playthrough begins.
+
 ## World Layer
 One of five fixed context layers assembled fresh each turn by the Context Builder. Ordered by scope: A (world constants, always present) → B (region) → C (zone/town) → D (current scene) → E (active context: NPCs, player stats, last turns, engine result). Total target ~1400 tokens. Layer content is authored once when the world is built; the LLM never modifies it. Exact layer boundaries and optimal token budgets to be validated through playtesting.
