@@ -30,6 +30,18 @@ The database record for a non-player character. Always contains: name, current l
 ## Session Synopsis
 A short, LLM-generated summary produced every N turns and at session end. Stored in the DB. On the next turn or session, the last 2–3 synopses are injected into the context. Represents compressed long-term memory. Game state from the DB always overrides anything implied by the synopsis if they conflict.
 
+## World Scope
+Content that persists permanently across all characters and playthroughs. Includes: locations, infrastructure, major NPCs (kings, dukes, guild leaders), authored lore, world events. Modified only by major in-world events (war, fire, political change). The world grows with each playthrough but is never reset.
+
+## Character Scope
+Content tied to a specific character's playthrough. Includes: minor LLM-generated NPCs (e.g. a warehouse guard), character-specific relationship data, personal discoveries, playthrough-specific story events. Deleted or archived when a playthrough ends.
+
+## NPC Tier
+Determines the persistence scope of an NPC. Major NPCs (world-authored, high narrative significance) are World-Scoped. Minor NPCs (LLM-generated during play) are Character-Scoped by default. An NPC's tier is set at creation and determines whether they survive a playthrough reset.
+
+## NPC Schedule
+The times and locations where an NPC can be found. Stored in the DB as part of the NPC entry. The Context Builder uses the schedule to determine whether an NPC is present at the current location and time before loading them into context. An NPC not on shift is not in the scene — regardless of their home location.
+
 ## Combat State
 A flag (`in_combat=true`) set in the DB when combat begins. While active, each turn the Engine automatically resolves the enemy's counter-action after the player acts. Initiative is rolled once at combat start. Combat ends when all combatants are no longer `active`.
 
