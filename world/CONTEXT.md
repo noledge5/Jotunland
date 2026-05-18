@@ -1,10 +1,13 @@
 # World Glossary — Avarr
 
 ## Avarr
-The known world's supercontinent. C-shaped, opening southward. Creates a vast inner warm sea (the Binnenmeer) with tropical inner coasts, temperate outer coasts, and subarctic northern regions. Geography determines politics: the inner sea drives trade empires, the northern fjords produce clan militaries, the eastern plains support large bureaucratic states.
+The known world's supercontinent. C-shaped, opening southward. Positioned on a 3000×3000 km world map (coordinates in meters, 0–3,000,000 per axis): landmass spans roughly x=200,000–2,800,000, y=400,000–2,900,000. Creates a vast inner warm sea (the Binnenmeer, x=600,000–2,400,000, y=500,000–2,200,000). Southern opening between y=0–400,000. Geography determines politics: the inner sea drives trade empires, the northern fjords produce clan militaries, the eastern plains support large bureaucratic states.
+
+## Binnenmeer
+The large warm inner sea enclosed by Avarr's C-shape. Tropical at its inner coasts, temperate further out. Primary engine of maritime trade and cultural exchange. Home to Vhaelor at its center. The southern opening connects to open ocean through dangerous straits.
 
 ## Vhaelor
-The central island within the Binnenmeer. A volcanic, rainforest-covered evolutionary pressure chamber. Extreme biodiversity, toxic flora, frequent Essenz storms, unstable weather. Origin point of many apex predator species that later migrated to the continent. Not uncivilized — isolated Stammeskulturen and coastal settlements exist — but impossible to durably control by outside powers.
+The central island within the Binnenmeer. Coordinate anchor approximately x=1,500,000, y=1,350,000. Diameter ~300 km. A volcanic, rainforest-covered evolutionary pressure chamber. Extreme biodiversity, toxic flora, frequent Essenz storms, unstable weather. Origin point of many apex predator species that later migrated to the continent. Not uncivilized — isolated Stammeskulturen and coastal settlements exist — but impossible to durably control by outside powers.
 
 ## Scientific Level
 Early medieval globally — no systematic science, no universities, no empirical method. Knowledge is oral, local, and practical. Regional variation: the eastern empire has proto-scholarly traditions (scribes, chroniclers, early natural philosophers in monastery-equivalents), the north explains phenomena through mythology and clan wisdom, Vhaelor's indigenous cultures hold deep empirical knowledge of local ecology and Essenz behavior passed down through ritual — accurate but unwritten. Everywhere, Essenz is partially understood through practice but not theorized. Nobody knows why Essenz storms happen, only how to survive and exploit them.
