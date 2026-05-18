@@ -11,3 +11,11 @@ Not a narrative category but a biological one. Any large non-domesticated fauna 
 
 ## Essenz
 A fundamental force permeating the world of Avarr. Exists in two states: **free Essenz** (an energy field that flows through the environment — concentrates near volcanoes, old battlefields, crystal veins, storm systems; dissipates and regenerates naturally) and **bound Essenz** (free Essenz captured into physical matter — crystal, precious metal, or organic tissue. Behaves like a substance: extractable, tradeable, exhaustible). The phase transition from free to bound occurs naturally in geological formations and living organisms, and can be induced artificially with the right techniques. Essenz storms disperse free Essenz across wide areas. Monster tissue and crystal veins are the primary sources of bound Essenz.
+
+## Essenz Use
+Essenz has two tiers of application:
+- **Enhancement** — the common use. Bound Essenz applied to objects or bodies makes them perform better: weapons hold a sharper edge, armor resists more damage, bodies endure more fatigue, crops yield more. Accessible to anyone with enough Essenz and basic technique. An expensive luxury good — most people never afford it regularly.
+- **Essenz Abilities** — rare, requires trained users. Limited to two domains: **Transmutation** (altering chemical structure — converting one material into another, e.g. wood into iron) and **Force Projection** (releasing Essenz as kinetic force waves — propelling oneself in a direction or moving objects without physical contact).
+
+## Transmutation
+An Essenz ability that alters the chemical composition of matter, converting one material into another. Not conjuration — matter must already exist. Exact limits (mass conservation, energy cost, material similarity constraints) are open and to be defined.
