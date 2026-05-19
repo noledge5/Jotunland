@@ -112,6 +112,16 @@ The one-time setup when a new Playthrough begins. Three steps:
 
 **Startausrüstung:** Klasse gibt 1–2 charakteristische Items vor. Zusätzlich erhält jeder Charakter 50 Gold für freie Einkäufe.
 
+## Essenz-Veranlagung
+Jeder Spielercharakter ist immer essenzveranlagt — das ist Teil dessen was ihn von einem Durchschnittsmenschen unterscheidet. Keine Freischaltbedingung nötig. Beide Essenz-Skills (Essenz-Transmutation, Essenz-Kraftprojektion) sind ab Charaktererstellung lernbar und einsetzbar (auch bei Skill 0, dann ohne Bonus). NPCs haben die Veranlagung nur wenn es narrativ und weltlogisch Sinn macht — Seltenheit bleibt gewahrt.
+
+## Heilung
+Vier Quellen der LP-Wiederherstellung:
+- **Natürliche Rast:** `KON-MOD + Level` LP pro Nacht, Minimum 1. Voraussetzung: Schlaf in sicherer Umgebung.
+- **Erste Hilfe:** `W6` LP sofort nach einem Kampf. Erfordert eine Erste-Hilfe-Probe (SG 10). Einmal pro Kampf anwendbar.
+- **Längere Rast:** doppelte natürliche Heilung pro Nacht. Voraussetzung: mindestens 3 aufeinanderfolgende Tage Ruhe ohne Kämpfe.
+- **Items (Tränke/Kräuter):** feste LP-Werte je nach Qualität. Werte vom Narrator oder Händler definiert.
+
 ## Attribut (ATTR)
 Sechs Basiswerte auf Skala 1–20. Durchschnitt = 10. Modifier = `floor((Wert - 10) / 2)`. Bei Skills mit zwei Leit-Attributen (z.B. STR/GES) zählt immer der höhere Modifier. Startwerte durch freie Verteilung bei Charaktererstellung (max 18). Steigen durch Charakter-Level-Ups (max 20).
 
