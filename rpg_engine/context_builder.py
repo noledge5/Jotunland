@@ -313,18 +313,22 @@ Antworte NUR mit gültigem JSON:
 {{
   "narration": "2-4 Sätze lebendiger Erzählung in der Gegenwartsform. Bleib dem düsteren Ton der Welt treu. Webe Sinnesdetails ein.",
   "time_delta_minutes": <ganzzahl, wie viele Spielminuten diese Handlung dauerte, max 4320>,
+  "gold_delta": <ganzzahl, positiv = Spieler erhält Gold/Münzen, negativ = Spieler gibt Gold aus. 0 wenn kein Handel>,
+  "inventory_changes": [],
   "generated_locations": [],
   "generated_npcs": [],
   "generated_groups": [],
   "world_state_changes": []
 }}
 
+inventory_changes Format: {{"op": "add" oder "remove", "item_name": str, "quantity": int, "equipped": false, "properties": {{}}}}
 generated_npcs Format: {{"id": "eindeutiger_slug", "name": str, "role": str, "description": str, "personality": str, "home_scene_id": str, "stats": {{}}}}
 generated_locations Format: {{"id": str, "name": str, "type": str, "layer_d_text": str, "parent_scene_id": str oder "zone_id": str, "x": int, "y": int}}
 generated_groups Format: {{"scene_id": str, "label": str, "description": str}}
 world_state_changes Format: {{"entity_type": str, "entity_id": str, "flag_name": str, "flag_value": str}}
 
-Generiere Orte/NSCs/Gruppen nur, wenn der Spieler direkt auf etwas Neues trifft oder es entdeckt. Halte generierte Inhalte konsistent mit dem Ton der Welt und dem Schauplatzkontext."""
+Generiere Orte/NSCs/Gruppen nur, wenn der Spieler direkt auf etwas Neues trifft oder es entdeckt. Halte generierte Inhalte konsistent mit dem Ton der Welt und dem Schauplatzkontext.
+Wenn der Spieler etwas kauft, verkauft, erhält oder verliert: setze gold_delta und inventory_changes entsprechend. Vergiss nie gold_delta wenn Münzen wechseln."""
 
     return narrator_system
 
@@ -341,4 +345,4 @@ MECHANISCHES ERGEBNIS: {engine_text}
 Spielereingabe: "{player_input}"
 
 Antworte NUR mit gültigem JSON:
-{{"narration": "...", "time_delta_minutes": 5, "generated_locations": [], "generated_npcs": [], "generated_groups": [], "world_state_changes": []}}"""
+{{"narration": "...", "time_delta_minutes": 5, "gold_delta": 0, "inventory_changes": [], "generated_locations": [], "generated_npcs": [], "generated_groups": [], "world_state_changes": []}}"""

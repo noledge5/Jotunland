@@ -130,6 +130,8 @@ def generate_narration(context_prompt, api_key=None, model=None, provider="anthr
     fallback = {
         "narration": "Die Welt verschiebt sich um dich herum, der Moment vergeht ohne klare Auflösung.",
         "time_delta_minutes": 5,
+        "gold_delta": 0,
+        "inventory_changes": [],
         "generated_locations": [],
         "generated_npcs": [],
         "generated_groups": [],
@@ -139,6 +141,8 @@ def generate_narration(context_prompt, api_key=None, model=None, provider="anthr
     def _ensure_fields(d):
         d.setdefault("narration", fallback["narration"])
         d.setdefault("time_delta_minutes", 5)
+        d.setdefault("gold_delta", 0)
+        d.setdefault("inventory_changes", [])
         d.setdefault("generated_locations", [])
         d.setdefault("generated_npcs", [])
         d.setdefault("generated_groups", [])

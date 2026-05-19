@@ -489,6 +489,52 @@ def apply_narrator_output(playthrough_id, narrator_json):
     """Apply the structured Narrator Output to the DB."""
     conn = _db()
 
+    # Gold delta
+    gold_delta = narrator_json.get('gold_delta', 0)
+    if gold_delta and isinstance(gold_delta, (int, float)) and gold_delta != 0:
+        conn.execute(
+            "UPDATE player SET gold = MAX(0, gold + ?) WHERE playthrough_id=?",
+            (int(gold_delta), playthrough_id)
+        )
+        _trace.log_db_write("player", "UPDATE", {"gold_delta": gold_delta})
+
+    # Inventory changes
+    for change in narrator_json.get('inventory_changes', []):
+        op = change.get('op', 'add')
+        item = change.get('item_name', '').strip()
+        qty = max(1, int(change.get('quantity', 1)))
+        if not item:
+            continue
+        if op == 'add':
+            existing = conn.execute(
+                "SELECT id, quantity FROM inventory WHERE playthrough_id=? AND item_name=?",
+                (playthrough_id, item)
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    "UPDATE inventory SET quantity=? WHERE id=?",
+                    (existing['quantity'] + qty, existing['id'])
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO inventory (playthrough_id, item_name, quantity, equipped, properties) "
+                    "VALUES (?,?,?,0,?)",
+                    (playthrough_id, item, qty, json.dumps(change.get('properties', {})))
+                )
+            _trace.log_db_write("inventory", "ADD", {"item": item, "qty": qty})
+        elif op == 'remove':
+            existing = conn.execute(
+                "SELECT id, quantity FROM inventory WHERE playthrough_id=? AND item_name=?",
+                (playthrough_id, item)
+            ).fetchone()
+            if existing:
+                new_qty = existing['quantity'] - qty
+                if new_qty <= 0:
+                    conn.execute("DELETE FROM inventory WHERE id=?", (existing['id'],))
+                else:
+                    conn.execute("UPDATE inventory SET quantity=? WHERE id=?", (new_qty, existing['id']))
+            _trace.log_db_write("inventory", "REMOVE", {"item": item, "qty": qty})
+
     for change in narrator_json.get('world_state_changes', []):
         conn.execute(
             "INSERT INTO world_state_flags (playthrough_id, entity_type, entity_id, flag_name, flag_value) "
