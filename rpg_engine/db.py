@@ -82,7 +82,7 @@ def init_db(db_path=None):
       xp INTEGER DEFAULT 0,
       hp_current INTEGER DEFAULT 20,
       hp_max INTEGER DEFAULT 20,
-      gold INTEGER DEFAULT 50,
+      gold INTEGER DEFAULT 500,
       current_scene_id TEXT,
       x INTEGER DEFAULT 2380000, y INTEGER DEFAULT 1200000,
       in_game_year INTEGER DEFAULT 743,

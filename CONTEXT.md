@@ -120,7 +120,7 @@ The one-time setup when a new Playthrough begins. Three steps:
 
 **4. Skills:** Spieler verteilt frei 80 Punkte auf beliebige Skills (Skala 0–100). Max 30 pro Skill bei Erstellung. Alle nicht gewählten Skills starten bei 0 (können trotzdem versucht werden, ohne Bonus).
 
-**Startausrüstung:** Klasse gibt 1–2 charakteristische Items vor. Zusätzlich erhält jeder Charakter 50 Gold für freie Einkäufe.
+**Startausrüstung:** Klasse gibt 1–2 charakteristische Items vor. Zusätzlich erhält jeder Charakter 500 Kupfer (= 5 Gold) für freie Einkäufe. Die DB speichert Münzen immer in Kupfer als Basiseinheit (1 Gold = 100 Kupfer, 1 Silber = 10 Kupfer).
 
 ## Essenz-Veranlagung
 Jeder Spielercharakter ist immer essenzveranlagt — das ist Teil dessen was ihn von einem Durchschnittsmenschen unterscheidet. Keine Freischaltbedingung nötig. Beide Essenz-Skills (Essenz-Transmutation, Essenz-Kraftprojektion) sind ab Charaktererstellung lernbar und einsetzbar (auch bei Skill 0, dann ohne Bonus). NPCs haben die Veranlagung nur wenn es narrativ und weltlogisch Sinn macht — Seltenheit bleibt gewahrt.

@@ -42,7 +42,7 @@
     "death_threshold": -10,
     "bleed_per_round": 1
   },
-  "starting_gold": 50,
+  "starting_gold": 500,
   "combat_status_values": ["active", "incapacitated", "fled", "surrendered", "dead"],
   "max_time_delta_minutes": 4320,
   "synopsis_every_n_turns": 20,

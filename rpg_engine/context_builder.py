@@ -197,7 +197,7 @@ def get_active_context(playthrough_id, engine_result):
 
     player_summary = (
         f"Name: {player['name']}, Klasse: {player['class']}, Level: {player['level']}, "
-        f"LP: {player['hp_current']}/{player['hp_max']}, Gold: {player['gold']}\n"
+        f"LP: {player['hp_current']}/{player['hp_max']}, Münzen: {player['gold']} Kupfer (1 Gold = 100 Kupfer, 1 Silber = 10 Kupfer)\n"
         f"Attribute: {attrs_compact}\n"
         f"Fertigkeiten: {skills_text}\n"
         f"Ausgerüstet: {equipped_text}\n"

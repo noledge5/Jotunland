@@ -623,6 +623,17 @@ function renderClassCards() {
 function attrMod(v) { return Math.floor((v - 10) / 2); }
 function fmtMod(m) { return m >= 0 ? `+${m}` : `${m}`; }
 
+function formatCoins(kupfer) {
+  const g = Math.floor(kupfer / 100);
+  const s = Math.floor((kupfer % 100) / 10);
+  const k = kupfer % 10;
+  const parts = [];
+  if (g) parts.push(`${g}G`);
+  if (s) parts.push(`${s}S`);
+  if (k || !parts.length) parts.push(`${k}Kpf`);
+  return parts.join(' ');
+}
+
 function renderAttrInputs() {
   const container = document.getElementById('attr-inputs');
   container.innerHTML = '';
@@ -997,7 +1008,7 @@ function updateUI() {
 
   document.getElementById('hdr-name').textContent = `${gs.name} · ${gs.class}`;
   document.getElementById('hdr-level').textContent = `Lv ${gs.level}`;
-  document.getElementById('hdr-gold').textContent = `${gs.gold}g`;
+  document.getElementById('hdr-gold').textContent = formatCoins(gs.gold);
   document.getElementById('hdr-hp').textContent = `LP ${gs.hp_current}/${gs.hp_max}`;
   document.getElementById('hdr-loc').textContent = gs.current_scene_name || '—';
 
