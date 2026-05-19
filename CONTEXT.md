@@ -93,6 +93,16 @@ Five nested levels of geographic scope, each with coordinate ranges:
 ## Playthrough
 A single character's run through the world. Starts with the world in its canonical default state. All Character-Scoped content (generated NPCs, World State Flags, relationship data, session synopses) belongs to exactly one Playthrough. When a new Playthrough begins, the world resets to its default — previous character's changes do not carry over.
 
+On the Landing Screen, a Playthrough is represented as a Run Entry showing: character name, class, level, last played timestamp, and current location. Actions per Run Entry: **Continue** (loads the game, restoring the last 10 turns of narration into the chat) and **Delete** (hard delete with confirmation dialog — removes all Character-Scoped data for that Playthrough).
+
+## LLM Provider
+The external API service used for all LLM calls. Three supported providers:
+- **Anthropic** — direct Claude API (`sk-ant-...`). Default.
+- **OpenRouter** — OpenAI-compatible proxy (`sk-or-...`). Supports any OpenRouter model including Gemini via `google/gemini-...` model IDs.
+- **Google Gemini** — accessed via OpenRouter (not via Google AI SDK directly).
+
+Provider selection, API key, and model are stored in browser localStorage only — never sent to the game server except as parameters in individual API calls. Managed via the **Settings Screen**, a modal accessible from the Landing Screen and the In-Game header (⚙ button). The wizard no longer contains API configuration.
+
 ## World State Flag
 A Character-Scoped boolean or value stored in the DB that records how a World-Scoped entity has changed during a Playthrough (e.g. `tavern_burned=true`, `warehouse_owner=killed`). The Context Builder checks these flags and dynamically overrides or extends the static World Layer text when assembling the prompt. Flags are reset when a new Playthrough begins.
 
