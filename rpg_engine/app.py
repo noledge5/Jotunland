@@ -503,11 +503,14 @@ def submit_roll():
     ).fetchone()
     ts = f"{p_time['in_game_year']}-{p_time['in_game_month']:02d}-{p_time['in_game_day']:02d} {p_time['in_game_hour']:02d}:{p_time['in_game_minute']:02d}"
 
-    # Update the last pending log entry
+    # Update the last pending log entry (SQLite doesn't support ORDER BY in UPDATE)
     conn.execute(
         "UPDATE turn_log SET engine_result=?, narration=?, time_delta_minutes=?, in_game_timestamp=? "
-        "WHERE playthrough_id=? AND narration='' AND in_game_timestamp='pending' "
-        "ORDER BY id DESC LIMIT 1",
+        "WHERE id = ("
+        "  SELECT id FROM turn_log "
+        "  WHERE playthrough_id=? AND narration='' AND in_game_timestamp='pending' "
+        "  ORDER BY id DESC LIMIT 1"
+        ")",
         (json.dumps(engine_result), narration,
          narrator_output.get('time_delta_minutes', 5), ts, playthrough_id)
     )
