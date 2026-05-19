@@ -14,6 +14,23 @@
 <div id="wizard-overlay" class="modal-overlay">
   <div class="wizard-box">
 
+    <!-- ── Landing: Saves or New Game ── -->
+    <div id="landing-screen">
+      <h2 class="wizard-title">Avarr</h2>
+      <p class="wizard-sub">Jahr 743 IC. Salzhaven wartet.</p>
+
+      <div id="landing-saves" class="landing-saves-section">
+        <p class="section-label">Gespeicherte Spiele</p>
+        <div id="saves-list"><!-- populated by JS --></div>
+      </div>
+
+      <div class="or-divider">— oder —</div>
+      <button class="btn-primary btn-wide" onclick="showWizard()">Neues Spiel starten</button>
+    </div>
+
+    <!-- ── Wizard (hidden until "Neues Spiel") ── -->
+    <div id="wizard-inner" class="hidden">
+
     <!-- Step Indicator -->
     <div class="wizard-steps">
       <div class="step-dot active" id="dot-1">1</div>
@@ -47,7 +64,7 @@
 
       <div id="step1-error" class="error-msg hidden"></div>
       <div class="wizard-nav">
-        <div></div>
+        <button class="btn-secondary" onclick="showLanding()">&larr; Abbrechen</button>
         <button class="btn-primary" onclick="wizardNext(1)">Weiter &rarr;</button>
       </div>
     </div>
@@ -119,18 +136,13 @@
       <button id="start-btn" class="btn-primary btn-wide">Spiel beginnen</button>
       <div id="modal-loading" class="spinner hidden">Erschaffe deine Welt...</div>
 
-      <div class="or-divider">— oder —</div>
-      <div id="saved-games">
-        <p class="section-label">Vorherigen Durchlauf fortsetzen</p>
-        <div id="saves-list"><!-- populated by JS --></div>
-      </div>
-
       <div class="wizard-nav" style="margin-top:1rem;">
         <button class="btn-secondary" onclick="wizardBack(4)">&larr; Zurück</button>
         <div></div>
       </div>
     </div>
 
+    </div><!-- /wizard-inner -->
   </div>
 </div>
 
@@ -241,6 +253,16 @@
         <h3>Verletzungen</h3>
         <ul id="injuries-list"></ul>
       </div>
+
+      <!-- Trace Panel -->
+      <div class="panel-section" id="trace-panel-section">
+        <h3 class="trace-header" onclick="toggleTracePanel()">
+          LLM &amp; State Trace <span id="trace-toggle-icon">▶</span>
+        </h3>
+        <div id="trace-panel" class="hidden">
+          <div id="trace-events"></div>
+        </div>
+      </div>
     </aside>
   </div>
 </div>
@@ -299,8 +321,41 @@ async function init() {
   // Auto-restore last session
   const savedId = localStorage.getItem('rpg_playthrough_id');
   if (savedId) {
-    await continueGame(parseInt(savedId));
+    const ok = await continueGame(parseInt(savedId));
+    if (!ok) localStorage.removeItem('rpg_playthrough_id');
   }
+}
+
+function showLanding() {
+  document.getElementById('wizard-inner').classList.add('hidden');
+  document.getElementById('landing-screen').classList.remove('hidden');
+}
+
+function showWizard() {
+  document.getElementById('landing-screen').classList.add('hidden');
+  document.getElementById('wizard-inner').classList.remove('hidden');
+}
+
+function toggleTracePanel() {
+  const panel = document.getElementById('trace-panel');
+  const icon = document.getElementById('trace-toggle-icon');
+  const hidden = panel.classList.toggle('hidden');
+  icon.textContent = hidden ? '▶' : '▼';
+}
+
+async function fetchAndRenderTrace() {
+  try {
+    const res = await fetch('/api/debug/trace');
+    const events = await res.json();
+    const container = document.getElementById('trace-events');
+    if (!events.length) { container.innerHTML = '<p class="trace-empty">Kein Trace</p>'; return; }
+    container.innerHTML = events.map(e => {
+      const keys = Object.entries(e).filter(([k]) => k !== 'event' && k !== 't');
+      const detail = keys.map(([k, v]) => `<span class="trace-key">${esc(k)}</span><span class="trace-val">${esc(String(v).slice(0,80))}</span>`).join('');
+      const cls = e.event.startsWith('LLM') ? 'trace-llm' : e.event.startsWith('DB') ? 'trace-db' : e.event.startsWith('ROLL') ? 'trace-roll' : e.event.startsWith('TICK') ? 'trace-tick' : '';
+      return `<div class="trace-event ${cls}"><span class="trace-ev">${esc(e.event)}</span>${detail}</div>`;
+    }).join('');
+  } catch(e) { /* silent */ }
 }
 
 async function loadCharOptions() {
@@ -745,17 +800,17 @@ async function continueGame(id) {
   try {
     const res = await fetch(`/api/game_state?playthrough_id=${id}`);
     const data = await res.json();
-    if (!res.ok) { alert(data.error || 'Fehler beim Laden.'); return; }
+    if (!res.ok) return false;
     appState.playthroughId = id;
     appState.gameState = data;
     enterGame();
     addMessage('narrator', `Willkommen zurück, ${data.name}. Die Geschichte geht weiter...`);
     updateUI();
-    // Restore pending roll if any
     if (data.pending_roll) {
       showDiceCard(data.pending_roll);
     }
-  } catch(e) { alert('Verbindungsfehler.'); }
+    return true;
+  } catch(e) { return false; }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -776,6 +831,7 @@ function exitToMenu() {
   document.getElementById('game-ui').classList.add('hidden');
   document.getElementById('wizard-overlay').classList.remove('hidden');
   document.getElementById('message-list').innerHTML = '';
+  showLanding();
   loadSaves();
 }
 
@@ -988,6 +1044,7 @@ function handleTurnResponse(data) {
   appState.gameState = data.game_state;
   updateUI();
   scrollToBottom();
+  fetchAndRenderTrace();
 }
 
 function getOutcomeClass(outcome) {
