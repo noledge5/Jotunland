@@ -58,6 +58,9 @@ The times and locations where an NPC can be found. Stored in the DB as part of t
 ## Combat State
 A flag (`in_combat=true`) set in the DB when combat begins. While active, each turn the Engine automatically resolves the enemy's counter-action after the player acts. Initiative is rolled once at combat start. Combat ends when all combatants are no longer `active`.
 
+## Called Shot
+When a player specifies a target zone in their action description (e.g. "Ich schlage auf den Kopf"), the Action Classifier raises the SG contextually — no fixed modifier. The Classifier weighs the target zone, the opponent's state, and the situation to pick the appropriate Difficulty Tier. A successful hit to the described zone is narrated accordingly by the Narrator. A critical hit (Nat 20) to a vital zone (head, throat) can trigger a Condition (Betäubung, Blutung) in addition to damage. Hit location is narrative flavor — there is no separate hit location table. The damage die result represents how clean and effective the hit was within the described zone.
+
 ## Combat Status
 The state of a combatant during or after combat. Values: `active` (fighting normally), `incapacitated` (unconscious, broken, unable to fight — not dead), `fled`, `surrendered`, `dead`. Tracked per combatant in the DB. Injuries (e.g. broken arm, leg wound) apply roll modifiers independently of HP and are also tracked in the DB.
 
