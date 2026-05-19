@@ -1,10 +1,13 @@
 import os
 import json
-from flask import Flask, request, jsonify, render_template, session
+from flask import Flask, request, jsonify, render_template
 from db import get_db, init_db
 from engine import (
-    resolve_skill_check, apply_engine_result, apply_narrator_output,
-    advance_time, get_combat_state, resolve_combat_turn, check_level_up
+    apply_narrator_output, advance_time,
+    request_roll, resolve_player_roll,
+    get_current_scene_npcs, check_char_level_up,
+    calculate_max_hp, process_dying,
+    resolve_combat_turn, resolve_combat_after_roll
 )
 from context_builder import build_context
 from llm import classify_action, generate_narration, generate_session_synopsis
@@ -14,7 +17,6 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('RPG_SECRET_KEY', 'rpg-secret-key-change-in-prod')
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'rpg.db')
-
 SKILLS_PATH = os.path.join(os.path.dirname(__file__), 'config', 'skills.json')
 RULEBOOK_PATH = os.path.join(os.path.dirname(__file__), 'config', 'rulebook.json')
 
@@ -48,7 +50,12 @@ def _get_player_state(playthrough_id):
         return None
 
     skills = conn.execute(
-        "SELECT skill_name, level, xp FROM player_skills WHERE playthrough_id=?",
+        "SELECT skill_name, level, ticks FROM player_skills WHERE playthrough_id=?",
+        (playthrough_id,)
+    ).fetchall()
+
+    attributes = conn.execute(
+        "SELECT attr_name, value FROM player_attributes WHERE playthrough_id=?",
         (playthrough_id,)
     ).fetchall()
 
@@ -68,8 +75,7 @@ def _get_player_state(playthrough_id):
         (playthrough_id,)
     ).fetchall()
 
-    # Get current scene/zone names
-    scene_name = player['current_scene_id'] or "Unknown"
+    scene_name = player['current_scene_id'] or "Unbekannt"
     if player['current_scene_id']:
         scene_row = conn.execute(
             "SELECT name FROM scenes WHERE id=?", (player['current_scene_id'],)
@@ -77,17 +83,37 @@ def _get_player_state(playthrough_id):
         if scene_row:
             scene_name = scene_row['name']
 
+    # Pending roll
+    pending_roll = None
+    if player['pending_roll']:
+        try:
+            pending_roll = json.loads(player['pending_roll'])
+        except Exception:
+            pass
+
     conn.close()
+
+    # Build skill tick info
+    skills_with_ticks = []
+    for s in skills:
+        from engine import _tick_threshold_for_value
+        ticks_needed = _tick_threshold_for_value(s['level'])
+        skills_with_ticks.append({
+            "skill_name": s['skill_name'],
+            "level": s['level'],
+            "ticks": s['ticks'],
+            "ticks_needed": ticks_needed
+        })
 
     return {
         "playthrough_id": playthrough_id,
         "name": player['name'],
         "class": player['class'],
         "level": player['level'],
-        "xp": player['xp'],
         "hp_current": player['hp_current'],
         "hp_max": player['hp_max'],
         "gold": player['gold'],
+        "skill_ups_count": player['skill_ups_count'] if 'skill_ups_count' in player.keys() else 0,
         "current_scene_id": player['current_scene_id'],
         "current_scene_name": scene_name,
         "in_combat": bool(player['in_combat']),
@@ -98,10 +124,12 @@ def _get_player_state(playthrough_id):
             "hour": player['in_game_hour'],
             "minute": player['in_game_minute']
         },
-        "skills": [dict(s) for s in skills],
+        "attributes": {r['attr_name']: r['value'] for r in attributes},
+        "skills": skills_with_ticks,
         "inventory": [dict(i) for i in inventory],
         "quests": [dict(q) for q in quests],
-        "injuries": [dict(i) for i in injuries]
+        "injuries": [dict(i) for i in injuries],
+        "pending_roll": pending_roll
     }
 
 
@@ -110,23 +138,92 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/api/character_options', methods=['GET'])
+def character_options():
+    """Return all skills, classes, and pool constants."""
+    sk = _load_skills()
+    rb = _load_rulebook()
+    return jsonify({
+        "skills": sk['skills'],
+        "classes": [
+            {
+                "name": name,
+                "description": data['description'],
+                "starting_items": data['starting_items']
+            }
+            for name, data in sk['classes'].items()
+        ],
+        "attr_pool": rb['attr_start_pool'],
+        "skill_pool": rb['skill_start_pool'],
+        "attr_min": rb['attr_start_min'],
+        "attr_max": rb['attr_start_max'],
+        "skill_max": rb['skill_start_max']
+    })
+
+
 @app.route('/api/new_game', methods=['POST'])
 def new_game():
-    """Create new playthrough. Body: {"name": str, "class": str}"""
+    """
+    Create new playthrough.
+    Body: {
+      "name": str, "class": str, "background": str,
+      "attributes": {"STR":14,...}, "skills": {"Klingenwaffen":30,...},
+      "api_key": str, "model": str, "provider": str
+    }
+    """
     data = request.get_json()
-    if not data or not data.get('name') or not data.get('class'):
-        return jsonify({"error": "name and class required"}), 400
+    if not data:
+        return jsonify({"error": "JSON body required"}), 400
 
-    char_name = data['name'].strip()
-    char_class = data['class'].strip()
+    char_name = (data.get('name') or '').strip()
+    char_class = (data.get('class') or '').strip()
+    background = (data.get('background') or '').strip()
     api_key = data.get('api_key') or None
     model = data.get('model') or None
     provider = data.get('provider', 'anthropic')
 
-    skills_data = _load_skills()
-    valid_classes = list(skills_data['class_starting_skills'].keys())
+    if not char_name:
+        return jsonify({"error": "Name darf nicht leer sein."}), 400
+
+    sk = _load_skills()
+    rb = _load_rulebook()
+
+    valid_classes = list(sk['classes'].keys())
     if char_class not in valid_classes:
-        return jsonify({"error": f"Invalid class. Choose: {', '.join(valid_classes)}"}), 400
+        return jsonify({"error": f"Ungültige Klasse. Wähle: {', '.join(valid_classes)}"}), 400
+
+    # Validate attributes
+    attributes = data.get('attributes') or {}
+    required_attrs = ['STR', 'GES', 'KON', 'INT', 'WEI', 'CHA']
+    missing = [a for a in required_attrs if a not in attributes]
+    if missing:
+        return jsonify({"error": f"Fehlende Attribute: {', '.join(missing)}"}), 400
+
+    attr_sum = sum(attributes[a] for a in required_attrs)
+    if attr_sum != rb['attr_start_pool']:
+        return jsonify({"error": f"Attribut-Summe muss {rb['attr_start_pool']} sein (aktuell: {attr_sum})."}), 400
+
+    for a in required_attrs:
+        v = attributes[a]
+        if v < rb['attr_start_min'] or v > rb['attr_start_max']:
+            return jsonify({"error": f"Attribut {a}={v} muss zwischen {rb['attr_start_min']} und {rb['attr_start_max']} liegen."}), 400
+
+    # Validate skills
+    skills_input = data.get('skills') or {}
+    valid_skill_names = {s['name'] for s in sk['skills']}
+    for sname in skills_input:
+        if sname not in valid_skill_names:
+            return jsonify({"error": f"Unbekannter Skill: {sname}"}), 400
+        if skills_input[sname] > rb['skill_start_max']:
+            return jsonify({"error": f"Skill {sname} darf maximal {rb['skill_start_max']} sein."}), 400
+
+    skill_sum = sum(skills_input.values())
+    if skill_sum > rb['skill_start_pool']:
+        return jsonify({"error": f"Skill-Summe darf maximal {rb['skill_start_pool']} sein (aktuell: {skill_sum})."}), 400
+
+    # Calculate HP
+    kon_val = attributes['KON']
+    hp_max = calculate_max_hp(kon_val, 1)
 
     conn = get_db(DB_PATH)
 
@@ -139,38 +236,38 @@ def new_game():
 
     # Create player record
     conn.execute(
-        "INSERT INTO player (playthrough_id, name, class, current_scene_id) VALUES (?,?,?,?)",
-        (playthrough_id, char_name, char_class, 'salzhaven_goldenes_schiff')
+        "INSERT INTO player (playthrough_id, name, class, current_scene_id, hp_max, hp_current, background) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (playthrough_id, char_name, char_class, 'salzhaven_goldenes_schiff', hp_max, hp_max, background)
     )
 
-    # Initialize skills from class config
-    starting_skills = skills_data['class_starting_skills'].get(char_class, {})
-    for skill_obj in skills_data['skills']:
-        skill_name = skill_obj['name']
-        skill_level = starting_skills.get(skill_name, 0)
+    # Store attributes
+    for attr_name, val in attributes.items():
         conn.execute(
-            "INSERT OR IGNORE INTO player_skills (playthrough_id, skill_name, level, xp) VALUES (?,?,?,0)",
-            (playthrough_id, skill_name, skill_level)
+            "INSERT OR REPLACE INTO player_attributes (playthrough_id, attr_name, value) VALUES (?,?,?)",
+            (playthrough_id, attr_name, val)
         )
 
-    # Give starting equipment based on class
-    starting_items = {
-        "Krieger": [("Sword", 1, 1, '{"damage": "1d6+2"}'), ("Leather Armor", 1, 1, '{"defense": 2}')],
-        "Schurke": [("Dagger", 1, 1, '{"damage": "1d4"}'), ("Lockpicks", 1, 0, '{}')],
-        "Händler": [("Merchant Ledger", 1, 0, '{}'), ("Fine Clothes", 1, 1, '{}')],
-        "Essenzkundiger": [("Essenz Focus Crystal", 1, 1, '{"essenz_bonus": 1}'), ("Scholar Robes", 1, 1, '{}')],
-        "Waldläufer": [("Hunting Bow", 1, 1, '{"damage": "1d6"}'), ("Quiver (20 arrows)", 1, 0, '{}'), ("Hunting Knife", 1, 0, '{"damage": "1d4"}')]
-    }
-    for item_name, qty, equipped, props in starting_items.get(char_class, []):
+    # Initialize all skills (only those with value > 0 get stored explicitly, others at 0)
+    for skill_obj in sk['skills']:
+        sname = skill_obj['name']
+        sval = skills_input.get(sname, 0)
         conn.execute(
-            "INSERT INTO inventory (playthrough_id, item_name, quantity, equipped, properties) VALUES (?,?,?,?,?)",
-            (playthrough_id, item_name, qty, equipped, props)
+            "INSERT OR IGNORE INTO player_skills (playthrough_id, skill_name, level, ticks) VALUES (?,?,?,0)",
+            (playthrough_id, sname, sval)
         )
 
-    # Create initial session log entry
+    # Give starting equipment
+    for item_name in sk['classes'][char_class]['starting_items']:
+        conn.execute(
+            "INSERT INTO inventory (playthrough_id, item_name, quantity, equipped, properties) VALUES (?,?,1,0,'{}' )",
+            (playthrough_id, item_name)
+        )
+
+    # Create initial session log
     cursor2 = conn.execute(
         "INSERT INTO session_log (playthrough_id, summary) VALUES (?,?)",
-        (playthrough_id, f"{char_name} the {char_class} begins their story in Salzhaven, at the Goldenes Schiff inn.")
+        (playthrough_id, f"{char_name}, ein {char_class}, beginnt seine Geschichte in Salzhaven, im Goldenen Schiff.")
     )
     session_id = cursor2.lastrowid
 
@@ -179,11 +276,10 @@ def new_game():
 
     # Generate opening narration
     initial_engine_result = {"needs_roll": False, "skill_result": None, "status": "new_game"}
-    context_prompt = build_context(playthrough_id, "I arrive at the Goldenes Schiff and look around.", initial_engine_result)
+    context_prompt = build_context(playthrough_id, "Ich betrete das Goldene Schiff und schaue mich um.", initial_engine_result)
     narrator_output = generate_narration(context_prompt, api_key=api_key, model=model, provider=provider)
-    narration = narrator_output.get("narration", "You stand in the Goldenes Schiff, a familiar crossroads of travelers and secrets.")
+    narration = narrator_output.get("narration", "Du stehst im Goldenen Schiff — ein vertrauter Knotenpunkt der Reisenden und Geheimnisse.")
 
-    # Log the opening turn
     ts = "743-04-12 09:00"
     conn2 = get_db(DB_PATH)
     turn_count = conn2.execute(
@@ -192,17 +288,20 @@ def new_game():
     conn2.execute(
         "INSERT INTO turn_log (playthrough_id, session_id, turn_number, player_input, "
         "engine_result, narration, time_delta_minutes, in_game_timestamp) VALUES (?,?,?,?,?,?,?,?)",
-        (playthrough_id, session_id, turn_count + 1, "[Game Start]",
+        (playthrough_id, session_id, turn_count + 1, "[Spielbeginn]",
          json.dumps(initial_engine_result), narration, 0, ts)
     )
     conn2.commit()
     conn2.close()
 
+    apply_narrator_output(playthrough_id, narrator_output)
     state = _get_player_state(playthrough_id)
+
     return jsonify({
         "playthrough_id": playthrough_id,
         "narration": narration,
-        "game_state": state
+        "game_state": state,
+        "starting_items": sk['classes'][char_class]['starting_items']
     })
 
 
@@ -211,13 +310,13 @@ def take_turn():
     """Process one player turn."""
     data = request.get_json()
     if not data or not data.get('playthrough_id') or not data.get('input'):
-        return jsonify({"error": "playthrough_id and input required"}), 400
+        return jsonify({"error": "playthrough_id und input erforderlich"}), 400
 
     playthrough_id = int(data['playthrough_id'])
     player_input = data['input'].strip()
 
     if not player_input:
-        return jsonify({"error": "input cannot be empty"}), 400
+        return jsonify({"error": "input darf nicht leer sein"}), 400
 
     conn = get_db(DB_PATH)
     player = conn.execute(
@@ -225,30 +324,38 @@ def take_turn():
     ).fetchone()
     if not player:
         conn.close()
-        return jsonify({"error": "Playthrough not found"}), 404
+        return jsonify({"error": "Playthrough nicht gefunden"}), 404
+
+    # Check for pending roll
+    if player['pending_roll']:
+        try:
+            pending = json.loads(player['pending_roll'])
+        except Exception:
+            pending = {}
+        conn.close()
+        return jsonify({
+            "error": "Würfelwurf ausstehend",
+            "pending_roll": pending
+        }), 409
 
     in_combat = bool(player['in_combat'])
     current_scene_id = player['current_scene_id'] or 'unknown'
 
-    # Get session id
     session_row = conn.execute(
         "SELECT id FROM session_log WHERE playthrough_id=? ORDER BY id DESC LIMIT 1",
         (playthrough_id,)
     ).fetchone()
     session_id = session_row['id'] if session_row else None
 
-    # Turn count
     turn_count = conn.execute(
         "SELECT COUNT(*) as cnt FROM turn_log WHERE playthrough_id=?", (playthrough_id,)
     ).fetchone()['cnt']
 
     conn.close()
 
-    # 1. Build skill list
-    skills_data = _load_skills()
-    skill_list = [s['name'] for s in skills_data['skills']]
+    sk = _load_skills()
+    skill_list = [s['name'] for s in sk['skills']]
 
-    # Get scene name for classifier context
     conn2 = get_db(DB_PATH)
     scene_row = conn2.execute("SELECT name FROM scenes WHERE id=?", (current_scene_id,)).fetchone()
     scene_name = scene_row['name'] if scene_row else current_scene_id
@@ -258,49 +365,59 @@ def take_turn():
     model = data.get('model') or None
     provider = data.get('provider', 'anthropic')
 
-    # 2. Classify action (LLM Call #1)
+    # 1. Classify action
     classifier_output = classify_action(player_input, skill_list, scene_name, in_combat,
                                         api_key=api_key, model=model, provider=provider)
 
-    # 3. Resolve mechanics
-    skill_result = None
+    # 2. Check if roll needed
     if classifier_output.get('needs_roll') and classifier_output.get('skill'):
         skill_name = classifier_output['skill']
-        difficulty_tier = classifier_output.get('difficulty_tier', 'Medium')
-        if in_combat and classifier_output.get('target'):
-            # Route through combat resolution
-            combat_result = resolve_combat_turn(playthrough_id, player_input, classifier_output['target'])
-            engine_result = {
-                "needs_roll": True,
-                "skill_result": combat_result.get('player_attack'),
-                "combat_result": combat_result,
-                "status": "combat_resolved"
-            }
-        else:
-            skill_result = resolve_skill_check(playthrough_id, skill_name, difficulty_tier)
-            engine_result = apply_engine_result(playthrough_id, classifier_output, skill_result)
-    else:
-        engine_result = apply_engine_result(playthrough_id, classifier_output, None)
+        difficulty_tier = classifier_output.get('difficulty_tier', 'Durchschnitt')
 
-    # 4. Build context
+        # Request external roll
+        roll_request = request_roll(playthrough_id, skill_name, difficulty_tier)
+
+        # Log the input (no narration yet)
+        conn3 = get_db(DB_PATH)
+        conn3.execute(
+            "INSERT INTO turn_log (playthrough_id, session_id, turn_number, player_input, "
+            "engine_result, narration, time_delta_minutes, in_game_timestamp) VALUES (?,?,?,?,?,?,?,?)",
+            (playthrough_id, session_id, turn_count + 1, player_input,
+             json.dumps({"awaiting_roll": True, "roll_request": roll_request}),
+             "", 0, "pending")
+        )
+        conn3.commit()
+        conn3.close()
+
+        state = _get_player_state(playthrough_id)
+        return jsonify({
+            "state": "awaiting_roll",
+            "roll_request": roll_request,
+            "game_state": state
+        })
+
+    # 3. No roll needed — direct narration
+    engine_result = {
+        "needs_roll": False,
+        "skill_result": None,
+        "target": classifier_output.get('target'),
+        "status": "resolved"
+    }
+
     context_prompt = build_context(playthrough_id, player_input, engine_result)
-
-    # 5. Generate narration (LLM Call #2)
     narrator_output = generate_narration(context_prompt, api_key=api_key, model=model, provider=provider)
-    narration = narrator_output.get("narration", "The moment passes.")
+    narration = narrator_output.get("narration", "Der Moment vergeht.")
 
-    # 6. Apply narrator output to DB
     apply_narrator_output(playthrough_id, narrator_output)
 
-    # 7. Log the turn
-    conn3 = get_db(DB_PATH)
-    p_time = conn3.execute(
+    conn4 = get_db(DB_PATH)
+    p_time = conn4.execute(
         "SELECT in_game_year, in_game_month, in_game_day, in_game_hour, in_game_minute "
         "FROM player WHERE playthrough_id=?", (playthrough_id,)
     ).fetchone()
     ts = f"{p_time['in_game_year']}-{p_time['in_game_month']:02d}-{p_time['in_game_day']:02d} {p_time['in_game_hour']:02d}:{p_time['in_game_minute']:02d}"
 
-    conn3.execute(
+    conn4.execute(
         "INSERT INTO turn_log (playthrough_id, session_id, turn_number, player_input, "
         "engine_result, narration, time_delta_minutes, in_game_timestamp) VALUES (?,?,?,?,?,?,?,?)",
         (playthrough_id, session_id, turn_count + 1, player_input,
@@ -308,28 +425,121 @@ def take_turn():
          narrator_output.get('time_delta_minutes', 5), ts)
     )
 
-    # 8. Check synopsis trigger
+    # Synopsis check
     rb = _load_rulebook()
     synopsis_every = rb.get('synopsis_every_n_turns', 20)
     if (turn_count + 1) % synopsis_every == 0:
-        recent_turns = conn3.execute(
+        recent_turns = conn4.execute(
             "SELECT narration FROM turn_log WHERE playthrough_id=? ORDER BY turn_number DESC LIMIT ?",
             (playthrough_id, synopsis_every)
         ).fetchall()
         recent_narrations = [t['narration'] for t in reversed(recent_turns)]
-        p = conn3.execute("SELECT name, class, level FROM player WHERE playthrough_id=?", (playthrough_id,)).fetchone()
-        player_summary = f"{p['name']} the {p['class']} (Level {p['level']})"
+        p = conn4.execute("SELECT name, class, level FROM player WHERE playthrough_id=?", (playthrough_id,)).fetchone()
+        player_summary = f"{p['name']} der {p['class']} (Level {p['level']})"
         synopsis = generate_session_synopsis(recent_narrations, player_summary,
-                                              api_key=api_key, model=model, provider=provider)
-        conn3.execute(
+                                             api_key=api_key, model=model, provider=provider)
+        conn4.execute(
             "INSERT INTO session_log (playthrough_id, summary) VALUES (?,?)",
             (playthrough_id, synopsis)
         )
 
-    conn3.commit()
-    conn3.close()
+    conn4.commit()
+    conn4.close()
 
-    check_level_up(playthrough_id)
+    check_char_level_up(playthrough_id)
+    state = _get_player_state(playthrough_id)
+
+    return jsonify({
+        "narration": narration,
+        "engine_result": engine_result,
+        "narrator_output": {
+            "time_delta_minutes": narrator_output.get("time_delta_minutes", 5),
+            "world_state_changes": narrator_output.get("world_state_changes", []),
+            "generated_npcs": [n.get("name") for n in narrator_output.get("generated_npcs", [])],
+            "generated_locations": [l.get("name") for l in narrator_output.get("generated_locations", [])]
+        },
+        "game_state": state
+    })
+
+
+@app.route('/api/roll', methods=['POST'])
+def submit_roll():
+    """Submit a player's physical dice roll result."""
+    data = request.get_json()
+    if not data or not data.get('playthrough_id') or data.get('dice_result') is None:
+        return jsonify({"error": "playthrough_id und dice_result erforderlich"}), 400
+
+    playthrough_id = int(data['playthrough_id'])
+    dice_result = int(data['dice_result'])
+
+    if dice_result < 1 or dice_result > 20:
+        return jsonify({"error": "dice_result muss zwischen 1 und 20 liegen"}), 400
+
+    api_key = data.get('api_key') or None
+    model = data.get('model') or None
+    provider = data.get('provider', 'anthropic')
+
+    # Resolve the roll
+    engine_result = resolve_player_roll(playthrough_id, dice_result)
+
+    if 'error' in engine_result:
+        return jsonify(engine_result), 400
+
+    # Build context and narrate
+    player_input_for_ctx = data.get('player_input', '[Würfelwurf]')
+    context_prompt = build_context(playthrough_id, player_input_for_ctx, engine_result)
+    narrator_output = generate_narration(context_prompt, api_key=api_key, model=model, provider=provider)
+    narration = narrator_output.get("narration", "Der Moment vergeht.")
+
+    apply_narrator_output(playthrough_id, narrator_output)
+
+    # Update the pending turn_log entry (last one with no narration)
+    conn = get_db(DB_PATH)
+    p_time = conn.execute(
+        "SELECT in_game_year, in_game_month, in_game_day, in_game_hour, in_game_minute "
+        "FROM player WHERE playthrough_id=?", (playthrough_id,)
+    ).fetchone()
+    ts = f"{p_time['in_game_year']}-{p_time['in_game_month']:02d}-{p_time['in_game_day']:02d} {p_time['in_game_hour']:02d}:{p_time['in_game_minute']:02d}"
+
+    # Update the last pending log entry
+    conn.execute(
+        "UPDATE turn_log SET engine_result=?, narration=?, time_delta_minutes=?, in_game_timestamp=? "
+        "WHERE playthrough_id=? AND narration='' AND in_game_timestamp='pending' "
+        "ORDER BY id DESC LIMIT 1",
+        (json.dumps(engine_result), narration,
+         narrator_output.get('time_delta_minutes', 5), ts, playthrough_id)
+    )
+
+    # Synopsis check
+    rb = _load_rulebook()
+    synopsis_every = rb.get('synopsis_every_n_turns', 20)
+    turn_count = conn.execute(
+        "SELECT COUNT(*) as cnt FROM turn_log WHERE playthrough_id=?", (playthrough_id,)
+    ).fetchone()['cnt']
+
+    if turn_count % synopsis_every == 0:
+        recent_turns = conn.execute(
+            "SELECT narration FROM turn_log WHERE playthrough_id=? ORDER BY turn_number DESC LIMIT ?",
+            (playthrough_id, synopsis_every)
+        ).fetchall()
+        recent_narrations = [t['narration'] for t in reversed(recent_turns) if t['narration']]
+        p = conn.execute("SELECT name, class, level FROM player WHERE playthrough_id=?", (playthrough_id,)).fetchone()
+        player_summary = f"{p['name']} der {p['class']} (Level {p['level']})"
+        session_row = conn.execute(
+            "SELECT id FROM session_log WHERE playthrough_id=? ORDER BY id DESC LIMIT 1",
+            (playthrough_id,)
+        ).fetchone()
+        synopsis = generate_session_synopsis(recent_narrations, player_summary,
+                                             api_key=api_key, model=model, provider=provider)
+        conn.execute(
+            "INSERT INTO session_log (playthrough_id, summary) VALUES (?,?)",
+            (playthrough_id, synopsis)
+        )
+
+    conn.commit()
+    conn.close()
+
+    check_char_level_up(playthrough_id)
     state = _get_player_state(playthrough_id)
 
     return jsonify({
@@ -350,15 +560,15 @@ def game_state():
     """Return current game state for playthrough_id query param."""
     playthrough_id = request.args.get('playthrough_id')
     if not playthrough_id:
-        return jsonify({"error": "playthrough_id required"}), 400
+        return jsonify({"error": "playthrough_id erforderlich"}), 400
     try:
         playthrough_id = int(playthrough_id)
     except ValueError:
-        return jsonify({"error": "invalid playthrough_id"}), 400
+        return jsonify({"error": "Ungültige playthrough_id"}), 400
 
     state = _get_player_state(playthrough_id)
     if not state:
-        return jsonify({"error": "Playthrough not found"}), 404
+        return jsonify({"error": "Playthrough nicht gefunden"}), 404
     return jsonify(state)
 
 
@@ -378,13 +588,14 @@ def list_playthroughs():
 
 @app.route('/api/classes', methods=['GET'])
 def list_classes():
-    """Return available character classes."""
-    skills_data = _load_skills()
+    """Return available character classes (legacy endpoint)."""
+    sk = _load_skills()
     classes = []
-    for cls_name, starting_skills in skills_data['class_starting_skills'].items():
+    for name, data in sk['classes'].items():
         classes.append({
-            "name": cls_name,
-            "starting_skills": starting_skills
+            "name": name,
+            "description": data['description'],
+            "starting_items": data['starting_items']
         })
     return jsonify(classes)
 

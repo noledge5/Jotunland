@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,509 +7,1138 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <!-- New Game Modal -->
-  <div id="new-game-modal" class="modal-overlay">
-    <div class="modal-box">
-      <h2>Begin Your Story</h2>
-      <p class="modal-subtitle">Year 743 of the Imperial Calendar. Salzhaven awaits.</p>
+
+<!-- ══════════════════════════════════════════════════════
+     CHARAKTER-ERSTELLUNG WIZARD
+══════════════════════════════════════════════════════ -->
+<div id="wizard-overlay" class="modal-overlay">
+  <div class="wizard-box">
+
+    <!-- Step Indicator -->
+    <div class="wizard-steps">
+      <div class="step-dot active" id="dot-1">1</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="dot-2">2</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="dot-3">3</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="dot-4">4</div>
+    </div>
+
+    <!-- Step 1: Name & Klasse -->
+    <div class="wizard-step" id="step-1">
+      <h2 class="wizard-title">Deine Geschichte beginnt</h2>
+      <p class="wizard-sub">Jahr 743 IC. Salzhaven wartet.</p>
+
       <div class="form-group">
-        <label for="char-name">Character Name</label>
-        <input type="text" id="char-name" placeholder="Enter your name..." maxlength="40">
+        <label for="char-name">Charaktername</label>
+        <input type="text" id="char-name" placeholder="Deinen Namen eingeben..." maxlength="40">
       </div>
+
       <div class="form-group">
-        <label>Class</label>
-        <div id="class-list" class="class-grid">
-          <!-- populated by JS -->
-        </div>
+        <label>Hintergrundgeschichte <span class="optional">(optional)</span></label>
+        <textarea id="char-background" placeholder="Woher kommst du? Was treibt dich an?" rows="3" maxlength="400"></textarea>
       </div>
+
       <div class="form-group">
-        <label>LLM Provider</label>
+        <label>Klasse wählen</label>
+        <div id="class-cards" class="class-grid"><!-- populated by JS --></div>
+      </div>
+
+      <div id="step1-error" class="error-msg hidden"></div>
+      <div class="wizard-nav">
+        <div></div>
+        <button class="btn-primary" onclick="wizardNext(1)">Weiter &rarr;</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Attribute -->
+    <div class="wizard-step hidden" id="step-2">
+      <h2 class="wizard-title">Attribute verteilen</h2>
+      <div class="attr-pool-bar">
+        <span>Verbleibend:</span>
+        <strong id="attr-pool-display">78 / 78</strong>
+        <span id="attr-pool-status" class="pool-ok">✓</span>
+      </div>
+      <div class="attr-quick-stats">
+        <span>Max LP: <strong id="preview-hp">—</strong></span>
+        <span>VW: <strong id="preview-vw">—</strong></span>
+      </div>
+
+      <div id="attr-inputs" class="attr-grid"><!-- populated by JS --></div>
+
+      <div id="step2-error" class="error-msg hidden"></div>
+      <div class="wizard-nav">
+        <button class="btn-secondary" onclick="wizardBack(2)">&larr; Zurück</button>
+        <button class="btn-primary" onclick="wizardNext(2)">Weiter &rarr;</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Skills -->
+    <div class="wizard-step hidden" id="step-3">
+      <h2 class="wizard-title">Fertigkeiten wählen</h2>
+      <div class="skill-pool-bar">
+        <span>Verbleibend:</span>
+        <strong id="skill-pool-display">80 / 80</strong>
+        <span id="skill-pool-status" class="pool-ok">✓</span>
+      </div>
+
+      <div class="skill-category-tabs" id="skill-tabs"><!-- populated by JS --></div>
+      <div id="skill-inputs" class="skill-list"><!-- populated by JS --></div>
+
+      <div id="step3-error" class="error-msg hidden"></div>
+      <div class="wizard-nav">
+        <button class="btn-secondary" onclick="wizardBack(3)">&larr; Zurück</button>
+        <button class="btn-primary" onclick="wizardNext(3)">Weiter &rarr;</button>
+      </div>
+    </div>
+
+    <!-- Step 4: API & Start -->
+    <div class="wizard-step hidden" id="step-4">
+      <h2 class="wizard-title">Letzter Schritt</h2>
+
+      <div class="char-summary" id="char-summary"><!-- populated by JS --></div>
+
+      <div class="form-group">
+        <label>LLM-Anbieter</label>
         <div style="display:flex;gap:8px;margin-bottom:8px;">
           <button type="button" class="provider-btn selected" data-provider="anthropic" onclick="selectProvider('anthropic')">Anthropic</button>
           <button type="button" class="provider-btn" data-provider="openrouter" onclick="selectProvider('openrouter')">OpenRouter</button>
         </div>
         <div style="position:relative;">
-          <input type="password" id="api-key" placeholder="API key (stored in browser only)" autocomplete="off">
-          <button type="button" id="key-toggle" onclick="toggleKeyVisibility()" title="Show/hide key">👁</button>
+          <input type="password" id="api-key" placeholder="API-Key (wird nur im Browser gespeichert)" autocomplete="off">
+          <button type="button" id="key-toggle" onclick="toggleKeyVisibility()" title="Anzeigen/Verbergen">&#128065;</button>
         </div>
         <div id="openrouter-model-row" style="margin-top:8px;display:none;">
-          <input type="text" id="or-model" placeholder="Model (e.g. anthropic/claude-sonnet-4-5)" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:0.6rem 0.8rem;font-size:0.9rem;font-family:var(--font-ui);outline:none;">
+          <input type="text" id="or-model" placeholder="Modell (z.B. anthropic/claude-sonnet-4-5)" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:0.6rem 0.8rem;font-size:0.9rem;font-family:var(--font-ui);outline:none;">
           <div id="model-suggestions" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
         </div>
       </div>
 
-      <div id="modal-error" class="error-msg hidden"></div>
-      <button id="start-btn" class="btn-primary">Begin</button>
-      <div id="modal-loading" class="spinner hidden"></div>
+      <div id="step4-error" class="error-msg hidden"></div>
+      <button id="start-btn" class="btn-primary btn-wide">Spiel beginnen</button>
+      <div id="modal-loading" class="spinner hidden">Erschaffe deine Welt...</div>
 
-      <div class="or-divider">— or —</div>
+      <div class="or-divider">— oder —</div>
       <div id="saved-games">
-        <p class="section-label">Continue a playthrough</p>
-        <div id="saves-list">
-          <!-- populated by JS -->
-        </div>
+        <p class="section-label">Vorherigen Durchlauf fortsetzen</p>
+        <div id="saves-list"><!-- populated by JS --></div>
+      </div>
+
+      <div class="wizard-nav" style="margin-top:1rem;">
+        <button class="btn-secondary" onclick="wizardBack(4)">&larr; Zurück</button>
+        <div></div>
       </div>
     </div>
+
   </div>
+</div>
 
-  <!-- Main Game UI -->
-  <div id="game-ui" class="hidden">
-    <!-- Top Bar -->
-    <header id="top-bar">
-      <div class="top-bar-name" id="hdr-name">—</div>
-      <div class="top-bar-stats">
-        <span class="stat-hp" id="hdr-hp">HP: —/—</span>
-        <span class="stat-gold" id="hdr-gold">Gold: —</span>
-        <span class="stat-loc" id="hdr-loc">—</span>
-        <span class="stat-time" id="hdr-time">—</span>
+<!-- ══════════════════════════════════════════════════════
+     SPIEL-UI
+══════════════════════════════════════════════════════ -->
+<div id="game-ui" class="hidden">
+
+  <!-- Top Bar -->
+  <header id="top-bar">
+    <div class="top-bar-left">
+      <span class="top-bar-name" id="hdr-name">—</span>
+      <div class="hp-bar-wrap">
+        <div class="hp-bar-track">
+          <div class="hp-bar-fill" id="hdr-hp-bar"></div>
+        </div>
+        <span class="hp-label" id="hdr-hp">LP —/—</span>
       </div>
-      <button id="panel-toggle" class="btn-icon" title="Toggle side panel">&#9776;</button>
-    </header>
-
-    <!-- Main Layout -->
-    <div id="main-layout">
-      <!-- Chat Area -->
-      <div id="chat-area">
-        <div id="message-list">
-          <!-- messages go here -->
-        </div>
-        <!-- Input -->
-        <div id="input-bar">
-          <textarea id="player-input" placeholder="What do you do?" rows="2" maxlength="500"></textarea>
-          <button id="send-btn" class="btn-primary">Send</button>
-        </div>
-      </div>
-
-      <!-- Side Panel -->
-      <aside id="side-panel">
-        <div class="panel-section">
-          <h3>Skills</h3>
-          <ul id="skills-list"></ul>
-        </div>
-        <div class="panel-section">
-          <h3>Inventory</h3>
-          <ul id="inventory-list"></ul>
-        </div>
-        <div class="panel-section">
-          <h3>Active Quests</h3>
-          <ul id="quests-list"></ul>
-        </div>
-        <div class="panel-section">
-          <h3>Injuries</h3>
-          <ul id="injuries-list"></ul>
-        </div>
-      </aside>
     </div>
-  </div>
+    <div class="top-bar-stats">
+      <span class="stat-gold" id="hdr-gold">—g</span>
+      <span class="stat-level" id="hdr-level">Lv —</span>
+      <div class="xp-bar-wrap" id="hdr-xp-wrap" title="Skill-Ups zum nächsten Level">
+        <div class="xp-bar-fill" id="hdr-xp-bar"></div>
+      </div>
+      <span class="stat-loc" id="hdr-loc">—</span>
+      <span class="stat-time" id="hdr-time">—</span>
+    </div>
+    <button id="panel-toggle" class="btn-icon" title="Seitenleiste">&#9776;</button>
+  </header>
 
-  <script>
-    // ── State ──────────────────────────────────────────────
-    let state = {
-      playthroughId: null,
-      selectedClass: null,
-      gameState: null,
-      provider: 'anthropic',
-      apiKey: '',
-      model: ''
+  <!-- Main Layout -->
+  <div id="main-layout">
+
+    <!-- Chat Area -->
+    <div id="chat-area">
+      <div id="message-list"></div>
+
+      <!-- Würfelwurf-Karte (hidden by default) -->
+      <div id="dice-roll-card" class="hidden">
+        <div class="dice-card-inner">
+          <div class="dice-card-header">
+            <span class="dice-card-icon">&#9680;</span>
+            <div>
+              <div class="dice-card-skill" id="dice-skill-name">—</div>
+              <div class="dice-card-tier" id="dice-tier">—</div>
+            </div>
+          </div>
+          <div class="dice-card-info">
+            <div class="dice-info-row">
+              <span class="dice-info-label">SG</span>
+              <span class="dice-info-value" id="dice-sg">—</span>
+            </div>
+            <div class="dice-info-row">
+              <span class="dice-info-label">Bonus</span>
+              <span class="dice-info-value" id="dice-modifier">—</span>
+            </div>
+            <div class="dice-info-row">
+              <span class="dice-info-label">Formel</span>
+              <span class="dice-info-value dice-formula" id="dice-formula">W20 + ?</span>
+            </div>
+          </div>
+          <p class="dice-instruction">Wirf deinen W20 und gib das Ergebnis ein</p>
+          <div class="dice-input-row">
+            <input type="number" id="dice-result-input" min="1" max="20" placeholder="1–20">
+            <button class="btn-primary" id="dice-confirm-btn" onclick="submitDiceRoll()">Wurf bestätigen</button>
+          </div>
+          <div id="dice-error" class="error-msg hidden"></div>
+        </div>
+      </div>
+
+      <!-- Normal Input -->
+      <div id="input-bar">
+        <textarea id="player-input" placeholder="Was tust du?" rows="2" maxlength="500"></textarea>
+        <button id="send-btn" class="btn-primary">Senden</button>
+      </div>
+    </div>
+
+    <!-- Side Panel -->
+    <aside id="side-panel">
+      <!-- Attribute -->
+      <div class="panel-section" id="panel-attrs-section">
+        <h3>Attribute</h3>
+        <ul id="attrs-list"></ul>
+      </div>
+
+      <!-- Skills by category -->
+      <div class="panel-section">
+        <h3>Fertigkeiten</h3>
+        <div id="panel-skills-list"></div>
+      </div>
+
+      <!-- Inventory -->
+      <div class="panel-section">
+        <h3>Inventar</h3>
+        <ul id="inventory-list"></ul>
+      </div>
+
+      <!-- Quests -->
+      <div class="panel-section">
+        <h3>Aktive Quests</h3>
+        <ul id="quests-list"></ul>
+      </div>
+
+      <!-- Injuries -->
+      <div class="panel-section">
+        <h3>Verletzungen</h3>
+        <ul id="injuries-list"></ul>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+const ATTR_POOL = 78;
+const SKILL_POOL = 80;
+const ATTR_MIN = 6, ATTR_MAX = 18, SKILL_MAX = 30;
+
+const ATTR_INFO = {
+  STR: { label: "Stärke",       short: "STR", desc: "Körperkraft, Nahkampfschaden" },
+  GES: { label: "Geschick",     short: "GES", desc: "Feinmotorik, Fernkampf, Ausweichen" },
+  KON: { label: "Konstitution", short: "KON", desc: "Ausdauer, Lebenspunkte" },
+  INT: { label: "Intelligenz",  short: "INT", desc: "Wissen, Magie, Wahrnehmung" },
+  WEI: { label: "Weisheit",     short: "WEI", desc: "Instinkt, soziale Empathie" },
+  CHA: { label: "Charisma",     short: "CHA", desc: "Überzeugungskraft, Führung" }
+};
+
+const OPENROUTER_MODELS = [
+  'anthropic/claude-sonnet-4-5',
+  'anthropic/claude-3-5-haiku',
+  'openai/gpt-4o',
+  'openai/gpt-4o-mini',
+  'google/gemini-flash-1.5',
+  'meta-llama/llama-3.3-70b-instruct',
+  'mistralai/mistral-large',
+  'deepseek/deepseek-chat',
+];
+
+let appState = {
+  playthroughId: null,
+  gameState: null,
+  provider: 'anthropic',
+  apiKey: '',
+  model: '',
+  // Wizard
+  selectedClass: null,
+  attributes: { STR: 13, GES: 13, KON: 13, INT: 13, WEI: 13, CHA: 13 },
+  skills: {},
+  charOptions: null,
+  activeSkillCategory: null,
+  // Pending roll
+  pendingRoll: null,
+  lastPlayerInput: ''
+};
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+async function init() {
+  loadSettings();
+  await Promise.all([loadCharOptions(), loadSaves()]);
+}
+
+async function loadCharOptions() {
+  try {
+    const res = await fetch('/api/character_options');
+    appState.charOptions = await res.json();
+    renderClassCards();
+    renderAttrInputs();
+    renderSkillInputs();
+  } catch(e) {
+    console.error('loadCharOptions error', e);
+  }
+}
+
+async function loadSaves() {
+  try {
+    const res = await fetch('/api/playthroughs');
+    const saves = await res.json();
+    const list = document.getElementById('saves-list');
+    list.innerHTML = '';
+    if (!saves.length) {
+      list.innerHTML = '<p class="muted">Keine gespeicherten Spiele.</p>';
+      return;
+    }
+    saves.forEach(s => {
+      const div = document.createElement('div');
+      div.className = 'save-entry';
+      div.innerHTML = `
+        <span class="save-name">${esc(s.character_name)}</span>
+        <span class="save-class">${esc(s.character_class)}</span>
+        <span class="save-level">Lv ${s.level || 1}</span>
+        <button class="btn-secondary" data-id="${s.id}">Fortsetzen</button>
+      `;
+      div.querySelector('button').addEventListener('click', () => continueGame(s.id));
+      list.appendChild(div);
+    });
+  } catch(e) { console.error('loadSaves error', e); }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  WIZARD — CLASS CARDS
+// ═══════════════════════════════════════════════════════════
+function renderClassCards() {
+  const opts = appState.charOptions;
+  if (!opts) return;
+  const grid = document.getElementById('class-cards');
+  grid.innerHTML = '';
+  opts.classes.forEach(cls => {
+    const card = document.createElement('div');
+    card.className = 'class-card';
+    card.dataset.name = cls.name;
+    card.innerHTML = `
+      <div class="class-card-name">${esc(cls.name)}</div>
+      <div class="class-card-desc">${esc(cls.description)}</div>
+      <div class="class-card-items">${cls.starting_items.map(i => `<span>${esc(i)}</span>`).join('')}</div>
+    `;
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      appState.selectedClass = cls.name;
+    });
+    grid.appendChild(card);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  WIZARD — ATTRIBUTES
+// ═══════════════════════════════════════════════════════════
+function attrMod(v) { return Math.floor((v - 10) / 2); }
+function fmtMod(m) { return m >= 0 ? `+${m}` : `${m}`; }
+
+function renderAttrInputs() {
+  const container = document.getElementById('attr-inputs');
+  container.innerHTML = '';
+  const ATTRS = ['STR', 'GES', 'KON', 'INT', 'WEI', 'CHA'];
+  ATTRS.forEach(a => {
+    const info = ATTR_INFO[a];
+    const v = appState.attributes[a] || 13;
+    const row = document.createElement('div');
+    row.className = 'attr-row';
+    row.id = `attr-row-${a}`;
+    row.innerHTML = `
+      <div class="attr-label-col">
+        <span class="attr-name">${info.label}</span>
+        <span class="attr-desc">${info.desc}</span>
+      </div>
+      <div class="attr-ctrl">
+        <button class="attr-btn" onclick="changeAttr('${a}',-1)">-</button>
+        <div class="attr-val-wrap">
+          <span class="attr-val" id="attr-val-${a}">${v}</span>
+          <span class="attr-mod" id="attr-mod-${a}">${fmtMod(attrMod(v))}</span>
+        </div>
+        <button class="attr-btn" onclick="changeAttr('${a}',+1)">+</button>
+      </div>
+    `;
+    container.appendChild(row);
+  });
+  updateAttrPool();
+}
+
+function changeAttr(attr, delta) {
+  const cur = appState.attributes[attr] || 13;
+  const next = cur + delta;
+  if (next < ATTR_MIN || next > ATTR_MAX) return;
+  // Check pool
+  const used = Object.values(appState.attributes).reduce((s, v) => s + v, 0);
+  if (delta > 0 && used >= ATTR_POOL) return;
+  appState.attributes[attr] = next;
+  document.getElementById(`attr-val-${attr}`).textContent = next;
+  document.getElementById(`attr-mod-${attr}`).textContent = fmtMod(attrMod(next));
+  updateAttrPool();
+}
+
+function updateAttrPool() {
+  const used = Object.values(appState.attributes).reduce((s, v) => s + v, 0);
+  const remaining = ATTR_POOL - used;
+  const disp = document.getElementById('attr-pool-display');
+  const status = document.getElementById('attr-pool-status');
+  disp.textContent = `${remaining} / ${ATTR_POOL}`;
+  if (remaining === 0) {
+    status.textContent = '✓'; status.className = 'pool-ok';
+    disp.style.color = 'var(--success)';
+  } else if (remaining < 0) {
+    status.textContent = '!'; status.className = 'pool-over';
+    disp.style.color = 'var(--danger)';
+  } else {
+    status.textContent = ''; status.className = '';
+    disp.style.color = 'var(--text-muted)';
+  }
+  // Preview HP and VW
+  const kon = appState.attributes.KON || 10;
+  const ges = appState.attributes.GES || 10;
+  document.getElementById('preview-hp').textContent = kon + 10 + 2;
+  document.getElementById('preview-vw').textContent = 10 + attrMod(ges);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  WIZARD — SKILLS
+// ═══════════════════════════════════════════════════════════
+function renderSkillInputs() {
+  const opts = appState.charOptions;
+  if (!opts) return;
+
+  // Build categories
+  const cats = [...new Set(opts.skills.map(s => s.category))];
+  if (!appState.activeSkillCategory) appState.activeSkillCategory = cats[0];
+
+  // Tabs
+  const tabsEl = document.getElementById('skill-tabs');
+  tabsEl.innerHTML = '';
+  cats.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'skill-tab' + (cat === appState.activeSkillCategory ? ' active' : '');
+    btn.textContent = cat;
+    btn.onclick = () => {
+      appState.activeSkillCategory = cat;
+      renderSkillInputs();
     };
+    tabsEl.appendChild(btn);
+  });
 
-    const OPENROUTER_MODELS = [
-      'anthropic/claude-sonnet-4-5',
-      'anthropic/claude-3-5-haiku',
-      'openai/gpt-4o',
-      'openai/gpt-4o-mini',
-      'google/gemini-flash-1.5',
-      'meta-llama/llama-3.3-70b-instruct',
-      'mistralai/mistral-large',
-      'deepseek/deepseek-chat',
-    ];
+  // Skills for active category
+  const container = document.getElementById('skill-inputs');
+  container.innerHTML = '';
+  const catSkills = opts.skills.filter(s => s.category === appState.activeSkillCategory);
+  catSkills.forEach(skill => {
+    const val = appState.skills[skill.name] || 0;
+    const row = document.createElement('div');
+    row.className = 'skill-row' + (val > 0 ? ' trained' : '');
+    row.id = `skill-row-${skill.id}`;
+    row.innerHTML = `
+      <div class="skill-info">
+        <span class="skill-name">${esc(skill.name)}</span>
+        <span class="skill-attrs">${skill.attrs.join(' / ')}</span>
+      </div>
+      <div class="skill-ctrl">
+        <button class="skill-btn" onclick="changeSkill('${esc(skill.name)}',-5)">-</button>
+        <input type="number" class="skill-val-input" id="skill-inp-${skill.id}"
+          value="${val}" min="0" max="${SKILL_MAX}" step="5"
+          onchange="setSkill('${esc(skill.name)}', this, '${skill.id}')">
+        <button class="skill-btn" onclick="changeSkill('${esc(skill.name)}',+5,'${skill.id}')">+</button>
+      </div>
+    `;
+    container.appendChild(row);
+  });
 
-    // ── Provider / Key UI ──────────────────────────────────
-    function selectProvider(p) {
-      state.provider = p;
-      document.querySelectorAll('.provider-btn').forEach(b => {
-        b.classList.toggle('selected', b.dataset.provider === p);
-      });
-      const modelRow = document.getElementById('openrouter-model-row');
-      modelRow.style.display = p === 'openrouter' ? 'block' : 'none';
-      if (p === 'openrouter' && !document.getElementById('model-suggestions').children.length) {
-        renderModelSuggestions();
-      }
-      saveSettings();
-    }
+  updateSkillPool();
+}
 
-    function renderModelSuggestions() {
-      const el = document.getElementById('model-suggestions');
-      el.innerHTML = '';
-      OPENROUTER_MODELS.forEach(m => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'model-suggestion';
-        btn.textContent = m;
-        btn.onclick = () => { document.getElementById('or-model').value = m; saveSettings(); };
-        el.appendChild(btn);
-      });
-    }
+function changeSkill(skillName, delta, skillId) {
+  const cur = appState.skills[skillName] || 0;
+  const next = Math.max(0, Math.min(SKILL_MAX, cur + delta));
+  const used = Object.values(appState.skills).reduce((s, v) => s + v, 0);
+  if (delta > 0 && (used + delta) > SKILL_POOL) return;
+  appState.skills[skillName] = next;
 
-    function toggleKeyVisibility() {
-      const inp = document.getElementById('api-key');
-      inp.type = inp.type === 'password' ? 'text' : 'password';
-    }
+  // Update input field if visible
+  if (skillId) {
+    const inp = document.getElementById(`skill-inp-${skillId}`);
+    if (inp) inp.value = next;
+    const row = document.getElementById(`skill-row-${skillId}`);
+    if (row) row.className = 'skill-row' + (next > 0 ? ' trained' : '');
+  }
+  updateSkillPool();
+}
 
-    function saveSettings() {
-      const key = document.getElementById('api-key').value;
-      const model = document.getElementById('or-model')?.value || '';
-      state.apiKey = key;
-      state.model = model;
-      try {
-        localStorage.setItem('rpg_provider', state.provider);
-        localStorage.setItem('rpg_api_key', key);
-        localStorage.setItem('rpg_model', model);
-      } catch(e) {}
-    }
+function setSkill(skillName, input, skillId) {
+  const next = Math.max(0, Math.min(SKILL_MAX, parseInt(input.value) || 0));
+  const old = appState.skills[skillName] || 0;
+  const used = Object.values(appState.skills).reduce((s, v) => s + v, 0);
+  const newUsed = used - old + next;
+  if (newUsed > SKILL_POOL) {
+    input.value = old;
+    return;
+  }
+  appState.skills[skillName] = next;
+  input.value = next;
+  const row = document.getElementById(`skill-row-${skillId}`);
+  if (row) row.className = 'skill-row' + (next > 0 ? ' trained' : '');
+  updateSkillPool();
+}
 
-    function loadSettings() {
-      try {
-        const p = localStorage.getItem('rpg_provider') || 'anthropic';
-        const k = localStorage.getItem('rpg_api_key') || '';
-        const m = localStorage.getItem('rpg_model') || '';
-        state.provider = p;
-        state.apiKey = k;
-        state.model = m;
-        document.getElementById('api-key').value = k;
-        if (document.getElementById('or-model')) document.getElementById('or-model').value = m;
-        selectProvider(p);
-      } catch(e) {}
-    }
+function updateSkillPool() {
+  const used = Object.values(appState.skills).reduce((s, v) => s + v, 0);
+  const remaining = SKILL_POOL - used;
+  const disp = document.getElementById('skill-pool-display');
+  const status = document.getElementById('skill-pool-status');
+  disp.textContent = `${remaining} / ${SKILL_POOL}`;
+  if (used > SKILL_POOL) {
+    status.textContent = '!'; status.className = 'pool-over';
+    disp.style.color = 'var(--danger)';
+  } else {
+    status.textContent = '✓'; status.className = 'pool-ok';
+    disp.style.color = used === SKILL_POOL ? 'var(--success)' : 'var(--text-muted)';
+  }
+}
 
-    // Save on input change
-    document.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('api-key').addEventListener('input', saveSettings);
-      document.getElementById('or-model')?.addEventListener('input', saveSettings);
+// ═══════════════════════════════════════════════════════════
+//  WIZARD — NAVIGATION
+// ═══════════════════════════════════════════════════════════
+function wizardNext(step) {
+  if (step === 1) {
+    const name = document.getElementById('char-name').value.trim();
+    if (!name) { showStepError(1, 'Bitte einen Charakternamen eingeben.'); return; }
+    if (!appState.selectedClass) { showStepError(1, 'Bitte eine Klasse wählen.'); return; }
+    hideStepError(1);
+    setWizardStep(2);
+    return;
+  }
+  if (step === 2) {
+    const used = Object.values(appState.attributes).reduce((s, v) => s + v, 0);
+    if (used !== ATTR_POOL) { showStepError(2, `Attributpunkte müssen genau ${ATTR_POOL} betragen (aktuell: ${used}).`); return; }
+    hideStepError(2);
+    setWizardStep(3);
+    return;
+  }
+  if (step === 3) {
+    const used = Object.values(appState.skills).reduce((s, v) => s + v, 0);
+    if (used > SKILL_POOL) { showStepError(3, `Skill-Punkte dürfen maximal ${SKILL_POOL} betragen (aktuell: ${used}).`); return; }
+    hideStepError(3);
+    renderCharSummary();
+    setWizardStep(4);
+    return;
+  }
+}
+
+function wizardBack(step) {
+  setWizardStep(step - 1);
+}
+
+function setWizardStep(n) {
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById(`step-${i}`).classList.toggle('hidden', i !== n);
+    const dot = document.getElementById(`dot-${i}`);
+    dot.classList.toggle('active', i === n);
+    dot.classList.toggle('done', i < n);
+  }
+}
+
+function showStepError(step, msg) {
+  const el = document.getElementById(`step${step}-error`);
+  el.textContent = msg; el.classList.remove('hidden');
+}
+function hideStepError(step) {
+  document.getElementById(`step${step}-error`).classList.add('hidden');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  WIZARD — CHAR SUMMARY
+// ═══════════════════════════════════════════════════════════
+function renderCharSummary() {
+  const name = document.getElementById('char-name').value.trim();
+  const cls = appState.selectedClass;
+  const attrs = appState.attributes;
+  const skills = Object.entries(appState.skills).filter(([,v]) => v > 0);
+
+  const attrHtml = Object.entries(attrs).map(([a, v]) =>
+    `<span class="summary-attr"><strong>${a}</strong> ${v} <small>${fmtMod(attrMod(v))}</small></span>`
+  ).join('');
+
+  const skillHtml = skills.length
+    ? skills.sort((a,b) => b[1]-a[1]).map(([n,v]) => `<span class="summary-skill">${esc(n)}: ${v}</span>`).join('')
+    : '<span class="muted">Keine</span>';
+
+  const opts = appState.charOptions;
+  const classData = opts?.classes.find(c => c.name === cls);
+  const itemsHtml = classData?.starting_items.map(i => `<span>${esc(i)}</span>`).join('') || '';
+
+  document.getElementById('char-summary').innerHTML = `
+    <div class="summary-row"><strong>${esc(name)}</strong> — ${esc(cls)}</div>
+    <div class="summary-section"><div class="summary-label">Attribute</div><div class="summary-attrs">${attrHtml}</div></div>
+    <div class="summary-section"><div class="summary-label">Fertigkeiten</div><div class="summary-skills">${skillHtml}</div></div>
+    <div class="summary-section"><div class="summary-label">Startausrüstung</div><div class="summary-items">${itemsHtml}</div></div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PROVIDER / API KEY
+// ═══════════════════════════════════════════════════════════
+function selectProvider(p) {
+  appState.provider = p;
+  document.querySelectorAll('.provider-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.provider === p);
+  });
+  const modelRow = document.getElementById('openrouter-model-row');
+  modelRow.style.display = p === 'openrouter' ? 'block' : 'none';
+  if (p === 'openrouter' && !document.getElementById('model-suggestions').children.length) {
+    renderModelSuggestions();
+  }
+  saveSettings();
+}
+
+function renderModelSuggestions() {
+  const el = document.getElementById('model-suggestions');
+  el.innerHTML = '';
+  OPENROUTER_MODELS.forEach(m => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'model-suggestion';
+    btn.textContent = m;
+    btn.onclick = () => { document.getElementById('or-model').value = m; saveSettings(); };
+    el.appendChild(btn);
+  });
+}
+
+function toggleKeyVisibility() {
+  const inp = document.getElementById('api-key');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+function saveSettings() {
+  const key = document.getElementById('api-key').value;
+  const model = document.getElementById('or-model')?.value || '';
+  appState.apiKey = key;
+  appState.model = model;
+  try {
+    localStorage.setItem('rpg_provider', appState.provider);
+    localStorage.setItem('rpg_api_key', key);
+    localStorage.setItem('rpg_model', model);
+  } catch(e) {}
+}
+
+function loadSettings() {
+  try {
+    const p = localStorage.getItem('rpg_provider') || 'anthropic';
+    const k = localStorage.getItem('rpg_api_key') || '';
+    const m = localStorage.getItem('rpg_model') || '';
+    appState.provider = p;
+    appState.apiKey = k;
+    appState.model = m;
+    document.getElementById('api-key').value = k;
+    if (document.getElementById('or-model')) document.getElementById('or-model').value = m;
+    selectProvider(p);
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════
+//  NEW GAME
+// ═══════════════════════════════════════════════════════════
+document.getElementById('start-btn').addEventListener('click', async () => {
+  const name = document.getElementById('char-name').value.trim();
+  const cls = appState.selectedClass;
+  saveSettings();
+
+  if (!appState.apiKey && appState.provider === 'openrouter') {
+    showStepError(4, 'Bitte einen OpenRouter API-Key eingeben.'); return;
+  }
+  hideStepError(4);
+
+  setStartLoading(true);
+  try {
+    const res = await fetch('/api/new_game', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        name,
+        class: cls,
+        background: document.getElementById('char-background').value.trim(),
+        attributes: appState.attributes,
+        skills: appState.skills,
+        api_key: appState.apiKey || undefined,
+        model: appState.model || undefined,
+        provider: appState.provider
+      })
     });
+    const data = await res.json();
+    if (!res.ok) { showStepError(4, data.error || 'Fehler beim Spielstart.'); return; }
 
-    // ── Init ───────────────────────────────────────────────
-    async function init() {
-      loadSettings();
-      await loadClasses();
-      await loadSaves();
+    appState.playthroughId = data.playthrough_id;
+    appState.gameState = data.game_state;
+    enterGame();
+    addMessage('narrator', data.narration);
+    updateUI();
+  } catch(e) {
+    showStepError(4, 'Verbindungsfehler. Ist der Server gestartet?');
+  } finally {
+    setStartLoading(false);
+  }
+});
+
+function showStepError(step, msg) {
+  let id = step === 4 ? 'step4-error' : `step${step}-error`;
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg; el.classList.remove('hidden');
+}
+function hideStepError(step) {
+  let id = step === 4 ? 'step4-error' : `step${step}-error`;
+  const el = document.getElementById(id);
+  if (el) el.classList.add('hidden');
+}
+
+function setStartLoading(on) {
+  document.getElementById('modal-loading').classList.toggle('hidden', !on);
+  document.getElementById('start-btn').disabled = on;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CONTINUE GAME
+// ═══════════════════════════════════════════════════════════
+async function continueGame(id) {
+  try {
+    const res = await fetch(`/api/game_state?playthrough_id=${id}`);
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Fehler beim Laden.'); return; }
+    appState.playthroughId = id;
+    appState.gameState = data;
+    enterGame();
+    addMessage('narrator', `Willkommen zurück, ${data.name}. Die Geschichte geht weiter...`);
+    updateUI();
+    // Restore pending roll if any
+    if (data.pending_roll) {
+      showDiceCard(data.pending_roll);
     }
+  } catch(e) { alert('Verbindungsfehler.'); }
+}
 
-    async function loadClasses() {
-      try {
-        const res = await fetch('/api/classes');
-        const classes = await res.json();
-        const grid = document.getElementById('class-list');
-        grid.innerHTML = '';
-        classes.forEach(cls => {
-          const btn = document.createElement('button');
-          btn.className = 'class-btn';
-          btn.textContent = cls.name;
-          btn.title = Object.entries(cls.starting_skills)
-            .map(([k,v]) => `${k}: ${v}`).join(', ');
-          btn.addEventListener('click', () => {
-            document.querySelectorAll('.class-btn').forEach(b => b.classList.remove('selected'));
-            btn.classList.add('selected');
-            state.selectedClass = cls.name;
-          });
-          grid.appendChild(btn);
-        });
-      } catch(e) {
-        console.error('loadClasses error', e);
-      }
-    }
+// ═══════════════════════════════════════════════════════════
+//  GAME UI
+// ═══════════════════════════════════════════════════════════
+function enterGame() {
+  document.getElementById('wizard-overlay').classList.add('hidden');
+  document.getElementById('game-ui').classList.remove('hidden');
+}
 
-    async function loadSaves() {
-      try {
-        const res = await fetch('/api/playthroughs');
-        const saves = await res.json();
-        const list = document.getElementById('saves-list');
-        list.innerHTML = '';
-        if (saves.length === 0) {
-          list.innerHTML = '<p class="muted">No saved games.</p>';
-          return;
-        }
-        saves.forEach(s => {
-          const div = document.createElement('div');
-          div.className = 'save-entry';
-          div.innerHTML = `
-            <span class="save-name">${escapeHtml(s.character_name)}</span>
-            <span class="save-class">${escapeHtml(s.character_class)}</span>
-            <span class="save-level">Lv ${s.level || 1}</span>
-            <button class="btn-secondary" data-id="${s.id}">Continue</button>
-          `;
-          div.querySelector('button').addEventListener('click', () => continueGame(s.id));
-          list.appendChild(div);
-        });
-      } catch(e) {
-        console.error('loadSaves error', e);
-      }
-    }
+function updateUI() {
+  const gs = appState.gameState;
+  if (!gs) return;
 
-    // ── New Game ───────────────────────────────────────────
-    document.getElementById('start-btn').addEventListener('click', async () => {
-      const name = document.getElementById('char-name').value.trim();
-      const cls = state.selectedClass;
-      const errEl = document.getElementById('modal-error');
-      errEl.classList.add('hidden');
+  document.getElementById('hdr-name').textContent = `${gs.name} · ${gs.class}`;
+  document.getElementById('hdr-level').textContent = `Lv ${gs.level}`;
+  document.getElementById('hdr-gold').textContent = `${gs.gold}g`;
+  document.getElementById('hdr-hp').textContent = `LP ${gs.hp_current}/${gs.hp_max}`;
+  document.getElementById('hdr-loc').textContent = gs.current_scene_name || '—';
 
-      if (!name) { showModalError('Enter a character name.'); return; }
-      if (!cls) { showModalError('Select a class.'); return; }
-      saveSettings();
-      if (!state.apiKey && state.provider === 'openrouter') { showModalError('Enter an OpenRouter API key.'); return; }
+  const t = gs.time;
+  document.getElementById('hdr-time').textContent =
+    `${t.year}-${pad(t.month)}-${pad(t.day)} ${pad(t.hour)}:${pad(t.minute)}`;
 
-      setModalLoading(true);
-      try {
-        const res = await fetch('/api/new_game', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            name, class: cls,
-            api_key: state.apiKey || undefined,
-            model: state.model || undefined,
-            provider: state.provider
-          })
-        });
-        const data = await res.json();
-        if (!res.ok) { showModalError(data.error || 'Error starting game.'); return; }
+  // HP bar
+  const hpPct = Math.max(0, Math.min(1, gs.hp_current / gs.hp_max));
+  const hpBar = document.getElementById('hdr-hp-bar');
+  hpBar.style.width = (hpPct * 100) + '%';
+  hpBar.className = 'hp-bar-fill' + (hpPct <= 0.3 ? ' danger' : hpPct <= 0.6 ? ' warning' : '');
 
-        state.playthroughId = data.playthrough_id;
-        state.gameState = data.game_state;
-        enterGame();
-        addMessage('narrator', data.narration);
-        updateUI();
-      } catch(e) {
-        showModalError('Connection error. Is the server running?');
-      } finally {
-        setModalLoading(false);
-      }
+  // XP bar (skill-ups progress to next level)
+  const skillUps = gs.skill_ups_count || 0;
+  const level = gs.level || 1;
+  const needed = level * 10;
+  const xpPct = Math.min(1, skillUps / needed);
+  const xpBar = document.getElementById('hdr-xp-bar');
+  xpBar.style.width = (xpPct * 100) + '%';
+  document.getElementById('hdr-xp-wrap').title = `${skillUps % needed}/${needed} Skill-Ups zum nächsten Level`;
+
+  // Attribute panel
+  const attrsList = document.getElementById('attrs-list');
+  attrsList.innerHTML = '';
+  const attrOrder = ['STR', 'GES', 'KON', 'INT', 'WEI', 'CHA'];
+  const attrMap = gs.attributes || {};
+  attrOrder.forEach(a => {
+    const v = attrMap[a] || 10;
+    const mod = attrMod(v);
+    const li = document.createElement('li');
+    li.className = 'attr-panel-row';
+    li.innerHTML = `<span class="attr-panel-name">${ATTR_INFO[a]?.label || a}</span><span class="attr-panel-val">${v} <span class="attr-panel-mod">${fmtMod(mod)}</span></span>`;
+    attrsList.appendChild(li);
+  });
+
+  // Skills grouped by category
+  const panelSkills = document.getElementById('panel-skills-list');
+  panelSkills.innerHTML = '';
+  const cats = {};
+  (gs.skills || []).filter(s => s.level > 0).forEach(s => {
+    const cat = getCategoryForSkill(s.skill_name);
+    if (!cats[cat]) cats[cat] = [];
+    cats[cat].push(s);
+  });
+  Object.entries(cats).forEach(([cat, skills]) => {
+    const section = document.createElement('div');
+    section.className = 'skill-cat-section';
+    section.innerHTML = `<div class="skill-cat-label">${esc(cat)}</div>`;
+    skills.sort((a,b) => b.level - a.level).forEach(s => {
+      const thn = s.ticks_needed || 3;
+      const th = s.ticks || 0;
+      const dots = Array.from({length: thn}, (_, i) =>
+        `<span class="tick-dot ${i < th ? 'filled' : ''}"></span>`
+      ).join('');
+      const row = document.createElement('div');
+      row.className = 'panel-skill-row';
+      row.innerHTML = `
+        <span class="sk-name">${esc(s.skill_name)}</span>
+        <span class="sk-val">${s.level}</span>
+        <span class="sk-ticks">${dots}</span>
+      `;
+      section.appendChild(row);
     });
+    panelSkills.appendChild(section);
+  });
 
-    // ── Continue Game ──────────────────────────────────────
-    async function continueGame(id) {
-      try {
-        const res = await fetch(`/api/game_state?playthrough_id=${id}`);
-        const data = await res.json();
-        if (!res.ok) { alert(data.error || 'Error loading game.'); return; }
-        state.playthroughId = id;
-        state.gameState = data;
-        enterGame();
-        addMessage('narrator', `Welcome back, ${data.name}. The story continues...`);
-        updateUI();
-      } catch(e) {
-        alert('Connection error.');
-      }
-    }
+  // Inventory
+  const invList = document.getElementById('inventory-list');
+  invList.innerHTML = '';
+  (gs.inventory || []).forEach(item => {
+    const li = document.createElement('li');
+    li.className = item.equipped ? 'equipped' : '';
+    li.textContent = `${item.item_name}${item.quantity > 1 ? ` ×${item.quantity}` : ''}${item.equipped ? ' ★' : ''}`;
+    invList.appendChild(li);
+  });
+  if (!gs.inventory?.length) invList.innerHTML = '<li class="muted">Leer</li>';
 
-    // ── Game UI ────────────────────────────────────────────
-    function enterGame() {
-      document.getElementById('new-game-modal').classList.add('hidden');
-      document.getElementById('game-ui').classList.remove('hidden');
-    }
+  // Quests
+  const questsList = document.getElementById('quests-list');
+  questsList.innerHTML = '';
+  (gs.quests || []).forEach(q => {
+    const li = document.createElement('li');
+    li.textContent = q.title;
+    questsList.appendChild(li);
+  });
+  if (!gs.quests?.length) questsList.innerHTML = '<li class="muted">Keine</li>';
 
-    function updateUI() {
-      const gs = state.gameState;
-      if (!gs) return;
+  // Injuries
+  const injList = document.getElementById('injuries-list');
+  injList.innerHTML = '';
+  (gs.injuries || []).forEach(inj => {
+    const li = document.createElement('li');
+    li.className = 'injury';
+    li.textContent = `${inj.injury_name} (${inj.affected_skill} ${inj.modifier > 0 ? '+' : ''}${inj.modifier})`;
+    injList.appendChild(li);
+  });
+  if (!gs.injuries?.length) injList.innerHTML = '<li class="muted">Keine</li>';
+}
 
-      document.getElementById('hdr-name').textContent = `${gs.name} · ${gs.class} · Lv ${gs.level}`;
-      document.getElementById('hdr-hp').textContent = `HP ${gs.hp_current}/${gs.hp_max}`;
-      document.getElementById('hdr-gold').textContent = `${gs.gold}g`;
-      document.getElementById('hdr-loc').textContent = gs.current_scene_name || '—';
+function getCategoryForSkill(skillName) {
+  const opts = appState.charOptions;
+  if (!opts) return 'Sonstige';
+  const found = opts.skills.find(s => s.name === skillName);
+  return found?.category || 'Sonstige';
+}
 
-      const t = gs.time;
-      document.getElementById('hdr-time').textContent =
-        `${t.year}-${pad(t.month)}-${pad(t.day)} ${pad(t.hour)}:${pad(t.minute)}`;
+// ═══════════════════════════════════════════════════════════
+//  SEND TURN
+// ═══════════════════════════════════════════════════════════
+async function sendTurn() {
+  const input = document.getElementById('player-input');
+  const text = input.value.trim();
+  if (!text || !appState.playthroughId) return;
+  if (appState.pendingRoll) { showDiceCard(appState.pendingRoll); return; }
 
-      // HP color
-      const hpEl = document.getElementById('hdr-hp');
-      const hpPct = gs.hp_current / gs.hp_max;
-      hpEl.className = 'stat-hp' + (hpPct <= 0.3 ? ' low' : hpPct <= 0.6 ? ' mid' : '');
+  appState.lastPlayerInput = text;
+  const sendBtn = document.getElementById('send-btn');
+  input.value = '';
+  input.disabled = true;
+  sendBtn.disabled = true;
 
-      // Skills
-      const skillsList = document.getElementById('skills-list');
-      skillsList.innerHTML = '';
-      (gs.skills || []).sort((a,b) => b.level - a.level).forEach(s => {
-        const li = document.createElement('li');
-        li.innerHTML = `<span class="sk-name">${escapeHtml(s.skill_name)}</span><span class="sk-level">Lv ${s.level}</span>`;
-        skillsList.appendChild(li);
-      });
+  addMessage('player', text);
+  const spinner = addSpinner();
 
-      // Inventory
-      const invList = document.getElementById('inventory-list');
-      invList.innerHTML = '';
-      (gs.inventory || []).forEach(item => {
-        const li = document.createElement('li');
-        li.className = item.equipped ? 'equipped' : '';
-        li.textContent = `${item.item_name}${item.quantity > 1 ? ` ×${item.quantity}` : ''}${item.equipped ? ' ★' : ''}`;
-        invList.appendChild(li);
-      });
-      if (!gs.inventory || gs.inventory.length === 0) {
-        invList.innerHTML = '<li class="muted">Empty</li>';
-      }
-
-      // Quests
-      const questsList = document.getElementById('quests-list');
-      questsList.innerHTML = '';
-      (gs.quests || []).forEach(q => {
-        const li = document.createElement('li');
-        li.textContent = q.title;
-        questsList.appendChild(li);
-      });
-      if (!gs.quests || gs.quests.length === 0) {
-        questsList.innerHTML = '<li class="muted">None</li>';
-      }
-
-      // Injuries
-      const injuriesList = document.getElementById('injuries-list');
-      injuriesList.innerHTML = '';
-      (gs.injuries || []).forEach(inj => {
-        const li = document.createElement('li');
-        li.className = 'injury';
-        li.textContent = `${inj.injury_name} (${inj.affected_skill} ${inj.modifier > 0 ? '+' : ''}${inj.modifier})`;
-        injuriesList.appendChild(li);
-      });
-      if (!gs.injuries || gs.injuries.length === 0) {
-        injuriesList.innerHTML = '<li class="muted">None</li>';
-      }
-    }
-
-    // ── Send Turn ──────────────────────────────────────────
-    async function sendTurn() {
-      const input = document.getElementById('player-input');
-      const text = input.value.trim();
-      if (!text) return;
-      if (!state.playthroughId) return;
-
-      const sendBtn = document.getElementById('send-btn');
-      input.value = '';
-      input.disabled = true;
-      sendBtn.disabled = true;
-
-      addMessage('player', text);
-      const spinner = addSpinner();
-
-      try {
-        const res = await fetch('/api/turn', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            playthrough_id: state.playthroughId,
-            input: text,
-            api_key: state.apiKey || undefined,
-            model: state.model || undefined,
-            provider: state.provider
-          })
-        });
-        const data = await res.json();
-        removeSpinner(spinner);
-
-        if (!res.ok) {
-          addMessage('system', `Error: ${data.error || 'Unknown error'}`);
-          return;
-        }
-
-        // Show engine result if relevant
-        const er = data.engine_result;
-        if (er && er.skill_result) {
-          const sr = er.skill_result;
-          const outcome = sr.outcome || '?';
-          const outcomeClass = outcome.includes('CRITICAL') ? (outcome.includes('SUCCESS') ? 'crit-success' : 'crit-fail') :
-                               outcome === 'SUCCESS' ? 'success' :
-                               outcome === 'PARTIAL' ? 'partial' : 'fail';
-          addMessage('roll', `
-            <span class="roll-skill">${escapeHtml(sr.skill)}</span>
-            <span class="roll-dice">🎲 ${sr.roll} + ${sr.modifier} = ${sr.total}</span>
-            <span class="roll-vs">vs DC ${sr.dc}</span>
-            <span class="roll-outcome ${outcomeClass}">${outcome.replace('_', ' ')}</span>
-            <span class="roll-xp">+${sr.xp_gained} XP</span>
-          `);
-        }
-
-        addMessage('narrator', data.narration);
-        state.gameState = data.game_state;
-        updateUI();
-        scrollToBottom();
-
-      } catch(e) {
-        removeSpinner(spinner);
-        addMessage('system', 'Connection error. Try again.');
-      } finally {
-        input.disabled = false;
-        sendBtn.disabled = false;
-        input.focus();
-      }
-    }
-
-    document.getElementById('send-btn').addEventListener('click', sendTurn);
-    document.getElementById('player-input').addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendTurn();
-      }
+  try {
+    const res = await fetch('/api/turn', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        playthrough_id: appState.playthroughId,
+        input: text,
+        api_key: appState.apiKey || undefined,
+        model: appState.model || undefined,
+        provider: appState.provider
+      })
     });
+    const data = await res.json();
+    removeSpinner(spinner);
 
-    // ── Side Panel Toggle ──────────────────────────────────
-    document.getElementById('panel-toggle').addEventListener('click', () => {
-      document.getElementById('side-panel').classList.toggle('open');
-    });
-
-    // ── Helpers ────────────────────────────────────────────
-    function addMessage(type, html) {
-      const list = document.getElementById('message-list');
-      const div = document.createElement('div');
-      div.className = `msg msg-${type}`;
-      if (type === 'player') {
-        div.textContent = html;
+    if (!res.ok) {
+      if (res.status === 409 && data.pending_roll) {
+        appState.pendingRoll = data.pending_roll;
+        showDiceCard(data.pending_roll);
       } else {
-        div.innerHTML = html;
+        addMessage('system', `Fehler: ${data.error || 'Unbekannter Fehler'}`);
       }
-      list.appendChild(div);
-      scrollToBottom();
-      return div;
+      return;
     }
 
-    function addSpinner() {
-      const list = document.getElementById('message-list');
-      const div = document.createElement('div');
-      div.className = 'msg msg-spinner';
-      div.innerHTML = '<span class="dots"><span>.</span><span>.</span><span>.</span></span>';
-      list.appendChild(div);
-      scrollToBottom();
-      return div;
+    if (data.state === 'awaiting_roll') {
+      appState.pendingRoll = data.roll_request;
+      appState.gameState = data.game_state;
+      updateUI();
+      showDiceCard(data.roll_request);
+      return;
     }
 
-    function removeSpinner(el) {
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-    }
+    handleTurnResponse(data);
 
-    function scrollToBottom() {
-      const list = document.getElementById('message-list');
-      list.scrollTop = list.scrollHeight;
-    }
+  } catch(e) {
+    removeSpinner(spinner);
+    addMessage('system', 'Verbindungsfehler. Erneut versuchen.');
+  } finally {
+    input.disabled = false;
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
 
-    function showModalError(msg) {
-      const el = document.getElementById('modal-error');
-      el.textContent = msg;
+function handleTurnResponse(data) {
+  // Show roll result if any
+  const er = data.engine_result;
+  if (er?.skill_result) {
+    const sr = er.skill_result;
+    const outcome = sr.outcome || '?';
+    const outcomeClass = getOutcomeClass(outcome);
+    let extraInfo = '';
+    if (er.tick_result) {
+      const tr = er.tick_result;
+      if (tr.skill_up) {
+        extraInfo = `<span class="roll-skillup">Skill-Up! ${sr.skill} → ${tr.new_value}</span>`;
+      } else {
+        extraInfo = `<span class="roll-tick">Tick ${tr.ticks}/${tr.ticks_needed}</span>`;
+      }
+    }
+    if (er.leveled_up) {
+      extraInfo += `<span class="roll-levelup">LEVEL UP!</span>`;
+    }
+    addMessage('roll', `
+      <span class="roll-skill">${esc(sr.skill)}</span>
+      <span class="roll-dice">W20 ${sr.dice_result} + ${sr.modifier} = ${sr.total}</span>
+      <span class="roll-vs">SG ${sr.sg}</span>
+      <span class="roll-outcome ${outcomeClass}">${formatOutcome(outcome)}</span>
+      ${extraInfo}
+    `);
+  }
+
+  addMessage('narrator', data.narration);
+  appState.gameState = data.game_state;
+  updateUI();
+  scrollToBottom();
+}
+
+function getOutcomeClass(outcome) {
+  if (outcome === 'KRITISCHER_ERFOLG') return 'crit-success';
+  if (outcome === 'KRITISCHER_FEHLSCHLAG') return 'crit-fail';
+  if (outcome === 'ERFOLG') return 'success';
+  if (outcome === 'TEILERFOLG') return 'partial';
+  return 'fail';
+}
+
+function formatOutcome(outcome) {
+  const map = {
+    'KRITISCHER_ERFOLG': 'Kritischer Erfolg',
+    'KRITISCHER_FEHLSCHLAG': 'Kritischer Fehlschlag',
+    'ERFOLG': 'Erfolg',
+    'TEILERFOLG': 'Teilerfolg',
+    'FEHLSCHLAG': 'Fehlschlag'
+  };
+  return map[outcome] || outcome;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DICE ROLL CARD
+// ═══════════════════════════════════════════════════════════
+function showDiceCard(rollRequest) {
+  appState.pendingRoll = rollRequest;
+  document.getElementById('dice-skill-name').textContent = rollRequest.skill_name || '—';
+  document.getElementById('dice-tier').textContent = rollRequest.difficulty_tier || '—';
+  document.getElementById('dice-sg').textContent = rollRequest.sg || '—';
+  const mod = rollRequest.modifier || 0;
+  document.getElementById('dice-modifier').textContent = fmtMod(mod);
+  document.getElementById('dice-formula').textContent = rollRequest.formula || `W20 ${fmtMod(mod)}`;
+  document.getElementById('dice-result-input').value = '';
+  document.getElementById('dice-error').classList.add('hidden');
+
+  document.getElementById('dice-roll-card').classList.remove('hidden');
+  document.getElementById('input-bar').classList.add('hidden');
+  document.getElementById('dice-result-input').focus();
+}
+
+function hideDiceCard() {
+  appState.pendingRoll = null;
+  document.getElementById('dice-roll-card').classList.add('hidden');
+  document.getElementById('input-bar').classList.remove('hidden');
+}
+
+async function submitDiceRoll() {
+  const val = parseInt(document.getElementById('dice-result-input').value);
+  if (isNaN(val) || val < 1 || val > 20) {
+    const el = document.getElementById('dice-error');
+    el.textContent = 'Bitte eine Zahl zwischen 1 und 20 eingeben.';
+    el.classList.remove('hidden');
+    return;
+  }
+
+  const btn = document.getElementById('dice-confirm-btn');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/roll', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        playthrough_id: appState.playthroughId,
+        dice_result: val,
+        player_input: appState.lastPlayerInput,
+        api_key: appState.apiKey || undefined,
+        model: appState.model || undefined,
+        provider: appState.provider
+      })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      const el = document.getElementById('dice-error');
+      el.textContent = data.error || 'Fehler beim Auflösen des Wurfs.';
       el.classList.remove('hidden');
+      return;
     }
 
-    function setModalLoading(on) {
-      document.getElementById('modal-loading').classList.toggle('hidden', !on);
-      document.getElementById('start-btn').disabled = on;
-    }
+    hideDiceCard();
+    handleTurnResponse(data);
 
-    function escapeHtml(str) {
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
+  } catch(e) {
+    const el = document.getElementById('dice-error');
+    el.textContent = 'Verbindungsfehler.';
+    el.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+  }
+}
 
-    function pad(n) { return String(n).padStart(2, '0'); }
+// Enter key in dice input
+document.getElementById('dice-result-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitDiceRoll();
+});
 
-    // ── Start ──────────────────────────────────────────────
-    init();
-  </script>
+// ═══════════════════════════════════════════════════════════
+//  SEND BUTTON & ENTER
+// ═══════════════════════════════════════════════════════════
+document.getElementById('send-btn').addEventListener('click', sendTurn);
+document.getElementById('player-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTurn(); }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  SIDE PANEL TOGGLE
+// ═══════════════════════════════════════════════════════════
+document.getElementById('panel-toggle').addEventListener('click', () => {
+  document.getElementById('side-panel').classList.toggle('open');
+});
+
+// ═══════════════════════════════════════════════════════════
+//  SETTINGS EVENTS
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('api-key').addEventListener('input', saveSettings);
+  document.getElementById('or-model')?.addEventListener('input', saveSettings);
+});
+
+// ═══════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════
+function addMessage(type, html) {
+  const list = document.getElementById('message-list');
+  const div = document.createElement('div');
+  div.className = `msg msg-${type}`;
+  if (type === 'player') {
+    div.textContent = html;
+  } else {
+    div.innerHTML = html;
+  }
+  list.appendChild(div);
+  scrollToBottom();
+  return div;
+}
+
+function addSpinner() {
+  const list = document.getElementById('message-list');
+  const div = document.createElement('div');
+  div.className = 'msg msg-spinner';
+  div.innerHTML = '<span class="dots"><span>.</span><span>.</span><span>.</span></span>';
+  list.appendChild(div);
+  scrollToBottom();
+  return div;
+}
+
+function removeSpinner(el) {
+  if (el?.parentNode) el.parentNode.removeChild(el);
+}
+
+function scrollToBottom() {
+  const list = document.getElementById('message-list');
+  list.scrollTop = list.scrollHeight;
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function pad(n) { return String(n).padStart(2, '0'); }
+
+// ═══════════════════════════════════════════════════════════
+//  START
+// ═══════════════════════════════════════════════════════════
+init();
+</script>
 </body>
 </html>

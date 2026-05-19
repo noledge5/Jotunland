@@ -78,8 +78,10 @@ def init_db(db_path=None):
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       playthrough_id INTEGER UNIQUE,
       name TEXT, class TEXT,
-      level INTEGER DEFAULT 1, xp INTEGER DEFAULT 0,
-      hp_current INTEGER DEFAULT 20, hp_max INTEGER DEFAULT 20,
+      level INTEGER DEFAULT 1,
+      xp INTEGER DEFAULT 0,
+      hp_current INTEGER DEFAULT 20,
+      hp_max INTEGER DEFAULT 20,
       gold INTEGER DEFAULT 50,
       current_scene_id TEXT,
       x INTEGER DEFAULT 2380000, y INTEGER DEFAULT 1200000,
@@ -88,12 +90,25 @@ def init_db(db_path=None):
       in_game_day INTEGER DEFAULT 12,
       in_game_hour INTEGER DEFAULT 9,
       in_game_minute INTEGER DEFAULT 0,
-      in_combat INTEGER DEFAULT 0
+      in_combat INTEGER DEFAULT 0,
+      background TEXT DEFAULT '',
+      pending_roll TEXT DEFAULT NULL,
+      skill_ups_count INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS player_attributes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      playthrough_id INTEGER,
+      attr_name TEXT,
+      value INTEGER DEFAULT 10,
+      UNIQUE(playthrough_id, attr_name)
     );
 
     CREATE TABLE IF NOT EXISTS player_skills (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      playthrough_id INTEGER, skill_name TEXT, level INTEGER DEFAULT 0, xp INTEGER DEFAULT 0,
+      playthrough_id INTEGER, skill_name TEXT,
+      level INTEGER DEFAULT 0, xp INTEGER DEFAULT 0,
+      ticks INTEGER DEFAULT 0,
       UNIQUE(playthrough_id, skill_name)
     );
 
@@ -160,5 +175,21 @@ def init_db(db_path=None):
     """)
 
     conn.commit()
+
+    # Idempotent column additions for existing DBs (catch exception if column exists)
+    _add_column_if_missing(conn, 'player', 'background', "TEXT DEFAULT ''")
+    _add_column_if_missing(conn, 'player', 'pending_roll', "TEXT DEFAULT NULL")
+    _add_column_if_missing(conn, 'player', 'skill_ups_count', "INTEGER DEFAULT 0")
+    _add_column_if_missing(conn, 'player_skills', 'ticks', "INTEGER DEFAULT 0")
+
+    conn.commit()
     conn.close()
     print(f"[DB] Initialized: {db_path}")
+
+
+def _add_column_if_missing(conn, table, column, col_def):
+    try:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
+        conn.commit()
+    except Exception:
+        pass  # Column already exists
