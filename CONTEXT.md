@@ -89,3 +89,20 @@ A Character-Scoped boolean or value stored in the DB that records how a World-Sc
 
 ## World Layer
 One of five fixed context layers assembled fresh each turn by the Context Builder. Ordered by scope: A (world constants, always present) → B (region) → C (zone/town) → D (current scene) → E (active context: NPCs, player stats, last turns, engine result). Total target ~1400 tokens. Layer content is authored once when the world is built; the LLM never modifies it. Exact layer boundaries and optimal token budgets to be validated through playtesting.
+
+## Charaktererstellung
+The one-time setup when a new Playthrough begins. Three steps:
+
+**1. Attribute:** Spieler verteilt frei 78 Punkte auf 6 Attribute (STR, GES, KON, INT, WEI, CHA). Min 6, max 18 pro Attribut bei Erstellung. Das absolute Maximum von 20 wird nur durch Levelups erreicht.
+
+**2. Klasse:** Rein narratives Label (Krieger, Schurke, Händler, Essenzkundiger, Waldläufer). Bestimmt Flavor, Hintergrundgeschichte und 1–2 charakteristische Startitems. Hat keinen Einfluss auf Attribut- oder Skillwerte.
+
+**3. Skills:** Spieler verteilt frei 80 Punkte auf beliebige Skills (Skala 0–100). Max 30 pro Skill bei Erstellung. Alle nicht gewählten Skills starten bei 0 (können trotzdem versucht werden, ohne Bonus).
+
+**Startausrüstung:** Klasse gibt 1–2 charakteristische Items vor. Zusätzlich erhält jeder Charakter 50 Gold für freie Einkäufe.
+
+## Attribut (ATTR)
+Sechs Basiswerte auf Skala 1–20. Durchschnitt = 10. Modifier = `floor((Wert - 10) / 2)`. Bei Skills mit zwei Leit-Attributen (z.B. STR/GES) zählt immer der höhere Modifier. Startwerte durch freie Verteilung bei Charaktererstellung (max 18). Steigen durch Charakter-Level-Ups (max 20).
+
+## Skill (SKILL)
+Ein Fähigkeitswert auf Skala 0–100. Skill-Bonus = `floor(Skill-Wert / 10)`. Jeder Skill hat ein Leit-Attribut (oder zwei, wobei der höhere Modifier zählt). Steigt durch Ticks (Learning-by-Doing). Ticks werden bei jeder Probe vergeben — unabhängig vom Erfolg. Die Anzahl nötiger Ticks pro +1 Skillpunkt steigt mit dem Skill-Niveau (Novize: 3 Ticks, Lehrling: 5, Geselle: 8, Experte: 12, Meister: 20).
