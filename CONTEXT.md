@@ -93,11 +93,13 @@ One of five fixed context layers assembled fresh each turn by the Context Builde
 ## Charaktererstellung
 The one-time setup when a new Playthrough begins. Three steps:
 
-**1. Attribute:** Spieler verteilt frei 78 Punkte auf 6 Attribute (STR, GES, KON, INT, WEI, CHA). Min 6, max 18 pro Attribut bei Erstellung. Das absolute Maximum von 20 wird nur durch Levelups erreicht.
+**1. Name + Hintergrund:** Name ist Pflichtfeld. Hintergrundgeschichte ist optionaler Freitext — wird im Kontext für den Narrator sichtbar, hat keinen mechanischen Effekt.
 
-**2. Klasse:** Rein narratives Label (Krieger, Schurke, Händler, Essenzkundiger, Waldläufer). Bestimmt Flavor, Hintergrundgeschichte und 1–2 charakteristische Startitems. Hat keinen Einfluss auf Attribut- oder Skillwerte.
+**2. Attribute:** Spieler verteilt frei 78 Punkte auf 6 Attribute (STR, GES, KON, INT, WEI, CHA). Min 6, max 18 pro Attribut bei Erstellung. Das absolute Maximum von 20 wird nur durch Levelups erreicht.
 
-**3. Skills:** Spieler verteilt frei 80 Punkte auf beliebige Skills (Skala 0–100). Max 30 pro Skill bei Erstellung. Alle nicht gewählten Skills starten bei 0 (können trotzdem versucht werden, ohne Bonus).
+**3. Klasse:** Rein narratives Label (Krieger, Schurke, Händler, Essenzkundiger, Waldläufer). Bestimmt Flavor und 1–2 charakteristische Startitems. Hat keinen Einfluss auf Attribut- oder Skillwerte.
+
+**4. Skills:** Spieler verteilt frei 80 Punkte auf beliebige Skills (Skala 0–100). Max 30 pro Skill bei Erstellung. Alle nicht gewählten Skills starten bei 0 (können trotzdem versucht werden, ohne Bonus).
 
 **Startausrüstung:** Klasse gibt 1–2 charakteristische Items vor. Zusätzlich erhält jeder Charakter 50 Gold für freie Einkäufe.
 
