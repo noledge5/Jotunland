@@ -9,6 +9,48 @@
 <body>
 
 <!-- ══════════════════════════════════════════════════════
+     SETTINGS MODAL
+══════════════════════════════════════════════════════ -->
+<div id="settings-modal" class="settings-backdrop hidden" onclick="closeSettingsOutside(event)">
+  <div class="settings-box">
+    <div class="settings-header">
+      <h3>Einstellungen</h3>
+      <button class="btn-icon" onclick="closeSettings()">&#10005;</button>
+    </div>
+
+    <div class="settings-section">
+      <label class="settings-label">Anbieter</label>
+      <div class="provider-row">
+        <button class="provider-btn" data-p="anthropic" onclick="setProvider('anthropic')">Anthropic</button>
+        <button class="provider-btn" data-p="openrouter" onclick="setProvider('openrouter')">OpenRouter</button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <label class="settings-label">API-Key <span class="settings-hint">(nur im Browser gespeichert)</span></label>
+      <div class="key-row">
+        <input type="password" id="settings-key" placeholder="sk-ant-... oder sk-or-..." autocomplete="off">
+        <button class="btn-icon" onclick="toggleSettingsKey()" title="Anzeigen">&#128065;</button>
+      </div>
+    </div>
+
+    <div class="settings-section" id="settings-model-section">
+      <label class="settings-label">Modell</label>
+      <select id="settings-model-select" onchange="onModelSelectChange()">
+        <option value="">— wählen —</option>
+      </select>
+      <input type="text" id="settings-model-custom" placeholder="Eigenes Modell eingeben..." style="margin-top:6px;display:none;">
+    </div>
+
+    <div id="settings-status" class="settings-status hidden"></div>
+
+    <div class="settings-footer">
+      <button class="btn-primary" onclick="saveSettings()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
      CHARAKTER-ERSTELLUNG WIZARD
 ══════════════════════════════════════════════════════ -->
 <div id="wizard-overlay" class="modal-overlay">
@@ -16,8 +58,13 @@
 
     <!-- ── Landing: Saves or New Game ── -->
     <div id="landing-screen">
-      <h2 class="wizard-title">Avarr</h2>
-      <p class="wizard-sub">Jahr 743 IC. Salzhaven wartet.</p>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <h2 class="wizard-title">Avarr</h2>
+          <p class="wizard-sub">Jahr 743 IC. Salzhaven wartet.</p>
+        </div>
+        <button class="btn-icon" title="Einstellungen" onclick="openSettings()">&#9881;</button>
+      </div>
 
       <div id="landing-saves" class="landing-saves-section">
         <p class="section-label">Gespeicherte Spiele</p>
@@ -110,26 +157,15 @@
       </div>
     </div>
 
-    <!-- Step 4: API & Start -->
+    <!-- Step 4: Summary & Start -->
     <div class="wizard-step hidden" id="step-4">
-      <h2 class="wizard-title">Letzter Schritt</h2>
+      <h2 class="wizard-title">Bereit?</h2>
 
       <div class="char-summary" id="char-summary"><!-- populated by JS --></div>
 
-      <div class="form-group">
-        <label>LLM-Anbieter</label>
-        <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <button type="button" class="provider-btn selected" data-provider="anthropic" onclick="selectProvider('anthropic')">Anthropic</button>
-          <button type="button" class="provider-btn" data-provider="openrouter" onclick="selectProvider('openrouter')">OpenRouter</button>
-        </div>
-        <div style="position:relative;">
-          <input type="password" id="api-key" placeholder="API-Key (wird nur im Browser gespeichert)" autocomplete="off">
-          <button type="button" id="key-toggle" onclick="toggleKeyVisibility()" title="Anzeigen/Verbergen">&#128065;</button>
-        </div>
-        <div id="openrouter-model-row" style="margin-top:8px;display:none;">
-          <input type="text" id="or-model" placeholder="Modell (z.B. anthropic/claude-sonnet-4-5)" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:0.6rem 0.8rem;font-size:0.9rem;font-family:var(--font-ui);outline:none;">
-          <div id="model-suggestions" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
-        </div>
+      <div id="api-key-warning" class="error-msg hidden" style="margin-bottom:0.75rem;">
+        ⚠ Kein API-Key gesetzt.
+        <button onclick="openSettings()" style="background:none;border:none;color:var(--gold);cursor:pointer;text-decoration:underline;font-size:inherit;">Einstellungen öffnen</button>
       </div>
 
       <div id="step4-error" class="error-msg hidden"></div>
@@ -172,21 +208,10 @@
       <span class="stat-time" id="hdr-time">—</span>
     </div>
     <button id="panel-toggle" class="btn-icon" title="Seitenleiste">&#9776;</button>
-    <button class="btn-icon" title="API-Einstellungen" onclick="toggleApiSettings()" style="margin-left:4px;">&#9881;</button>
+    <button class="btn-icon" title="Einstellungen" onclick="openSettings()" style="margin-left:4px;">&#9881;</button>
     <button class="btn-icon" title="Menü" onclick="exitToMenu()" style="margin-left:4px;">&#8962;</button>
   </header>
 
-  <!-- API Settings Bar -->
-  <div id="api-settings-bar" class="hidden" style="background:var(--bg3);border-bottom:1px solid var(--border2);padding:0.5rem 1rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
-    <span style="color:var(--text2);font-size:0.8rem;white-space:nowrap;">API-Key:</span>
-    <input type="password" id="api-key-ingame" placeholder="Anthropic oder OpenRouter Key" style="flex:1;min-width:200px;background:var(--bg4);border:1px solid var(--border2);border-radius:4px;color:var(--text);padding:0.4rem 0.6rem;font-size:0.85rem;">
-    <select id="provider-ingame" style="background:var(--bg4);border:1px solid var(--border2);border-radius:4px;color:var(--text);padding:0.4rem 0.6rem;font-size:0.85rem;">
-      <option value="anthropic">Anthropic</option>
-      <option value="openrouter">OpenRouter</option>
-    </select>
-    <button class="btn-secondary" onclick="saveApiSettings()" style="white-space:nowrap;">Speichern</button>
-    <span id="api-saved-hint" class="hidden" style="color:#7a9e6e;font-size:0.8rem;">✓ gespeichert</span>
-  </div>
 
   <!-- Main Layout -->
   <div id="main-layout">
@@ -326,6 +351,135 @@ let appState = {
 };
 
 // ═══════════════════════════════════════════════════════════
+//  SETTINGS MODAL
+// ═══════════════════════════════════════════════════════════
+const PROVIDER_MODELS = {
+  anthropic: [
+    { label: 'Claude Sonnet 4.6 (Standard)', value: 'claude-sonnet-4-6' },
+    { label: 'Claude Opus 4.7', value: 'claude-opus-4-7' },
+    { label: 'Claude Haiku 4.5', value: 'claude-haiku-4-5-20251001' },
+  ],
+  openrouter: [
+    { label: 'Claude Sonnet 4.5 (via OR)', value: 'anthropic/claude-sonnet-4-5' },
+    { label: 'Claude Opus 4 (via OR)', value: 'anthropic/claude-opus-4' },
+    { label: 'Gemini 2.0 Flash', value: 'google/gemini-2.0-flash-001' },
+    { label: 'Gemini 2.5 Pro', value: 'google/gemini-2.5-pro-preview' },
+    { label: 'Llama 3.3 70B', value: 'meta-llama/llama-3.3-70b-instruct' },
+    { label: 'Mistral Large', value: 'mistralai/mistral-large' },
+    { label: 'Eigenes Modell...', value: '__custom__' },
+  ]
+};
+
+function openSettings() {
+  const modal = document.getElementById('settings-modal');
+  modal.classList.remove('hidden');
+  // Populate from appState
+  document.getElementById('settings-key').value = appState.apiKey || '';
+  setProvider(appState.provider || 'anthropic', false);
+  updateModelSelect(appState.model || '');
+}
+
+function closeSettings() {
+  document.getElementById('settings-modal').classList.add('hidden');
+}
+
+function closeSettingsOutside(e) {
+  if (e.target === document.getElementById('settings-modal')) closeSettings();
+}
+
+function setProvider(p, save = false) {
+  appState.provider = p;
+  document.querySelectorAll('#settings-modal .provider-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.p === p);
+  });
+  updateModelSelect(appState.model || '');
+  if (save) saveSettings();
+}
+
+function updateModelSelect(currentModel) {
+  const p = appState.provider;
+  const sel = document.getElementById('settings-model-select');
+  const custom = document.getElementById('settings-model-custom');
+  const section = document.getElementById('settings-model-section');
+  const models = PROVIDER_MODELS[p] || [];
+  sel.innerHTML = models.map(m =>
+    `<option value="${esc(m.value)}">${esc(m.label)}</option>`
+  ).join('');
+  // Match current model
+  const match = models.find(m => m.value === currentModel);
+  if (match) {
+    sel.value = match.value;
+    custom.style.display = 'none';
+  } else if (currentModel && p === 'openrouter') {
+    sel.value = '__custom__';
+    custom.style.display = 'block';
+    custom.value = currentModel;
+  } else {
+    sel.value = models[0]?.value || '';
+    custom.style.display = 'none';
+  }
+  section.style.display = models.length ? 'block' : 'none';
+}
+
+function onModelSelectChange() {
+  const sel = document.getElementById('settings-model-select');
+  const custom = document.getElementById('settings-model-custom');
+  if (sel.value === '__custom__') {
+    custom.style.display = 'block';
+    custom.focus();
+  } else {
+    custom.style.display = 'none';
+  }
+}
+
+function toggleSettingsKey() {
+  const input = document.getElementById('settings-key');
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+function saveSettings() {
+  const key = document.getElementById('settings-key')?.value?.trim() || '';
+  const sel = document.getElementById('settings-model-select');
+  const custom = document.getElementById('settings-model-custom');
+  let model = '';
+  if (sel) {
+    model = sel.value === '__custom__'
+      ? (custom?.value?.trim() || '')
+      : sel.value;
+    // For anthropic, use fixed model unless first option
+    if (appState.provider === 'anthropic' && sel.value) {
+      model = sel.value;
+    }
+  }
+  appState.apiKey = key;
+  appState.model = model;
+  localStorage.setItem('rpg_api_key', key);
+  localStorage.setItem('rpg_provider', appState.provider);
+  localStorage.setItem('rpg_model', model);
+  // Show saved status
+  const status = document.getElementById('settings-status');
+  if (status) {
+    status.textContent = '✓ Gespeichert';
+    status.className = 'settings-status settings-ok';
+    status.classList.remove('hidden');
+    setTimeout(() => status.classList.add('hidden'), 2000);
+  }
+  closeSettings();
+  // Warn on step 4 if no key
+  const warn = document.getElementById('api-key-warning');
+  if (warn) warn.classList.toggle('hidden', !!key);
+}
+
+function loadSettings() {
+  const p = localStorage.getItem('rpg_provider') || 'anthropic';
+  const k = localStorage.getItem('rpg_api_key') || '';
+  const m = localStorage.getItem('rpg_model') || '';
+  appState.provider = p;
+  appState.apiKey = k;
+  appState.model = m;
+}
+
+// ═══════════════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════════════
 async function init() {
@@ -390,22 +544,51 @@ async function loadSaves() {
     const list = document.getElementById('saves-list');
     list.innerHTML = '';
     if (!saves.length) {
-      list.innerHTML = '<p class="muted">Keine gespeicherten Spiele.</p>';
+      list.innerHTML = '<p class="muted">Noch keine gespeicherten Spiele.</p>';
       return;
     }
     saves.forEach(s => {
       const div = document.createElement('div');
       div.className = 'save-entry';
+      const loc = s.location_name ? esc(s.location_name) : '—';
+      const ts = s.last_played ? esc(s.last_played) : '—';
       div.innerHTML = `
-        <span class="save-name">${esc(s.character_name)}</span>
-        <span class="save-class">${esc(s.character_class)}</span>
-        <span class="save-level">Lv ${s.level || 1}</span>
-        <button class="btn-secondary" data-id="${s.id}">Fortsetzen</button>
+        <div class="save-info">
+          <span class="save-name">${esc(s.character_name)}</span>
+          <span class="save-meta">${esc(s.character_class)} · Lv ${s.level || 1} · ${loc}</span>
+          <span class="save-ts">${ts}</span>
+        </div>
+        <div class="save-actions">
+          <button class="btn-primary save-continue">Fortsetzen</button>
+          <button class="btn-danger save-delete" title="Löschen">&#128465;</button>
+        </div>
       `;
-      div.querySelector('button').addEventListener('click', () => continueGame(s.id));
+      div.querySelector('.save-continue').addEventListener('click', () => continueGame(s.id));
+      div.querySelector('.save-delete').addEventListener('click', () => confirmDelete(s.id, s.character_name, div));
       list.appendChild(div);
     });
   } catch(e) { console.error('loadSaves error', e); }
+}
+
+async function confirmDelete(id, name, el) {
+  if (!confirm(`"${name}" wirklich löschen? Das kann nicht rückgängig gemacht werden.`)) return;
+  try {
+    const res = await fetch('/api/delete_playthrough', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ playthrough_id: id })
+    });
+    if (res.ok) {
+      el.remove();
+      if (localStorage.getItem('rpg_playthrough_id') == id) {
+        localStorage.removeItem('rpg_playthrough_id');
+      }
+      const list = document.getElementById('saves-list');
+      if (!list.children.length) {
+        list.innerHTML = '<p class="muted">Noch keine gespeicherten Spiele.</p>';
+      }
+    }
+  } catch(e) { alert('Fehler beim Löschen.'); }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -688,62 +871,6 @@ function renderCharSummary() {
 // ═══════════════════════════════════════════════════════════
 //  PROVIDER / API KEY
 // ═══════════════════════════════════════════════════════════
-function selectProvider(p) {
-  appState.provider = p;
-  document.querySelectorAll('.provider-btn').forEach(b => {
-    b.classList.toggle('selected', b.dataset.provider === p);
-  });
-  const modelRow = document.getElementById('openrouter-model-row');
-  modelRow.style.display = p === 'openrouter' ? 'block' : 'none';
-  if (p === 'openrouter' && !document.getElementById('model-suggestions').children.length) {
-    renderModelSuggestions();
-  }
-  saveSettings();
-}
-
-function renderModelSuggestions() {
-  const el = document.getElementById('model-suggestions');
-  el.innerHTML = '';
-  OPENROUTER_MODELS.forEach(m => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'model-suggestion';
-    btn.textContent = m;
-    btn.onclick = () => { document.getElementById('or-model').value = m; saveSettings(); };
-    el.appendChild(btn);
-  });
-}
-
-function toggleKeyVisibility() {
-  const inp = document.getElementById('api-key');
-  inp.type = inp.type === 'password' ? 'text' : 'password';
-}
-
-function saveSettings() {
-  const key = document.getElementById('api-key').value;
-  const model = document.getElementById('or-model')?.value || '';
-  appState.apiKey = key;
-  appState.model = model;
-  try {
-    localStorage.setItem('rpg_provider', appState.provider);
-    localStorage.setItem('rpg_api_key', key);
-    localStorage.setItem('rpg_model', model);
-  } catch(e) {}
-}
-
-function loadSettings() {
-  try {
-    const p = localStorage.getItem('rpg_provider') || 'anthropic';
-    const k = localStorage.getItem('rpg_api_key') || '';
-    const m = localStorage.getItem('rpg_model') || '';
-    appState.provider = p;
-    appState.apiKey = k;
-    appState.model = m;
-    document.getElementById('api-key').value = k;
-    if (document.getElementById('or-model')) document.getElementById('or-model').value = m;
-    selectProvider(p);
-  } catch(e) {}
-}
 
 // ═══════════════════════════════════════════════════════════
 //  NEW GAME
@@ -811,17 +938,32 @@ function setStartLoading(on) {
 // ═══════════════════════════════════════════════════════════
 async function continueGame(id) {
   try {
-    const res = await fetch(`/api/game_state?playthrough_id=${id}`);
-    const data = await res.json();
-    if (!res.ok) return false;
+    const [stateRes, histRes] = await Promise.all([
+      fetch(`/api/game_state?playthrough_id=${id}`),
+      fetch(`/api/turn_history?playthrough_id=${id}&n=10`)
+    ]);
+    if (!stateRes.ok) return false;
+    const data = await stateRes.json();
+    const history = histRes.ok ? await histRes.json() : [];
+
     appState.playthroughId = id;
     appState.gameState = data;
     enterGame();
-    addMessage('narrator', `Willkommen zurück, ${data.name}. Die Geschichte geht weiter...`);
     updateUI();
-    if (data.pending_roll) {
-      showDiceCard(data.pending_roll);
+
+    // Restore last 10 turns
+    if (history.length) {
+      addMessage('system', `— Letzte ${history.length} Züge —`);
+      for (const turn of history) {
+        if (turn.player_input) addMessage('player', turn.player_input);
+        if (turn.narration) addMessage('narrator', turn.narration);
+      }
+      addMessage('system', '— Die Geschichte geht weiter —');
+    } else {
+      addMessage('narrator', `Willkommen zurück, ${data.name}.`);
     }
+
+    if (data.pending_roll) showDiceCard(data.pending_roll);
     return true;
   } catch(e) { return false; }
 }
@@ -837,27 +979,6 @@ function enterGame() {
   }
 }
 
-function toggleApiSettings() {
-  const bar = document.getElementById('api-settings-bar');
-  const hidden = bar.classList.toggle('hidden');
-  if (!hidden) {
-    document.getElementById('api-key-ingame').value = appState.apiKey || '';
-    document.getElementById('provider-ingame').value = appState.provider || 'anthropic';
-    document.getElementById('api-key-ingame').focus();
-  }
-}
-
-function saveApiSettings() {
-  const key = document.getElementById('api-key-ingame').value.trim();
-  const provider = document.getElementById('provider-ingame').value;
-  appState.apiKey = key;
-  appState.provider = provider;
-  localStorage.setItem('rpg_api_key', key);
-  localStorage.setItem('rpg_provider', provider);
-  const hint = document.getElementById('api-saved-hint');
-  hint.classList.remove('hidden');
-  setTimeout(() => hint.classList.add('hidden'), 2000);
-}
 
 function exitToMenu() {
   localStorage.removeItem('rpg_playthrough_id');
@@ -1195,10 +1316,6 @@ document.getElementById('panel-toggle').addEventListener('click', () => {
 // ═══════════════════════════════════════════════════════════
 //  SETTINGS EVENTS
 // ═══════════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('api-key').addEventListener('input', saveSettings);
-  document.getElementById('or-model')?.addEventListener('input', saveSettings);
-});
 
 // ═══════════════════════════════════════════════════════════
 //  HELPERS
@@ -1207,7 +1324,7 @@ function addMessage(type, html) {
   const list = document.getElementById('message-list');
   const div = document.createElement('div');
   div.className = `msg msg-${type}`;
-  if (type === 'player') {
+  if (type === 'player' || type === 'system') {
     div.textContent = html;
   } else {
     div.innerHTML = html;

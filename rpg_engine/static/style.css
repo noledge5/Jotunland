@@ -937,3 +937,74 @@ li.injury   { color: var(--danger); font-size: 0.78rem; }
 .trace-key::after { content: '='; color: var(--border2); }
 .trace-val  { color: var(--gold); word-break: break-all; }
 .trace-empty { color: var(--text3); font-style: italic; }
+
+/* ── Settings Modal ──────────────────────────────────────── */
+.settings-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center;
+}
+.settings-backdrop.hidden { display: none; }
+
+.settings-box {
+  background: var(--bg2); border: 1px solid var(--border2);
+  border-radius: 12px; padding: 1.75rem;
+  width: min(420px, 92vw); box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.settings-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 1.25rem;
+}
+.settings-header h3 { color: var(--gold); font-family: var(--font-serif); font-size: 1.2rem; }
+.settings-section { margin-bottom: 1rem; }
+.settings-label {
+  display: block; font-size: 0.75rem; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text2); margin-bottom: 0.4rem;
+}
+.settings-hint { font-size: 0.7rem; text-transform: none; opacity: 0.6; }
+.key-row { display: flex; gap: 6px; align-items: center; }
+.key-row input { flex: 1; }
+.provider-row { display: flex; gap: 8px; }
+#settings-modal .provider-btn {
+  flex: 1; padding: 0.4rem 0.75rem; border-radius: 6px;
+  background: var(--bg3); border: 1px solid var(--border2);
+  color: var(--text2); cursor: pointer; font-size: 0.85rem;
+  transition: all 0.15s;
+}
+#settings-modal .provider-btn.selected {
+  background: var(--gold); color: #000; border-color: var(--gold);
+  font-weight: 600;
+}
+#settings-model-section select,
+#settings-model-section input {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: 6px; color: var(--text); padding: 0.5rem 0.75rem;
+  font-size: 0.85rem; font-family: var(--font-ui);
+}
+.settings-status { font-size: 0.85rem; padding: 0.4rem 0; }
+.settings-ok { color: #7a9e6e; }
+.settings-footer { margin-top: 1.25rem; display: flex; justify-content: flex-end; }
+
+/* ── Save Entry (new layout) ─────────────────────────────── */
+.save-entry {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem;
+}
+.save-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.save-name { font-weight: 600; color: var(--text); }
+.save-meta { font-size: 0.8rem; color: var(--text2); }
+.save-ts   { font-size: 0.75rem; color: var(--text3); }
+.save-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.save-continue { font-size: 0.85rem; padding: 0.35rem 0.75rem; }
+.btn-danger {
+  background: transparent; border: 1px solid rgba(200,80,60,0.4);
+  color: rgba(200,80,60,0.7); border-radius: 6px; cursor: pointer;
+  padding: 0.35rem 0.5rem; font-size: 0.85rem; transition: all 0.15s;
+}
+.btn-danger:hover { background: rgba(200,80,60,0.15); color: #e05040; border-color: #e05040; }
+
+/* ── System messages ─────────────────────────────────────── */
+.msg-system {
+  text-align: center; font-size: 0.75rem; color: var(--text3);
+  padding: 0.25rem; letter-spacing: 0.05em;
+}

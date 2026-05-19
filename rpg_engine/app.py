@@ -579,16 +579,76 @@ def game_state():
 
 @app.route('/api/playthroughs', methods=['GET'])
 def list_playthroughs():
-    """List all active playthroughs."""
+    """List all active playthroughs with last-played time and location."""
     conn = get_db(DB_PATH)
     rows = conn.execute(
         "SELECT p.id, p.character_name, p.character_class, p.created_at, "
-        "pl.level, pl.hp_current, pl.hp_max "
+        "pl.level, pl.hp_current, pl.hp_max, pl.current_scene_id, "
+        "pl.in_game_year, pl.in_game_month, pl.in_game_day, pl.in_game_hour, pl.in_game_minute "
         "FROM playthroughs p LEFT JOIN player pl ON pl.playthrough_id = p.id "
         "WHERE p.status='active' ORDER BY p.id DESC"
     ).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        # Last turn timestamp
+        last_turn = conn.execute(
+            "SELECT in_game_timestamp FROM turn_log WHERE playthrough_id=? "
+            "AND in_game_timestamp != 'pending' ORDER BY id DESC LIMIT 1",
+            (r['id'],)
+        ).fetchone()
+        d['last_played'] = last_turn['in_game_timestamp'] if last_turn else None
+        # Scene name
+        if r['current_scene_id']:
+            scene = conn.execute(
+                "SELECT name FROM scenes WHERE id=?", (r['current_scene_id'],)
+            ).fetchone()
+            d['location_name'] = scene['name'] if scene else r['current_scene_id']
+        else:
+            d['location_name'] = '—'
+        result.append(d)
     conn.close()
-    return jsonify([dict(r) for r in rows])
+    return jsonify(result)
+
+
+@app.route('/api/delete_playthrough', methods=['POST'])
+def delete_playthrough():
+    """Hard-delete a playthrough and all its character-scoped data."""
+    data = request.get_json()
+    if not data or not data.get('playthrough_id'):
+        return jsonify({"error": "playthrough_id erforderlich"}), 400
+    pid = int(data['playthrough_id'])
+    conn = get_db(DB_PATH)
+    tables = [
+        'player', 'player_attributes', 'player_skills', 'inventory',
+        'npc_relations', 'world_state_flags', 'combat_combatants',
+        'injuries', 'session_log', 'turn_log', 'quests'
+    ]
+    for table in tables:
+        conn.execute(f"DELETE FROM {table} WHERE playthrough_id=?", (pid,))
+    conn.execute("DELETE FROM playthroughs WHERE id=?", (pid,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route('/api/turn_history', methods=['GET'])
+def turn_history():
+    """Return last N turns for a playthrough (for chat restore on continue)."""
+    pid = request.args.get('playthrough_id')
+    n = int(request.args.get('n', 10))
+    if not pid:
+        return jsonify({"error": "playthrough_id erforderlich"}), 400
+    conn = get_db(DB_PATH)
+    rows = conn.execute(
+        "SELECT player_input, narration, engine_result FROM turn_log "
+        "WHERE playthrough_id=? AND narration != '' AND in_game_timestamp != 'pending' "
+        "ORDER BY id DESC LIMIT ?",
+        (int(pid), n)
+    ).fetchall()
+    conn.close()
+    turns = list(reversed([dict(r) for r in rows]))
+    return jsonify(turns)
 
 
 @app.route('/api/classes', methods=['GET'])
