@@ -2,6 +2,7 @@ import os
 import json
 from flask import Flask, request, jsonify, render_template
 from db import get_db, init_db
+import trace as _trace
 from engine import (
     apply_narrator_output, advance_time,
     request_roll, resolve_player_roll,
@@ -314,6 +315,7 @@ def take_turn():
 
     playthrough_id = int(data['playthrough_id'])
     player_input = data['input'].strip()
+    _trace.new_turn(playthrough_id, player_input)
 
     if not player_input:
         return jsonify({"error": "input darf nicht leer sein"}), 400
@@ -598,6 +600,12 @@ def list_classes():
             "starting_items": data['starting_items']
         })
     return jsonify(classes)
+
+
+@app.route('/api/debug/trace', methods=['GET'])
+def debug_trace():
+    """Return the trace log of the last turn (LLM calls, DB writes, state changes)."""
+    return jsonify(_trace.get_trace())
 
 
 if __name__ == '__main__':

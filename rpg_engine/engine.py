@@ -3,6 +3,7 @@ import json
 import os
 import math
 from db import get_db
+import trace as _trace
 
 _rulebook = None
 _skills_data = None
@@ -163,7 +164,6 @@ def award_tick(playthrough_id, skill_name) -> dict:
             "UPDATE player_skills SET level=?, ticks=? WHERE playthrough_id=? AND skill_name=?",
             (current_value, current_ticks, playthrough_id, skill_name)
         )
-        # Increment skill_ups_count on player
         conn.execute(
             "UPDATE player SET skill_ups_count = skill_ups_count + 1 WHERE playthrough_id=?",
             (playthrough_id,)
@@ -177,6 +177,7 @@ def award_tick(playthrough_id, skill_name) -> dict:
     conn.commit()
     conn.close()
 
+    _trace.log_tick(skill_name, current_ticks, threshold, skill_up, current_value)
     return {
         "skill_up": skill_up,
         "new_value": current_value,
@@ -210,6 +211,8 @@ def check_char_level_up(playthrough_id) -> bool:
         )
         conn.commit()
         leveled_up = True
+        _trace.log_state_change("player.level", player['level'], new_level, "skill_ups threshold reached")
+        _trace.log_db_write("player", "UPDATE", {"level": new_level, "hp_max": new_hp_max})
 
     conn.close()
     return leveled_up
@@ -292,6 +295,9 @@ def request_roll(playthrough_id, skill_name, difficulty_tier) -> dict:
     conn.close()
 
     sign = "+" if modifier >= 0 else ""
+    formula = f"W20 {sign}{modifier}"
+    _trace.log_roll_requested(skill_name, sg, modifier, formula)
+    _trace.log_db_write("player", "UPDATE", {"pending_roll": pending})
     return {
         "needs_player_roll": True,
         "skill_name": skill_name,
@@ -344,6 +350,8 @@ def resolve_player_roll(playthrough_id, dice_result: int) -> dict:
     else:
         outcome = 'FEHLSCHLAG'
 
+    _trace.log_roll_resolved(dice_result, modifier, total, sg, outcome)
+
     # Award tick and check skill-up
     tick_result = award_tick(playthrough_id, skill_name)
 
@@ -358,6 +366,7 @@ def resolve_player_roll(playthrough_id, dice_result: int) -> dict:
     )
     conn.commit()
     conn.close()
+    _trace.log_db_write("player", "UPDATE", {"pending_roll": None})
 
     return {
         "needs_roll": True,
@@ -473,6 +482,9 @@ def apply_narrator_output(playthrough_id, narrator_json):
             (playthrough_id, change.get('entity_type', 'scene'), change.get('entity_id', ''),
              change.get('flag_name', ''), change.get('flag_value', ''), change.get('flag_value', ''))
         )
+        _trace.log_db_write("world_state_flags", "UPSERT", {
+            "entity": change.get('entity_id'), "flag": change.get('flag_name'), "value": change.get('flag_value')
+        })
 
     for npc in narrator_json.get('generated_npcs', []):
         conn.execute(
@@ -482,6 +494,7 @@ def apply_narrator_output(playthrough_id, narrator_json):
              npc.get('description', ''), npc.get('personality', ''),
              npc.get('home_scene_id', ''), json.dumps(npc.get('stats', {})), 'generated')
         )
+        _trace.log_db_write("npcs", "INSERT", {"id": npc.get('id'), "name": npc.get('name'), "tier": "generated"})
 
     for loc in narrator_json.get('generated_locations', []):
         if 'parent_scene_id' in loc:
@@ -500,15 +513,26 @@ def apply_narrator_output(playthrough_id, narrator_json):
                  loc.get('name', ''), loc.get('type', ''), loc.get('layer_d_text', ''),
                  loc.get('x', 0), loc.get('y', 0))
             )
+        _trace.log_db_write("scenes", "INSERT", {"id": loc.get('id'), "name": loc.get('name')})
 
     for group in narrator_json.get('generated_groups', []):
         conn.execute(
             "INSERT INTO group_entries (scene_id, label, description) VALUES (?,?,?)",
             (group.get('scene_id', ''), group.get('label', ''), group.get('description', ''))
         )
+        _trace.log_db_write("group_entries", "INSERT", {"scene_id": group.get('scene_id'), "label": group.get('label')})
 
     conn.commit()
     conn.close()
+
+    _trace.log_narrator_output(
+        narrator_json.get('narration', ''),
+        narrator_json.get('time_delta_minutes', 5),
+        len(narrator_json.get('generated_npcs', [])),
+        len(narrator_json.get('generated_locations', [])),
+        len(narrator_json.get('generated_groups', [])),
+        len(narrator_json.get('world_state_changes', []))
+    )
 
     delta = narrator_json.get('time_delta_minutes', 5)
     if isinstance(delta, (int, float)) and delta > 0:

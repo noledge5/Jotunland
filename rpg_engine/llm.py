@@ -3,6 +3,7 @@ import httpx
 import json
 import re
 import os
+import trace as _trace
 
 _DEFAULT_MODEL_ANTHROPIC = "claude-sonnet-4-6"
 _DEFAULT_MODEL_OPENROUTER = "anthropic/claude-sonnet-4-5"
@@ -104,6 +105,7 @@ Wenn kein Wurf nötig ist (Rasten, Beobachten, normales Gespräch, Bewegung zu b
 
     raw = ""
     try:
+        _trace.log_llm_call("classify_action", model or _DEFAULT_MODEL_ANTHROPIC)
         raw = _call_llm(system_prompt, [{"role": "user", "content": player_input}],
                         150, api_key, model, provider)
         result = _try_parse_json(raw)
@@ -113,10 +115,10 @@ Wenn kein Wurf nötig ist (Rasten, Beobachten, normales Gespräch, Bewegung zu b
             result["needs_roll"] = True
             result.setdefault("skill", "Klingenwaffen")
             result.setdefault("difficulty_tier", "Durchschnitt")
-        # Validate difficulty_tier
         valid_tiers = ["Sehr Leicht", "Leicht", "Durchschnitt", "Schwer", "Sehr Schwer", "Heroisch", "Extrem"]
         if result.get("difficulty_tier") and result["difficulty_tier"] not in valid_tiers:
             result["difficulty_tier"] = "Durchschnitt"
+        _trace.log_llm_result("classify_action", result)
         return result
     except Exception as e:
         print(f"[LLM] classify_action Fehler: {e}")
@@ -144,10 +146,12 @@ def generate_narration(context_prompt, api_key=None, model=None, provider="anthr
         return d
 
     try:
+        _trace.log_llm_call("generate_narration", model or _DEFAULT_MODEL_ANTHROPIC)
         raw = _call_llm("", [{"role": "user", "content": context_prompt}],
                         1000, api_key, model, provider)
         result = _try_parse_json(raw)
         if result:
+            _trace.log_llm_result("generate_narration", result.get('narration', '')[:120])
             return _ensure_fields(result)
 
         # Retry once

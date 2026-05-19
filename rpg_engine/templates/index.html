@@ -160,6 +160,7 @@
       <span class="stat-time" id="hdr-time">—</span>
     </div>
     <button id="panel-toggle" class="btn-icon" title="Seitenleiste">&#9776;</button>
+    <button class="btn-icon" title="Neues Spiel / Menü" onclick="exitToMenu()" style="margin-left:4px;">&#8962;</button>
   </header>
 
   <!-- Main Layout -->
@@ -295,6 +296,11 @@ let appState = {
 async function init() {
   loadSettings();
   await Promise.all([loadCharOptions(), loadSaves()]);
+  // Auto-restore last session
+  const savedId = localStorage.getItem('rpg_playthrough_id');
+  if (savedId) {
+    await continueGame(parseInt(savedId));
+  }
 }
 
 async function loadCharOptions() {
@@ -705,7 +711,7 @@ document.getElementById('start-btn').addEventListener('click', async () => {
 
     appState.playthroughId = data.playthrough_id;
     appState.gameState = data.game_state;
-    enterGame();
+    enterGame(); // also saves to localStorage
     addMessage('narrator', data.narration);
     updateUI();
   } catch(e) {
@@ -758,6 +764,19 @@ async function continueGame(id) {
 function enterGame() {
   document.getElementById('wizard-overlay').classList.add('hidden');
   document.getElementById('game-ui').classList.remove('hidden');
+  if (appState.playthroughId) {
+    localStorage.setItem('rpg_playthrough_id', appState.playthroughId);
+  }
+}
+
+function exitToMenu() {
+  localStorage.removeItem('rpg_playthrough_id');
+  appState.playthroughId = null;
+  appState.gameState = null;
+  document.getElementById('game-ui').classList.add('hidden');
+  document.getElementById('wizard-overlay').classList.remove('hidden');
+  document.getElementById('message-list').innerHTML = '';
+  loadSaves();
 }
 
 function updateUI() {
