@@ -7,6 +7,11 @@ import trace as _trace
 
 _rulebook = None
 _skills_data = None
+_DB_PATH = os.path.join(os.path.dirname(__file__), 'rpg.db')
+
+
+def _db():
+    return get_db(_DB_PATH)
 
 
 def _load_rulebook():
@@ -45,7 +50,7 @@ def skill_bonus(skill_value: int) -> int:
 
 def get_attr(playthrough_id, attr_name) -> int:
     """Read attribute value from player_attributes."""
-    conn = get_db()
+    conn = _db()
     row = conn.execute(
         "SELECT value FROM player_attributes WHERE playthrough_id=? AND attr_name=?",
         (playthrough_id, attr_name)
@@ -65,7 +70,7 @@ def get_player_vw(playthrough_id) -> int:
     ges = get_attr(playthrough_id, 'GES')
     base = 10 + attr_mod(ges)
     # Check for shield in equipped inventory
-    conn = get_db()
+    conn = _db()
     shields = conn.execute(
         "SELECT item_name, properties FROM inventory "
         "WHERE playthrough_id=? AND equipped=1",
@@ -84,7 +89,7 @@ def get_player_vw(playthrough_id) -> int:
 
 def get_skill_value(playthrough_id, skill_name) -> int:
     """Read skill value (level column) from player_skills, 0 if not found."""
-    conn = get_db()
+    conn = _db()
     row = conn.execute(
         "SELECT level FROM player_skills WHERE playthrough_id=? AND skill_name=?",
         (playthrough_id, skill_name)
@@ -104,7 +109,7 @@ def get_skill_attrs(skill_name) -> list:
 
 def get_injury_modifiers(playthrough_id, skill_name):
     """Return total modifier from injuries affecting this skill."""
-    conn = get_db()
+    conn = _db()
     rows = conn.execute(
         "SELECT modifier FROM injuries WHERE playthrough_id=? AND entity_type='player' AND affected_skill=?",
         (playthrough_id, skill_name)
@@ -133,7 +138,7 @@ def award_tick(playthrough_id, skill_name) -> dict:
     If ticks >= threshold: skill_value += 1, ticks = 0, skill_ups_count += 1.
     Returns: {"skill_up": bool, "new_value": int, "ticks": int, "ticks_needed": int}
     """
-    conn = get_db()
+    conn = _db()
     row = conn.execute(
         "SELECT level, ticks FROM player_skills WHERE playthrough_id=? AND skill_name=?",
         (playthrough_id, skill_name)
@@ -191,7 +196,7 @@ def check_char_level_up(playthrough_id) -> bool:
     Check if skill_ups_count >= (level * 10).
     If so: level += 1, hp_max += 2, return True.
     """
-    conn = get_db()
+    conn = _db()
     player = conn.execute(
         "SELECT level, skill_ups_count, hp_max FROM player WHERE playthrough_id=?",
         (playthrough_id,)
@@ -228,7 +233,7 @@ def process_dying(playthrough_id):
     If player hp_current <= 0 and hp_current > -10: hp_current -= 1 (bleeding).
     If hp_current <= -10: player dies.
     """
-    conn = get_db()
+    conn = _db()
     player = conn.execute(
         "SELECT hp_current FROM player WHERE playthrough_id=?", (playthrough_id,)
     ).fetchone()
@@ -286,13 +291,21 @@ def request_roll(playthrough_id, skill_name, difficulty_tier) -> dict:
         "difficulty_tier": difficulty_tier
     }
 
-    conn = get_db()
-    conn.execute(
+    conn = _db()
+    cursor = conn.execute(
         "UPDATE player SET pending_roll=? WHERE playthrough_id=?",
         (json.dumps(pending), playthrough_id)
     )
+    rows_affected = cursor.rowcount
     conn.commit()
+
+    # Verify write
+    verify = conn.execute(
+        "SELECT pending_roll FROM player WHERE playthrough_id=?", (playthrough_id,)
+    ).fetchone()
     conn.close()
+
+    print(f"[request_roll] rows_affected={rows_affected} verify={verify['pending_roll'] if verify else 'NO ROW'}")
 
     sign = "+" if modifier >= 0 else ""
     formula = f"W20 {sign}{modifier}"
@@ -317,11 +330,13 @@ def resolve_player_roll(playthrough_id, dice_result: int) -> dict:
     Clear pending_roll.
     Return full engine_result dict.
     """
-    conn = get_db()
+    conn = _db()
     player = conn.execute(
         "SELECT pending_roll FROM player WHERE playthrough_id=?", (playthrough_id,)
     ).fetchone()
     conn.close()
+
+    print(f"[resolve_player_roll] playthrough_id={playthrough_id} pending_roll={player['pending_roll'] if player else 'NO ROW'}")
 
     if not player or not player['pending_roll']:
         return {"error": "Kein ausstehender Wurf gefunden."}
@@ -359,7 +374,7 @@ def resolve_player_roll(playthrough_id, dice_result: int) -> dict:
     leveled_up = check_char_level_up(playthrough_id)
 
     # Clear pending_roll
-    conn = get_db()
+    conn = _db()
     conn.execute(
         "UPDATE player SET pending_roll=NULL WHERE playthrough_id=?",
         (playthrough_id,)
@@ -389,7 +404,7 @@ def resolve_player_roll(playthrough_id, dice_result: int) -> dict:
 
 def get_current_scene_npcs(playthrough_id):
     """Get NPCs present at player's current scene given current in-game time."""
-    conn = get_db()
+    conn = _db()
     player = conn.execute(
         "SELECT current_scene_id, in_game_hour FROM player WHERE playthrough_id=?",
         (playthrough_id,)
@@ -427,7 +442,7 @@ def advance_time(playthrough_id, delta_minutes):
     if delta_minutes <= 0:
         return
 
-    conn = get_db()
+    conn = _db()
     player = conn.execute(
         "SELECT in_game_year, in_game_month, in_game_day, in_game_hour, in_game_minute "
         "FROM player WHERE playthrough_id=?", (playthrough_id,)
@@ -472,7 +487,7 @@ def advance_time(playthrough_id, delta_minutes):
 
 def apply_narrator_output(playthrough_id, narrator_json):
     """Apply the structured Narrator Output to the DB."""
-    conn = get_db()
+    conn = _db()
 
     for change in narrator_json.get('world_state_changes', []):
         conn.execute(
@@ -547,7 +562,7 @@ def resolve_combat_turn(playthrough_id, player_action, target_npc_id):
     Player attack: request_roll (external dice).
     NPC counter-attack: engine rolls internally.
     """
-    conn = get_db()
+    conn = _db()
 
     # Determine combat skill from action
     action_lower = player_action.lower()
@@ -602,7 +617,7 @@ def resolve_combat_after_roll(playthrough_id, engine_result, target_npc_id):
     skill_result = engine_result.get('skill_result', {})
     outcome = skill_result.get('outcome', 'FEHLSCHLAG')
 
-    conn = get_db()
+    conn = _db()
 
     target = conn.execute(
         "SELECT * FROM combat_combatants WHERE playthrough_id=? AND entity_id=? AND combat_status='active'",
@@ -719,7 +734,7 @@ def apply_engine_result(playthrough_id, classifier_output, skill_result):
         'status': 'resolved'
     }
 
-    conn = get_db()
+    conn = _db()
     player = conn.execute(
         "SELECT in_combat FROM player WHERE playthrough_id=?", (playthrough_id,)
     ).fetchone()
