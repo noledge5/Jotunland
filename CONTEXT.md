@@ -58,6 +58,9 @@ The times and locations where an NPC can be found. Stored in the DB as part of t
 ## Combat State
 A flag (`in_combat=true`) set in the DB when combat begins. While active, each turn the Engine automatically resolves the enemy's counter-action after the player acts. Initiative is rolled once at combat start. Combat ends when all combatants are no longer `active`.
 
+## Verteidigungswert (VW)
+Passiver Schutzwert: `10 + GES-MOD + Schild-Bonus`. NPC-Angriffswürfe (intern vom Engine berechnet) müssen diesen Wert übertreffen um zu treffen. Der Spieler würfelt standardmäßig nicht für Verteidigung. Ausnahme: Erklärt der Spieler explizit "Ich weiche aus" oder "Ich blocke", wird eine aktive Verteidigungsprobe ausgeführt — Ausweichen (`W20 + GES-MOD + Akrobatik-Bonus`) oder Parade (`W20 + STR-MOD + Parade/Schild-Bonus`) gegen den NPC-Angriffswurf. Aktive Verteidigung ersetzt den eigenen Angriff in dieser Runde.
+
 ## Called Shot
 When a player specifies a target zone in their action description (e.g. "Ich schlage auf den Kopf"), the Action Classifier raises the SG contextually — no fixed modifier. The Classifier weighs the target zone, the opponent's state, and the situation to pick the appropriate Difficulty Tier. A successful hit to the described zone is narrated accordingly by the Narrator. A critical hit (Nat 20) to a vital zone (head, throat) can trigger a Condition (Betäubung, Blutung) in addition to damage. Hit location is narrative flavor — there is no separate hit location table. The damage die result represents how clean and effective the hit was within the described zone.
 
