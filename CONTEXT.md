@@ -10,7 +10,9 @@ Any moment in gameplay where the player experiences a contradiction between what
 The authoritative record of all facts about the current game world: player stats, inventory, location, NPC relationships, quest status, session history. Stored in the database. The LLM never holds Game State in its own memory — it receives it fresh from the database on every turn.
 
 ## Turn
-One complete player interaction cycle: player input → engine resolution → context assembly → LLM narration → state update.
+One complete player interaction cycle. Two variants:
+- **Turn ohne Probe:** Spieler-Input → Engine/Classifier → Kontext-Assembly → LLM-Narration → State-Update.
+- **Turn mit Probe:** Spieler-Input → Classifier bestimmt Skill + SG → Engine fordert Würfelwurf an → Spieler gibt W20-Ergebnis ein (zweiter Input) → Engine berechnet Endergebnis → Kontext-Assembly → LLM-Narration → State-Update. Der Spieler würfelt physisch; das Engine-Ergebnis wird nie intern gewürfelt wenn eine Probe nötig ist.
 
 ## Action Classifier
 A lightweight, structured LLM call that receives the raw player input, the character's current skill list, and scene context. It decides (a) whether the action requires a dice roll at all, and (b) if so, which skill applies. Returns structured JSON: `{ "skill": "stealth", "needs_roll": true }` or `{ "needs_roll": false }`. Does not use a hardcoded action-type enum — the Skill List is the rulebook. Makes no decisions about outcomes.
@@ -25,10 +27,10 @@ All game outcomes — damage, skill check results, hit/miss, XP gain — are det
 The set of tables or data files that define game constants: weapon damage dice, armor values, skill difficulty thresholds, XP formulas. Owned entirely by the Engine. Never read by the LLM.
 
 ## Rulebook
-The authoritative D20-based rule system that governs all mechanical resolution. Defines difficulty tiers (Trivial DC 4 → Easy DC 8 → Medium DC 12 → Hard DC 16 → Very Hard DC 19 → Nearly Impossible DC 22), critical outcomes (Natural 20 = critical success regardless of DC; Natural 1 = critical failure regardless of modifier), damage dice per weapon type, XP tables, and injury thresholds. The Action Classifier selects a difficulty tier by name — the Engine maps it to a DC. The LLM never sets raw DC values.
+The authoritative D20-based rule system that governs all mechanical resolution. Defines difficulty tiers (Sehr Leicht SG 8 → Leicht SG 10 → Durchschnitt SG 12 → Schwer SG 14 → Sehr Schwer SG 16 → Heroisch SG 18 → Extrem SG 20), critical outcomes (Natural 20 = critical success regardless of SG; Natural 1 = critical failure regardless of modifier), damage dice per weapon type, XP tables, and injury thresholds. The Action Classifier selects a difficulty tier by name — the Engine maps it to a SG. The LLM never sets raw SG values. Game language is German throughout.
 
 ## Difficulty Tier
-A named category from the Rulebook that describes how hard an action is. The Action Classifier picks the appropriate tier based on scene context (NPC stats, situation, environment). The Engine converts the tier to a DC number. Valid tiers: Trivial, Easy, Medium, Hard, Very Hard, Nearly Impossible.
+A named category from the Rulebook that describes how hard an action is. The Action Classifier picks the appropriate tier based on scene context (NPC stats, situation, environment). The Engine converts the tier to a SG number. Valid tiers: Sehr Leicht (8), Leicht (10), Durchschnitt (12), Schwer (14), Sehr Schwer (16), Heroisch (18), Extrem (20).
 
 ## NPC Entry
 The database record for a non-player character. Always contains: name, current location, description, personality. Once the player has met an NPC (`met=true`), the entry is extended with: relation score (-100 to +100), what the NPC knows about the player, what the player knows about the NPC, shared history summary. An NPC's entry only enters the LLM context when the player is at the NPC's exact location and has either met them before or actively initiates contact. Never loaded by zone or region proximity alone.
