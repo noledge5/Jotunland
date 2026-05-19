@@ -67,6 +67,9 @@ When a player specifies a target zone in their action description (e.g. "Ich sch
 ## Combat Status
 The state of a combatant during or after combat. Values: `active` (fighting normally), `incapacitated` (unconscious, broken, unable to fight — not dead), `fled`, `surrendered`, `dead`. Tracked per combatant in the DB. Injuries (e.g. broken arm, leg wound) apply roll modifiers independently of HP and are also tracked in the DB.
 
+## Sterben
+Bei 0 LP ist der Charakter bewusstlos und sterbend — er verliert jede Runde 1 LP durch Blutung. Ein anderer Charakter kann ihn mit einer Erste-Hilfe-Probe (SG 12 — Durchschnitt) stabilisieren. Ohne Stabilisierung stirbt der Charakter bei -10 LP. Selbststabilisierung ist nicht möglich. Mit geeigneten Items (Verbände, Tränke) kann ein bewusstloser Charakter unter bestimmten Umständen vom Narrator als stabilisiert gewertet werden.
+
 ## In-Game Clock
 A timestamp stored in the DB representing the current in-game date and time. Updated each turn by the Engine using the `time_delta` value from the Narrator Output. The LLM estimates how much time the narrated action takes and includes it in its structured output. The Engine applies the delta, then re-evaluates NPC schedules against the new time. The current in-game time is injected into the context each turn so the LLM can make consistent time estimates.
 
