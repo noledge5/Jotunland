@@ -172,8 +172,21 @@
       <span class="stat-time" id="hdr-time">—</span>
     </div>
     <button id="panel-toggle" class="btn-icon" title="Seitenleiste">&#9776;</button>
-    <button class="btn-icon" title="Neues Spiel / Menü" onclick="exitToMenu()" style="margin-left:4px;">&#8962;</button>
+    <button class="btn-icon" title="API-Einstellungen" onclick="toggleApiSettings()" style="margin-left:4px;">&#9881;</button>
+    <button class="btn-icon" title="Menü" onclick="exitToMenu()" style="margin-left:4px;">&#8962;</button>
   </header>
+
+  <!-- API Settings Bar -->
+  <div id="api-settings-bar" class="hidden" style="background:var(--bg3);border-bottom:1px solid var(--border2);padding:0.5rem 1rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+    <span style="color:var(--text2);font-size:0.8rem;white-space:nowrap;">API-Key:</span>
+    <input type="password" id="api-key-ingame" placeholder="Anthropic oder OpenRouter Key" style="flex:1;min-width:200px;background:var(--bg4);border:1px solid var(--border2);border-radius:4px;color:var(--text);padding:0.4rem 0.6rem;font-size:0.85rem;">
+    <select id="provider-ingame" style="background:var(--bg4);border:1px solid var(--border2);border-radius:4px;color:var(--text);padding:0.4rem 0.6rem;font-size:0.85rem;">
+      <option value="anthropic">Anthropic</option>
+      <option value="openrouter">OpenRouter</option>
+    </select>
+    <button class="btn-secondary" onclick="saveApiSettings()" style="white-space:nowrap;">Speichern</button>
+    <span id="api-saved-hint" class="hidden" style="color:#7a9e6e;font-size:0.8rem;">✓ gespeichert</span>
+  </div>
 
   <!-- Main Layout -->
   <div id="main-layout">
@@ -822,6 +835,28 @@ function enterGame() {
   if (appState.playthroughId) {
     localStorage.setItem('rpg_playthrough_id', appState.playthroughId);
   }
+}
+
+function toggleApiSettings() {
+  const bar = document.getElementById('api-settings-bar');
+  const hidden = bar.classList.toggle('hidden');
+  if (!hidden) {
+    document.getElementById('api-key-ingame').value = appState.apiKey || '';
+    document.getElementById('provider-ingame').value = appState.provider || 'anthropic';
+    document.getElementById('api-key-ingame').focus();
+  }
+}
+
+function saveApiSettings() {
+  const key = document.getElementById('api-key-ingame').value.trim();
+  const provider = document.getElementById('provider-ingame').value;
+  appState.apiKey = key;
+  appState.provider = provider;
+  localStorage.setItem('rpg_api_key', key);
+  localStorage.setItem('rpg_provider', provider);
+  const hint = document.getElementById('api-saved-hint');
+  hint.classList.remove('hidden');
+  setTimeout(() => hint.classList.add('hidden'), 2000);
 }
 
 function exitToMenu() {
