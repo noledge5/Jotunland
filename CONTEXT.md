@@ -58,6 +58,13 @@ The times and locations where an NPC can be found. Stored in the DB as part of t
 ## Combat State
 A flag (`in_combat=true`) set in the DB when combat begins. Initiative is determined by context (Classifier wertet Situation aus — Hinterhalt, Überraschung, wer angreift), kein separater Würfelwurf. Alle aktiven Gegner greifen den Spieler jede Runde an. Der Spieler greift standardmäßig einen Gegner pro Runde an. Mit einer expliziten Flächenaktion ("Ich schlage in den Schwarm") kann der Spieler mehrere Gegner gleichzeitig angreifen — mit Malus auf jeden Einzeltreffer, den der Classifier festlegt. Combat ends when all combatants are no longer `active`.
 
+Combat is initiated by the Narrator via the `enter_combat` field in Narrator Output. The Narrator provides all combatant entries (id, name, hp_max, stats). The Engine creates the `combat_combatants` records and sets `in_combat=1`. From the second round onward, all HP tracking is fully engine-driven — the Narrator never sets HP values or decides outcomes. The Narrator receives a `=== KAMPFZUSTAND ===` context block each round showing all combatants with current HP and status.
+
+## Combat Turn Flow
+Two distinct paths based on `in_combat` flag:
+- **Out of combat:** Classify → [Roll?] → Narrate → apply_narrator_output. Narrator may include `enter_combat` to start combat.
+- **In combat:** Classify (forces roll) → Roll requested → Player submits → resolve_player_roll → resolve_combat_after_roll (applies damage, enemy counter-attacks, updates DB) → build_context with KAMPFZUSTAND → Narrate → apply_narrator_output.
+
 ## Verteidigungswert (VW)
 Passiver Schutzwert: `10 + GES-MOD + Schild-Bonus`. NPC-Angriffswürfe (intern vom Engine berechnet) müssen diesen Wert übertreffen um zu treffen. Der Spieler würfelt standardmäßig nicht für Verteidigung. Ausnahme: Erklärt der Spieler explizit "Ich weiche aus" oder "Ich blocke", wird eine aktive Verteidigungsprobe ausgeführt — Ausweichen (`W20 + GES-MOD + Akrobatik-Bonus`) oder Parade (`W20 + STR-MOD + Parade/Schild-Bonus`) gegen den NPC-Angriffswurf. Aktive Verteidigung ersetzt den eigenen Angriff in dieser Runde.
 

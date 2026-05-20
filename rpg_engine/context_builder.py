@@ -117,8 +117,32 @@ def get_active_context(playthrough_id, engine_result):
         f"{i['injury_name']} ({i['affected_skill']} {i['modifier']:+d})" for i in injuries
     ) or "keine"
 
+    # Combat state block
+    from engine import get_current_scene_npcs, get_combatants
+    combat_block = ""
+    if player['in_combat']:
+        combatants = get_combatants(playthrough_id)
+        lines = []
+        for c in combatants:
+            if c['is_player']:
+                continue
+            status = c['combat_status']
+            hp_ratio = c['hp_current'] / c['hp_max'] if c['hp_max'] else 0
+            if status == 'dead':
+                condition = "tot"
+            elif status == 'incapacitated':
+                condition = "kampfunfähig"
+            elif hp_ratio <= 0.25:
+                condition = "schwer verwundet"
+            elif hp_ratio <= 0.6:
+                condition = "verwundet"
+            else:
+                condition = "unverletzt"
+            name = c.get('npc_name') or c['entity_id']
+            lines.append(f"  - {name} [{status}]: {c['hp_current']}/{c['hp_max']} LP ({condition})")
+        combat_block = "\n=== KAMPFZUSTAND ===\n" + ("\n".join(lines) if lines else "  (keine Gegner eingetragen)")
+
     # NPCs in scene
-    from engine import get_current_scene_npcs
     npcs = get_current_scene_npcs(playthrough_id)
     npc_lines = []
     for npc in npcs:
@@ -186,6 +210,17 @@ def get_active_context(playthrough_id, engine_result):
                     engine_text += f"\nTick: {tick['ticks']}/{tick['ticks_needed']}"
             if engine_result.get('leveled_up'):
                 engine_text += "\nCHARACTER LEVEL UP!"
+            # Combat results
+            if engine_result.get('player_damage') is not None:
+                engine_text += f"\nSpieler-Schaden: {engine_result['player_damage']} → Gegner LP jetzt {engine_result.get('target_new_hp', '?')}"
+            for atk in engine_result.get('enemy_attacks', []):
+                dmg = atk.get('damage', 0)
+                if dmg:
+                    engine_text += f"\n{atk.get('name', 'Gegner')} greift an: W20={atk['roll']} → {atk['outcome']} → {dmg} Schaden (Spieler LP: {atk.get('player_new_hp', '?')})"
+                else:
+                    engine_text += f"\n{atk.get('name', 'Gegner')} greift an: W20={atk['roll']} → {atk['outcome']} → verfehlt"
+            if engine_result.get('combat_ended'):
+                engine_text += f"\nKAMPF BEENDET: {engine_result.get('combat_end_reason', '?')}"
         elif engine_result.get('needs_roll') is False:
             engine_text = "Keine Fertigkeitsprobe erforderlich."
         else:
@@ -210,7 +245,7 @@ def get_active_context(playthrough_id, engine_result):
 
     layer_e = f"""=== SPIELER ===
 {player_summary}
-
+{combat_block}
 === ANWESENDE NSCs ===
 {npcs_text}
 
@@ -311,10 +346,11 @@ Spielereingabe: "{player_input}"
 
 Antworte NUR mit gültigem JSON:
 {{
-  "narration": "2-4 Sätze lebendiger Erzählung in der Gegenwartsform. Bleib dem düsteren Ton der Welt treu. Webe Sinnesdetails ein.",
+  "narration": "2-4 Sätze lebendiger Erzählung in der Gegenwartsform. Bleib dem düsteren Ton der Welt treu. Webe Sinnesdetails ein. Im Kampf: beschreibe Treffer, Wunden und Konter basierend auf dem MECHANISCHEN ERGEBNIS — erfinde keine Ausgänge.",
   "time_delta_minutes": <ganzzahl, wie viele Spielminuten diese Handlung dauerte, max 4320>,
-  "gold_delta": <ganzzahl, positiv = Spieler erhält Gold/Münzen, negativ = Spieler gibt Gold aus. 0 wenn kein Handel>,
+  "gold_delta": <ganzzahl, positiv = Spieler erhält Münzen, negativ = Spieler gibt aus. 0 wenn kein Handel>,
   "inventory_changes": [],
+  "enter_combat": [],
   "generated_locations": [],
   "generated_npcs": [],
   "generated_groups": [],
@@ -322,13 +358,16 @@ Antworte NUR mit gültigem JSON:
 }}
 
 inventory_changes Format: {{"op": "add" oder "remove", "item_name": str, "quantity": int, "equipped": false, "properties": {{}}}}
+enter_combat Format: [{{"id": "eindeutiger_slug", "name": str, "role": str, "hp_max": int, "description": str, "stats": {{"combat_skill": int}}}}]
+  — Nur befüllen wenn JETZT ein Kampf BEGINNT (in_combat war vorher false). Leer lassen wenn bereits im Kampf oder kein Kampf.
 generated_npcs Format: {{"id": "eindeutiger_slug", "name": str, "role": str, "description": str, "personality": str, "home_scene_id": str, "stats": {{}}}}
 generated_locations Format: {{"id": str, "name": str, "type": str, "layer_d_text": str, "parent_scene_id": str oder "zone_id": str, "x": int, "y": int}}
 generated_groups Format: {{"scene_id": str, "label": str, "description": str}}
 world_state_changes Format: {{"entity_type": str, "entity_id": str, "flag_name": str, "flag_value": str}}
 
-Generiere Orte/NSCs/Gruppen nur, wenn der Spieler direkt auf etwas Neues trifft oder es entdeckt. Halte generierte Inhalte konsistent mit dem Ton der Welt und dem Schauplatzkontext.
-Wenn der Spieler etwas kauft, verkauft, erhält oder verliert: setze gold_delta und inventory_changes entsprechend. Vergiss nie gold_delta wenn Münzen wechseln."""
+Generiere Orte/NSCs/Gruppen nur, wenn der Spieler direkt auf etwas Neues trifft oder es entdeckt.
+Wenn der Spieler etwas kauft, verkauft, erhält oder verliert: setze gold_delta und inventory_changes entsprechend.
+KAMPF-REGEL: Du entscheidest NICHT über Treffer, Schaden oder Tod — das steht im MECHANISCHEN ERGEBNIS. Erzähle nur, was dort steht."""
 
     return narrator_system
 

@@ -264,7 +264,7 @@ def process_dying(playthrough_id):
 
 # ── External Roll System ────────────────────────────────────────────────────
 
-def request_roll(playthrough_id, skill_name, difficulty_tier) -> dict:
+def request_roll(playthrough_id, skill_name, difficulty_tier, target_npc_id=None) -> dict:
     """
     Calculate modifier (ATTR-MOD + Skill-Bonus),
     save pending_roll in DB as JSON.
@@ -288,7 +288,8 @@ def request_roll(playthrough_id, skill_name, difficulty_tier) -> dict:
         "skill_name": skill_name,
         "sg": sg,
         "modifier": modifier,
-        "difficulty_tier": difficulty_tier
+        "difficulty_tier": difficulty_tier,
+        "target_npc_id": target_npc_id
     }
 
     conn = _db()
@@ -346,6 +347,7 @@ def resolve_player_roll(playthrough_id, dice_result: int) -> dict:
     sg = pending['sg']
     modifier = pending['modifier']
     difficulty_tier = pending['difficulty_tier']
+    target_npc_id = pending.get('target_npc_id')
 
     total = dice_result + modifier
 
@@ -385,6 +387,7 @@ def resolve_player_roll(playthrough_id, dice_result: int) -> dict:
 
     return {
         "needs_roll": True,
+        "target_npc_id": target_npc_id,
         "skill_result": {
             "skill": skill_name,
             "sg": sg,
@@ -586,6 +589,10 @@ def apply_narrator_output(playthrough_id, narrator_json):
     conn.commit()
     conn.close()
 
+    enter_combat = narrator_json.get('enter_combat', [])
+    if enter_combat and isinstance(enter_combat, list):
+        start_combat(playthrough_id, enter_combat)
+
     _trace.log_narrator_output(
         narrator_json.get('narration', ''),
         narrator_json.get('time_delta_minutes', 5),
@@ -601,6 +608,80 @@ def apply_narrator_output(playthrough_id, narrator_json):
 
 
 # ── Combat ──────────────────────────────────────────────────────────────────
+
+def start_combat(playthrough_id, combatants: list):
+    """Set in_combat=1, populate combat_combatants from narrator-provided list."""
+    conn = _db()
+    conn.execute("DELETE FROM combat_combatants WHERE playthrough_id=?", (playthrough_id,))
+
+    player_hp = conn.execute(
+        "SELECT hp_current, hp_max FROM player WHERE playthrough_id=?", (playthrough_id,)
+    ).fetchone()
+    if player_hp:
+        conn.execute(
+            "INSERT INTO combat_combatants (playthrough_id, entity_type, entity_id, combat_status, hp_current, hp_max, is_player) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (playthrough_id, 'player', 'player', 'active', player_hp['hp_current'], player_hp['hp_max'], 1)
+        )
+
+    for c in combatants:
+        npc_id = c.get('id', 'enemy_unknown')
+        hp = max(1, int(c.get('hp_max', 8)))
+        conn.execute(
+            "INSERT INTO combat_combatants (playthrough_id, entity_type, entity_id, combat_status, hp_current, hp_max, is_player) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (playthrough_id, 'npc', npc_id, 'active', hp, hp, 0)
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO npcs (id, name, role, description, personality, home_scene_id, stats, tier) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (npc_id, c.get('name', 'Unbekannter Gegner'), c.get('role', 'Gegner'),
+             c.get('description', ''), c.get('personality', ''),
+             '', json.dumps(c.get('stats', {})), 'generated')
+        )
+
+    conn.execute("UPDATE player SET in_combat=1 WHERE playthrough_id=?", (playthrough_id,))
+    conn.commit()
+    conn.close()
+    _trace.log_state_change(playthrough_id, "in_combat", True, f"{len(combatants)} Gegner initialisiert")
+
+
+def get_combatants(playthrough_id) -> list:
+    """Return all combatants with resolved names for context block."""
+    conn = _db()
+    rows = conn.execute(
+        "SELECT cc.entity_id, cc.entity_type, cc.combat_status, cc.hp_current, cc.hp_max, cc.is_player, "
+        "n.name as npc_name "
+        "FROM combat_combatants cc "
+        "LEFT JOIN npcs n ON cc.entity_id = n.id "
+        "WHERE cc.playthrough_id=?",
+        (playthrough_id,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_primary_combat_target(playthrough_id, target_hint=None) -> str | None:
+    """Resolve the player's attack target. Matches name hint or returns first active enemy."""
+    conn = _db()
+    enemies = conn.execute(
+        "SELECT cc.entity_id, n.name as npc_name "
+        "FROM combat_combatants cc "
+        "LEFT JOIN npcs n ON cc.entity_id = n.id "
+        "WHERE cc.playthrough_id=? AND cc.is_player=0 AND cc.combat_status='active'",
+        (playthrough_id,)
+    ).fetchall()
+    conn.close()
+
+    if not enemies:
+        return None
+    if target_hint:
+        hint_lower = target_hint.lower()
+        for e in enemies:
+            if e['npc_name'] and hint_lower in e['npc_name'].lower():
+                return e['entity_id']
+    return enemies[0]['entity_id']
+
 
 def resolve_combat_turn(playthrough_id, player_action, target_npc_id):
     """
@@ -700,53 +781,63 @@ def resolve_combat_after_roll(playthrough_id, engine_result, target_npc_id):
             combat_result['combat_ended'] = True
             combat_result['combat_end_reason'] = f"{target_npc_id} besiegt"
 
-    # Enemy counter-attack (if combat not ended)
-    if not combat_result['combat_ended'] and target and player_hp:
-        enemy_roll = roll_d20()
-        npc_row = conn.execute("SELECT stats FROM npcs WHERE id=?", (target_npc_id,)).fetchone()
-        npc_combat = 8
-        if npc_row:
+    # All active enemies counter-attack
+    if not combat_result['combat_ended'] and player_hp:
+        active_attackers = conn.execute(
+            "SELECT cc.entity_id, cc.hp_current, n.name as npc_name, n.stats as npc_stats "
+            "FROM combat_combatants cc LEFT JOIN npcs n ON cc.entity_id = n.id "
+            "WHERE cc.playthrough_id=? AND cc.is_player=0 AND cc.combat_status='active'",
+            (playthrough_id,)
+        ).fetchall()
+
+        player_vw = get_player_vw(playthrough_id)
+        current_player_hp = player_hp['hp_current']
+        enemy_attacks = []
+
+        for attacker in active_attackers:
+            npc_combat = 8
             try:
-                stats = json.loads(npc_row['stats'] or '{}')
+                stats = json.loads(attacker['npc_stats'] or '{}')
                 npc_combat = stats.get('combat_skill', 8)
             except Exception:
                 pass
 
-        player_vw = get_player_vw(playthrough_id)
-        enemy_total = enemy_roll + (npc_combat // 3)
-        enemy_result = {'roll': enemy_roll, 'total': enemy_total, 'vw': player_vw}
+            enemy_roll = roll_d20()
+            enemy_total = enemy_roll + (npc_combat // 3)
+            atk = {'id': attacker['entity_id'], 'name': attacker['npc_name'] or attacker['entity_id'],
+                   'roll': enemy_roll, 'total': enemy_total, 'vw': player_vw}
 
-        if enemy_roll == 20:
-            enemy_damage = 8
-            enemy_result['outcome'] = 'KRITISCHER_ERFOLG'
-        elif enemy_roll == 1:
-            enemy_damage = 0
-            enemy_result['outcome'] = 'KRITISCHER_FEHLSCHLAG'
-        elif enemy_total >= player_vw:
-            enemy_damage = random.randint(1, 6)
-            enemy_result['outcome'] = 'ERFOLG'
-        else:
-            enemy_damage = 0
-            enemy_result['outcome'] = 'FEHLSCHLAG'
+            if enemy_roll == 20:
+                enemy_damage = 8
+                atk['outcome'] = 'KRITISCHER_ERFOLG'
+            elif enemy_roll == 1:
+                enemy_damage = 0
+                atk['outcome'] = 'KRITISCHER_FEHLSCHLAG'
+            elif enemy_total >= player_vw:
+                enemy_damage = random.randint(1, 6)
+                atk['outcome'] = 'ERFOLG'
+            else:
+                enemy_damage = 0
+                atk['outcome'] = 'FEHLSCHLAG'
 
-        if enemy_damage > 0:
-            new_player_hp = player_hp['hp_current'] - enemy_damage
-            enemy_result['damage'] = enemy_damage
-            enemy_result['player_new_hp'] = new_player_hp
-            conn.execute(
-                "UPDATE player SET hp_current=? WHERE playthrough_id=?",
-                (new_player_hp, playthrough_id)
-            )
-            conn.execute(
-                "UPDATE combat_combatants SET hp_current=? WHERE playthrough_id=? AND is_player=1",
-                (new_player_hp, playthrough_id)
-            )
-            if new_player_hp <= 0:
+            if enemy_damage > 0:
+                current_player_hp -= enemy_damage
+                atk['damage'] = enemy_damage
+                atk['player_new_hp'] = current_player_hp
+
+            enemy_attacks.append(atk)
+
+        if current_player_hp != player_hp['hp_current']:
+            conn.execute("UPDATE player SET hp_current=? WHERE playthrough_id=?",
+                         (current_player_hp, playthrough_id))
+            conn.execute("UPDATE combat_combatants SET hp_current=? WHERE playthrough_id=? AND is_player=1",
+                         (current_player_hp, playthrough_id))
+            if current_player_hp <= 0:
                 combat_result['combat_ended'] = True
                 combat_result['combat_end_reason'] = 'spieler_besiegt'
                 process_dying(playthrough_id)
 
-        combat_result['enemy_attack'] = enemy_result
+        combat_result['enemy_attacks'] = enemy_attacks
 
     # Check if all enemies defeated
     active_enemies = conn.execute(

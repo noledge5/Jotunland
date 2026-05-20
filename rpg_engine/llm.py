@@ -132,6 +132,7 @@ def generate_narration(context_prompt, api_key=None, model=None, provider="anthr
         "time_delta_minutes": 5,
         "gold_delta": 0,
         "inventory_changes": [],
+        "enter_combat": [],
         "generated_locations": [],
         "generated_npcs": [],
         "generated_groups": [],
@@ -143,6 +144,7 @@ def generate_narration(context_prompt, api_key=None, model=None, provider="anthr
         d.setdefault("time_delta_minutes", 5)
         d.setdefault("gold_delta", 0)
         d.setdefault("inventory_changes", [])
+        d.setdefault("enter_combat", [])
         d.setdefault("generated_locations", [])
         d.setdefault("generated_npcs", [])
         d.setdefault("generated_groups", [])

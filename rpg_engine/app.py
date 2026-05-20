@@ -8,7 +8,8 @@ from engine import (
     request_roll, resolve_player_roll,
     get_current_scene_npcs, check_char_level_up,
     calculate_max_hp, process_dying,
-    resolve_combat_turn, resolve_combat_after_roll
+    resolve_combat_turn, resolve_combat_after_roll,
+    get_primary_combat_target
 )
 from context_builder import build_context
 from llm import classify_action, generate_narration, generate_session_synopsis
@@ -376,8 +377,14 @@ def take_turn():
         skill_name = classifier_output['skill']
         difficulty_tier = classifier_output.get('difficulty_tier', 'Durchschnitt')
 
+        # Resolve combat target if in combat
+        target_npc_id = None
+        if in_combat:
+            target_hint = classifier_output.get('target')
+            target_npc_id = get_primary_combat_target(playthrough_id, target_hint)
+
         # Request external roll
-        roll_request = request_roll(playthrough_id, skill_name, difficulty_tier)
+        roll_request = request_roll(playthrough_id, skill_name, difficulty_tier, target_npc_id)
 
         # Log the input (no narration yet)
         conn3 = get_db(DB_PATH)
@@ -486,6 +493,16 @@ def submit_roll():
 
     if 'error' in engine_result:
         return jsonify(engine_result), 400
+
+    # If in combat, apply mechanical combat resolution
+    conn_combat = get_db(DB_PATH)
+    p_combat = conn_combat.execute(
+        "SELECT in_combat FROM player WHERE playthrough_id=?", (playthrough_id,)
+    ).fetchone()
+    conn_combat.close()
+    if p_combat and p_combat['in_combat']:
+        target_npc_id = engine_result.get('target_npc_id')
+        engine_result = resolve_combat_after_roll(playthrough_id, engine_result, target_npc_id)
 
     # Build context and narrate
     player_input_for_ctx = data.get('player_input', '[Würfelwurf]')
