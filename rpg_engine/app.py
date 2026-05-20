@@ -691,4 +691,4 @@ def debug_trace():
 if __name__ == '__main__':
     init_db(DB_PATH)
     import_world(DB_PATH)
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5001)
