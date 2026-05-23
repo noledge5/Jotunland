@@ -259,6 +259,7 @@
           <button class="mode-btn active" id="mode-handeln" onclick="setInputMode('handeln')">⚔ Handeln</button>
           <button class="mode-btn" id="mode-sprechen" onclick="setInputMode('sprechen')">💬 Sprechen</button>
           <button class="mode-btn" id="mode-dm" onclick="setInputMode('dm')">🎲 DM-Frage</button>
+          <button class="mode-btn" id="mode-korrektur" onclick="setInputMode('korrektur')">🔧 Korrektur</button>
         </div>
         <div class="input-row">
           <textarea id="player-input" placeholder="Was tust du?" rows="2" maxlength="500"></textarea>
@@ -306,6 +307,20 @@
         </h3>
         <div id="trace-panel" class="hidden">
           <div id="trace-events"></div>
+        </div>
+      </div>
+
+      <!-- Bug Log -->
+      <div class="panel-section" id="bug-panel-section">
+        <h3 class="trace-header" onclick="toggleBugPanel()">
+          🐛 Bug-Log <span id="bug-toggle-icon">▶</span>
+        </h3>
+        <div id="bug-panel" class="hidden">
+          <div id="bug-entries"></div>
+          <div class="bug-input-row">
+            <textarea id="bug-input" placeholder="Bug beschreiben…" rows="2" maxlength="500"></textarea>
+            <button onclick="submitBug()" class="btn-sm">Eintragen</button>
+          </div>
         </div>
       </div>
     </aside>
@@ -1130,16 +1145,58 @@ appState.inputMode = 'handeln';
 
 function setInputMode(mode) {
   appState.inputMode = mode;
-  ['handeln','sprechen','dm'].forEach(m => {
+  ['handeln','sprechen','dm','korrektur'].forEach(m => {
     document.getElementById(`mode-${m}`).classList.toggle('active', m === mode);
   });
   const input = document.getElementById('player-input');
   const placeholders = {
     handeln: 'Was tust du?',
     sprechen: 'Was sagst du?',
-    dm: 'Frage an den DM (keine Spielzeit vergeht)…'
+    dm: 'Frage an den DM (keine Spielzeit vergeht)…',
+    korrektur: 'Was soll korrigiert werden? (z.B. "Der NSC kennt mich nicht, das ist falsch")'
   };
-  input.placeholder = placeholders[mode];
+  input.placeholder = placeholders[mode] || 'Was tust du?';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  BUG LOG
+// ═══════════════════════════════════════════════════════════
+function toggleBugPanel() {
+  const panel = document.getElementById('bug-panel');
+  const icon = document.getElementById('bug-toggle-icon');
+  const hidden = panel.classList.toggle('hidden');
+  icon.textContent = hidden ? '▶' : '▼';
+  if (!hidden) loadBugLog();
+}
+
+async function loadBugLog() {
+  try {
+    const res = await fetch('/api/bugs');
+    const data = await res.json();
+    const el = document.getElementById('bug-entries');
+    if (!data.bugs || !data.bugs.length) {
+      el.innerHTML = '<div class="bug-empty">Keine Einträge</div>';
+      return;
+    }
+    el.innerHTML = data.bugs.slice(-20).reverse().map(b =>
+      `<div class="bug-entry"><span class="bug-ts">${b.ts}</span><span class="bug-txt">${esc(b.text)}</span></div>`
+    ).join('');
+  } catch(e) {}
+}
+
+async function submitBug() {
+  const input = document.getElementById('bug-input');
+  const text = input.value.trim();
+  if (!text) return;
+  try {
+    await fetch('/api/bugs', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text, playthrough_id: appState.playthroughId})
+    });
+    input.value = '';
+    loadBugLog();
+  } catch(e) {}
 }
 
 // ═══════════════════════════════════════════════════════════

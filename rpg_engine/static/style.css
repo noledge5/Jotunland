@@ -801,6 +801,51 @@ textarea { resize: vertical; }
   border-color: var(--gold);
   color: var(--gold);
 }
+#mode-korrektur.active {
+  background: #2a1a1a;
+  border-color: #c0392b;
+  color: #e74c3c;
+}
+
+/* Bug Log */
+.bug-input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+.bug-input-row textarea {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  font-family: var(--font);
+  resize: none;
+  outline: none;
+}
+.bug-input-row textarea:focus { border-color: #e74c3c; }
+.btn-sm {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+  background: #2a1a1a;
+  border: 1px solid #c0392b;
+  color: #e74c3c;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.btn-sm:hover { background: #3a2020; }
+.bug-entry {
+  display: flex;
+  flex-direction: column;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+.bug-ts { color: var(--text-muted); font-size: 0.7rem; margin-bottom: 0.1rem; }
+.bug-txt { color: var(--text); }
+.bug-empty { color: var(--text-muted); font-size: 0.8rem; padding: 0.3rem 0; }
 
 .input-row {
   display: flex;

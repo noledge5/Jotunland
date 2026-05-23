@@ -307,6 +307,73 @@ def new_game():
     })
 
 
+BUG_LOG_PATH = os.path.join(os.path.dirname(__file__), '..', 'bug_log.jsonl')
+
+
+@app.route('/api/bugs', methods=['GET'])
+def get_bugs():
+    bugs = []
+    try:
+        with open(BUG_LOG_PATH, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    bugs.append(json.loads(line))
+    except FileNotFoundError:
+        pass
+    return jsonify({"bugs": bugs})
+
+
+@app.route('/api/bugs', methods=['POST'])
+def add_bug():
+    data = request.get_json()
+    if not data or not data.get('text'):
+        return jsonify({"error": "text erforderlich"}), 400
+    from datetime import datetime
+    entry = {
+        "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "text": data['text'].strip(),
+        "playthrough_id": data.get('playthrough_id')
+    }
+    with open(BUG_LOG_PATH, 'a') as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+    return jsonify({"ok": True})
+
+
+def _handle_korrektur(playthrough_id, correction, api_key, model, provider):
+    """Apply a player correction: re-narrate with correction context, no time passes."""
+    from context_builder import get_active_context
+    from llm import generate_narration
+
+    engine_result = {"needs_roll": False, "skill_result": None, "status": "korrektur"}
+    game_state_text = get_active_context(playthrough_id, engine_result)
+
+    prompt = f"""Du bist der Spielleiter. Der Spieler hat einen Fehler in der letzten Narration gemeldet.
+Korrigiere den Fehler sachlich. Erkläre kurz was richtig ist laut Gamestate. Keine neue Handlung.
+Keine Spielzeit vergeht.
+
+AKTUELLER GAMESTATE:
+{game_state_text}
+
+KORREKTUR DES SPIELERS: {correction}
+
+Antworte NUR mit gültigem JSON:
+{{"narration": "Kurze Korrektur-Bestätigung (1-2 Sätze): was wurde richtiggestellt.", "time_delta_minutes": 0, "gold_delta": 0, "inventory_changes": [], "enter_combat": [], "generated_locations": [], "generated_npcs": [], "generated_groups": [], "world_state_changes": []}}"""
+
+    narrator_output = generate_narration(prompt, api_key=api_key, model=model, provider=provider)
+    narrator_output['time_delta_minutes'] = 0
+    apply_narrator_output(playthrough_id, narrator_output)
+
+    state = _get_player_state(playthrough_id)
+    return jsonify({
+        "narration": narrator_output.get("narration", ""),
+        "engine_result": engine_result,
+        "narrator_output": {"time_delta_minutes": 0, "world_state_changes": narrator_output.get("world_state_changes", []), "generated_npcs": [], "generated_locations": []},
+        "game_state": state,
+        "correction": True
+    })
+
+
 def _handle_dm_query(playthrough_id, question, api_key, model, provider):
     """Handle an OOC DM question: answer from game state, no time passes."""
     from context_builder import get_active_context, get_layer_a
@@ -405,6 +472,10 @@ def take_turn():
     # DM-Frage: answer directly from game state, no time passes, no classifier
     if input_mode == 'dm':
         return _handle_dm_query(playthrough_id, player_input, api_key, model, provider)
+
+    # Korrektur: correct a narration error, no time passes
+    if input_mode == 'korrektur':
+        return _handle_korrektur(playthrough_id, player_input, api_key, model, provider)
 
     # 1. Classify action
     classifier_output = classify_action(player_input, skill_list, scene_name, in_combat,
