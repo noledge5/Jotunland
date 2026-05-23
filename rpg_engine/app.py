@@ -333,7 +333,8 @@ def add_bug():
     entry = {
         "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "text": data['text'].strip(),
-        "playthrough_id": data.get('playthrough_id')
+        "playthrough_id": data.get('playthrough_id'),
+        "trace": _trace.get_trace()
     }
     with open(BUG_LOG_PATH, 'a') as f:
         f.write(json.dumps(entry, ensure_ascii=False) + '\n')
