@@ -307,6 +307,39 @@ def new_game():
     })
 
 
+def _handle_dm_query(playthrough_id, question, api_key, model, provider):
+    """Handle an OOC DM question: answer from game state, no time passes."""
+    from context_builder import get_active_context, get_layer_a
+    from llm import generate_narration
+
+    engine_result = {"needs_roll": False, "skill_result": None, "status": "dm_query"}
+    game_state_text = get_active_context(playthrough_id, engine_result)
+
+    dm_prompt = f"""Du bist der Spielleiter (DM/GM) — nicht der Erzähler. Der Spieler stellt eine Meta-Frage außerhalb der Geschichte.
+Beantworte die Frage sachlich und direkt auf Basis des Gamestates. Keine Erzählung, keine Atmosphäre. Kurz und präzise.
+Wenn die Frage im Gamestate beantwortet werden kann (HP, Gold, Skills, Gegner-Status), tue das exakt.
+
+AKTUELLER GAMESTATE:
+{game_state_text}
+
+FRAGE: {question}
+
+Antworte NUR mit gültigem JSON:
+{{"narration": "Deine sachliche DM-Antwort hier.", "time_delta_minutes": 0, "gold_delta": 0, "inventory_changes": [], "enter_combat": [], "generated_locations": [], "generated_npcs": [], "generated_groups": [], "world_state_changes": []}}"""
+
+    narrator_output = generate_narration(dm_prompt, api_key=api_key, model=model, provider=provider)
+    narrator_output['time_delta_minutes'] = 0  # enforce: DM queries never advance time
+
+    state = _get_player_state(playthrough_id)
+    return jsonify({
+        "narration": narrator_output.get("narration", ""),
+        "engine_result": engine_result,
+        "narrator_output": {"time_delta_minutes": 0, "world_state_changes": [], "generated_npcs": [], "generated_locations": []},
+        "game_state": state,
+        "dm_response": True
+    })
+
+
 @app.route('/api/turn', methods=['POST'])
 def take_turn():
     """Process one player turn."""
@@ -316,6 +349,7 @@ def take_turn():
 
     playthrough_id = int(data['playthrough_id'])
     player_input = data['input'].strip()
+    input_mode = data.get('input_mode', 'handeln')  # 'handeln' | 'sprechen' | 'dm'
     _trace.new_turn(playthrough_id, player_input)
 
     if not player_input:
@@ -368,9 +402,14 @@ def take_turn():
     model = data.get('model') or None
     provider = data.get('provider', 'anthropic')
 
+    # DM-Frage: answer directly from game state, no time passes, no classifier
+    if input_mode == 'dm':
+        return _handle_dm_query(playthrough_id, player_input, api_key, model, provider)
+
     # 1. Classify action
     classifier_output = classify_action(player_input, skill_list, scene_name, in_combat,
-                                        api_key=api_key, model=model, provider=provider)
+                                        api_key=api_key, model=model, provider=provider,
+                                        input_mode=input_mode)
 
     # 2. Check if roll needed
     if classifier_output.get('needs_roll') and classifier_output.get('skill'):

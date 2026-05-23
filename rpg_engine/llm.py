@@ -73,7 +73,7 @@ def _try_parse_json(text: str) -> dict | None:
 
 
 def classify_action(player_input, skill_list, scene_context, in_combat,
-                    api_key=None, model=None, provider="anthropic"):
+                    api_key=None, model=None, provider="anthropic", input_mode="handeln"):
     """Call #1: classify player intent. Returns dict."""
     # Use German skill names from config if not passed
     if not skill_list:
@@ -100,6 +100,8 @@ Antworte NUR mit gültigem JSON:
 
 Wenn kein Wurf nötig ist (Rasten, Beobachten, normales Gespräch, Bewegung zu bekannten Orten), gib zurück: {{"needs_roll": false, "skill": null, "difficulty_tier": null, "target": null}}"""
 
+    if input_mode == 'sprechen':
+        system_prompt += "\n\nDER SPIELER SPRICHT (Modus: Sprechen). Soziale Aktionen (Überreden, Lügen, Einschüchtern, Verhandeln) brauchen eine Probe. Normales Gespräch, Fragen stellen, Antworten geben — kein Wurf."
     if in_combat:
         system_prompt += "\n\nDER SPIELER IST IM KAMPF. Erzwinge needs_roll=true und nutze eine passende Kampffertigkeit (z.B. Klingenwaffen, Bogen, Waffenloser Kampf)."
 

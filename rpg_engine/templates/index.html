@@ -255,8 +255,15 @@
 
       <!-- Normal Input -->
       <div id="input-bar">
-        <textarea id="player-input" placeholder="Was tust du?" rows="2" maxlength="500"></textarea>
-        <button id="send-btn" class="btn-primary">Senden</button>
+        <div class="input-mode-row">
+          <button class="mode-btn active" id="mode-handeln" onclick="setInputMode('handeln')">⚔ Handeln</button>
+          <button class="mode-btn" id="mode-sprechen" onclick="setInputMode('sprechen')">💬 Sprechen</button>
+          <button class="mode-btn" id="mode-dm" onclick="setInputMode('dm')">🎲 DM-Frage</button>
+        </div>
+        <div class="input-row">
+          <textarea id="player-input" placeholder="Was tust du?" rows="2" maxlength="500"></textarea>
+          <button id="send-btn" class="btn-primary">Senden</button>
+        </div>
       </div>
     </div>
 
@@ -1117,6 +1124,25 @@ function getCategoryForSkill(skillName) {
 }
 
 // ═══════════════════════════════════════════════════════════
+//  INPUT MODE
+// ═══════════════════════════════════════════════════════════
+appState.inputMode = 'handeln';
+
+function setInputMode(mode) {
+  appState.inputMode = mode;
+  ['handeln','sprechen','dm'].forEach(m => {
+    document.getElementById(`mode-${m}`).classList.toggle('active', m === mode);
+  });
+  const input = document.getElementById('player-input');
+  const placeholders = {
+    handeln: 'Was tust du?',
+    sprechen: 'Was sagst du?',
+    dm: 'Frage an den DM (keine Spielzeit vergeht)…'
+  };
+  input.placeholder = placeholders[mode];
+}
+
+// ═══════════════════════════════════════════════════════════
 //  SEND TURN
 // ═══════════════════════════════════════════════════════════
 async function sendTurn() {
@@ -1131,7 +1157,9 @@ async function sendTurn() {
   input.disabled = true;
   sendBtn.disabled = true;
 
-  addMessage('player', text);
+  const mode = appState.inputMode || 'handeln';
+  const modeLabel = {handeln: '⚔', sprechen: '💬', dm: '🎲'}[mode] || '';
+  addMessage('player', `${modeLabel} ${text}`);
   const spinner = addSpinner();
 
   try {
@@ -1141,6 +1169,7 @@ async function sendTurn() {
       body: JSON.stringify({
         playthrough_id: appState.playthroughId,
         input: text,
+        input_mode: mode,
         api_key: appState.apiKey || undefined,
         model: appState.model || undefined,
         provider: appState.provider

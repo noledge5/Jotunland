@@ -763,11 +763,48 @@ textarea { resize: vertical; }
 /* ── INPUT BAR ────────────────────────────────────────── */
 #input-bar {
   display: flex;
-  gap: 0.5rem;
-  padding: 0.7rem 1rem;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem 0.7rem;
   background: var(--bg2);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+.input-mode-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.78rem;
+  font-family: var(--font);
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.mode-btn:hover { border-color: var(--accent2); color: var(--text); }
+.mode-btn.active {
+  background: var(--accent2);
+  border-color: var(--accent2);
+  color: #000;
+  font-weight: 600;
+}
+#mode-dm.active {
+  background: #5a4a2a;
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.input-row {
+  display: flex;
+  gap: 0.5rem;
 }
 
 #player-input {
