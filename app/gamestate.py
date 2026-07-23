@@ -216,8 +216,45 @@ def create_pc(name: str, klasse: str | None = None, hintergrund: str = "",
         gs["hp"] = gs["hp_max"] = rules.max_hp_for(attribute, 1)
     for item in rules.CLASSES[gs["klasse"]]["starting_items"]:
         gs["inventar"].append({"name": item, "menge": 1, "equipped": True})
+    set_starting_location(gs)
     save_pc(gs)
     return gs
+
+
+def set_starting_location(gs: dict) -> None:
+    """Setzt den Startort aus world/data/world_constants.json, sofern der
+    zugehoerige Wiki-Eintrag existiert (Seed gelaufen). Sonst location=None
+    und der DM waehlt selbst. Baut den location_stack ueber die parent-Kette."""
+    from . import wiki_index
+    # Autorenwelt liegt versioniert im Repo (nicht im Laufzeit-BASE_DIR).
+    repo_root = Path(__file__).resolve().parent.parent
+    constants = read_json(repo_root / "world" / "data" / "world_constants.json", {})
+    start = (((constants.get("world") or {}).get("starting_state")) or {})
+    scene_id = start.get("location_scene_id")
+    if not scene_id:
+        return
+    slug = slugify(scene_id)
+    meta = wiki_index.get_entry_meta(slug)
+    if meta is None:
+        return
+    gs["location"] = {"slug": slug, "name": meta.get("name", slug)}
+    stack, cur, seen = [slug], meta, {slug}
+    while True:
+        parent = cur.get("parent") or (slugify(cur["region"]) if cur.get("region") else None)
+        if not parent or parent in seen:
+            break
+        pmeta = wiki_index.get_entry_meta(parent)
+        if pmeta is None:
+            break
+        stack.insert(0, parent)
+        seen.add(parent)
+        cur = pmeta
+    gs["location_stack"] = stack
+    if meta.get("koordinaten"):
+        gs["position"] = {"x": meta["koordinaten"][0], "y": meta["koordinaten"][1]}
+    coord = start.get("coordinate")
+    if coord:
+        gs["position"] = {"x": coord["x"], "y": coord["y"]}
 
 
 def list_pcs() -> list[dict]:

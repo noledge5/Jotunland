@@ -311,6 +311,14 @@ def add_wiki_entry(gs: dict, args: dict) -> str:
                 "zeitplan", "bounding_box"):
         if args.get(key):
             meta[key] = args[key]
+    # Waehrend des Spiels erschaffene NPCs/Orte an den aktuellen Ort
+    # ankern, damit sie nicht als Orphan im Netz haengen.
+    if not args.get("links") and not meta.get("parent") and gs.get("location"):
+        loc = gs["location"]["slug"]
+        if loc != slug and wiki_index.get_entry_meta(loc):
+            meta["links"] = [loc]
+    elif args.get("links"):
+        meta["links"] = args["links"]
     if etype in COORD_TYPES:
         meta["koordinaten"] = args.get("koordinaten") or auto_coords(
             slug, args.get("parent") or args.get("stadt") or args.get("region"))

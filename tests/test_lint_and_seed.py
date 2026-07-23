@@ -77,6 +77,32 @@ def test_seed_avarr_idempotent_and_lint_clean(env):
     assert errors == [], errors
 
 
+def test_new_pc_starts_in_authored_salzhaven(env):
+    """Live-Playtest-Fund: PC muss in der ausgearbeiteten Startszene
+    beginnen, nicht dass der DM einen Ort erfindet."""
+    import scripts.seed_world as sw
+    importlib.reload(sw)
+    sw.seed()
+    gs = env["gsm"].create_pc("Bjorn")
+    assert gs["location"]["slug"] == "salzhaven-goldenes-schiff"
+    assert "salzhaven" in gs["location_stack"]
+    assert "ostimperium" in gs["location_stack"]
+
+
+def test_generated_npc_anchored_to_location(env):
+    """Live-Playtest-Fund: im Spiel erschaffene NPCs haengen nicht als
+    Orphan, sondern werden an den aktuellen Ort verlinkt."""
+    import scripts.seed_world as sw
+    importlib.reload(sw)
+    sw.seed()
+    t, gsm = env["tools"], env["gsm"]
+    gs = gsm.create_pc("Bjorn")  # startet in salzhaven-goldenes-schiff
+    t.execute_tool(gs, "add_wiki_entry", {"type": "character", "name": "Zwielichtiger Gast",
+                                          "scope": "charakter", "body": "Beobachtet die Tuer."})
+    meta = env["widx"].get_entry_meta("zwielichtiger-gast")
+    assert "salzhaven-goldenes-schiff" in meta["links"]
+
+
 def test_generate_wiki_dry_run(env):
     import scripts.seed_world as sw
     import scripts.generate_wiki as gw

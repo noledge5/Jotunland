@@ -65,9 +65,10 @@ def run_lint() -> list[dict]:
             if target not in all_slugs:
                 add("error", "dead-link", f"'{slug}' verlinkt auf fehlenden Eintrag '{target}'")
 
-        # orphan
+        # orphan — charakter-gebundene Eintraege sind situativ, nie hart
         if slug not in linked_from and e["type"] not in ORPHAN_OK and slug != "canon":
-            level = "error" if e["type"] in NEVER_ORPHAN else "warning"
+            hard = e["type"] in NEVER_ORPHAN and e.get("scope", "welt") == "welt"
+            level = "error" if hard else "warning"
             add(level, "orphan", f"'{slug}' ({e['type']}) wird nirgends verlinkt")
 
         # region-/parent-referenz
