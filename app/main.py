@@ -532,5 +532,11 @@ async def protocol():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="127.0.0.1",
-                port=int(os.environ.get("PORT", 3111)), reload=False)
+    # HOST=0.0.0.0 macht den Server im LAN erreichbar (z.B. fuers iPhone
+    # ueber http://<rechner-lan-ip>:3111). Default bleibt lokal.
+    host = os.environ.get("HOST", "127.0.0.1")
+    port = int(os.environ.get("PORT", 3111))
+    if host == "0.0.0.0":
+        print(f"Server im LAN erreichbar auf Port {port} — "
+              f"oeffne vom iPhone http://<lan-ip>:{port}")
+    uvicorn.run("app.main:app", host=host, port=port, reload=False)
