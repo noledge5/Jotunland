@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NovaTerrum</title>
+<style>
+  :root {
+    --bg: #14110f; --panel: #1d1916; --panel2: #241f1b; --border: #3a322b;
+    --text: #d8cfc2; --dim: #8a7f70; --accent: #a33b2e; --gold: #b8963f;
+    --green: #5d7a4c; --red: #9c3a30;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.55 Georgia, 'Times New Roman', serif;
+    height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 8px 14px;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 17px; letter-spacing: 3px; color: var(--gold); font-weight: normal; }
+  header .spacer { flex: 1; }
+  select, input[type=text], input[type=number], button {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    padding: 5px 9px; font: inherit; font-size: 13px; border-radius: 3px;
+  }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--gold); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #f0e6d8; }
+  main { flex: 1; display: flex; min-height: 0; }
+  #chatcol { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #log { flex: 1; overflow-y: auto; padding: 18px 22px; }
+  .msg { max-width: 780px; margin: 0 auto 16px; white-space: pre-wrap; }
+  .msg.user { color: #c9b98a; border-left: 3px solid var(--gold); padding-left: 12px; }
+  .msg.dm { }
+  .msg.tool { font-family: monospace; font-size: 12px; color: var(--dim); }
+  .msg.error { color: var(--red); font-family: monospace; font-size: 13px; }
+  .msg.lint { color: #8a6d3b; font-family: monospace; font-size: 12px; }
+  #inputbar { display: flex; gap: 8px; padding: 10px 14px; background: var(--panel); border-top: 1px solid var(--border); }
+  #inputbar textarea {
+    flex: 1; resize: none; height: 58px; background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); padding: 8px; font: inherit; border-radius: 3px;
+  }
+  aside {
+    width: 290px; background: var(--panel); border-left: 1px solid var(--border);
+    padding: 14px; overflow-y: auto; font-size: 13px;
+  }
+  aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: var(--dim); margin: 14px 0 6px; }
+  aside h2:first-child { margin-top: 0; }
+  .stat { display: flex; justify-content: space-between; padding: 2px 0; }
+  .hpbar { height: 8px; background: var(--panel2); border: 1px solid var(--border); border-radius: 3px; overflow: hidden; margin: 4px 0; }
+  .hpbar > div { height: 100%; background: var(--green); }
+  .tag { display: inline-block; background: var(--panel2); border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; margin: 2px 2px 0 0; font-size: 12px; }
+  #combatbox { border: 1px solid var(--red); border-radius: 3px; padding: 8px; margin-top: 6px; display: none; }
+  #combatbox.active { display: block; }
+  /* Wuerfel-Dialog */
+  #rolldlg {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65);
+    align-items: center; justify-content: center; z-index: 10;
+  }
+  #rolldlg.open { display: flex; }
+  #rolldlg .box {
+    background: var(--panel); border: 1px solid var(--gold); border-radius: 4px;
+    padding: 22px; width: 340px; text-align: center;
+  }
+  #rolldlg .box h3 { color: var(--gold); margin-bottom: 8px; font-weight: normal; }
+  #rolldlg .die { font-size: 42px; color: var(--gold); margin: 10px 0; font-family: Georgia, serif; }
+  /* Karte */
+  #mapview { display: none; flex: 1; padding: 10px; }
+  #mapview.open { display: block; }
+  #mapview svg { width: 100%; height: 100%; background: #171310; border: 1px solid var(--border); border-radius: 4px; }
+  .maplabel { fill: var(--dim); font-size: 10px; font-family: Georgia, serif; }
+  .mapdot { fill: var(--gold); }
+  .mapregion { fill: var(--accent); }
+  @media (max-width: 720px) { aside { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>NOVATERRUM</h1>
+  <select id="pcsel" title="Charakter"></select>
+  <button id="newpc">Neuer PC</button>
+  <button id="mapbtn">Karte</button>
+  <button id="protbtn" title="Session-Protokoll ins Journal schreiben">Protokoll</button>
+  <div class="spacer"></div>
+  <input type="text" id="model" size="30" title="Modell-ID (or/..., gemini-..., claude-...)">
+  <button id="savemodel">Modell setzen</button>
+</header>
+<main>
+  <div id="chatcol">
+    <div id="log"></div>
+    <div id="mapview"><svg id="mapsvg" viewBox="0 0 800 720"></svg></div>
+    <div id="inputbar">
+      <textarea id="inp" placeholder="Was tust du? ([META] fuer Regie-Anweisungen)"></textarea>
+      <button id="send" class="primary">Senden</button>
+    </div>
+  </div>
+  <aside id="sidebar"></aside>
+</main>
+
+<div id="rolldlg">
+  <div class="box">
+    <h3>Angriffswurf</h3>
+    <div id="rollinfo" style="color:var(--dim); font-size:13px;"></div>
+    <div class="die" id="dieface">d20</div>
+    <input type="number" id="rollval" min="1" max="20" placeholder="1-20" style="width:80px; text-align:center;">
+    <div style="margin-top:12px; display:flex; gap:8px; justify-content:center;">
+      <button id="autoroll">Selbst wuerfeln lassen</button>
+      <button id="submitroll" class="primary">Wurf eintragen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let streaming = false;
+
+function el(cls, text) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  d.textContent = text || '';
+  $('log').appendChild(d);
+  $('log').scrollTop = $('log').scrollHeight;
+  return d;
+}
+
+async function api(path, opts) {
+  const r = await fetch(path, {headers: {'Content-Type': 'application/json'}, ...opts});
+  if (!r.ok) {
+    let detail = r.statusText;
+    try { detail = (await r.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
+  return r;
+}
+
+// --- State / Sidebar ---
+async function refreshState() {
+  const s = await (await api('/api/state')).json();
+  $('model').value = s.settings.model || '';
+  const pcs = await (await api('/api/pcs')).json();
+  $('pcsel').innerHTML = pcs.map(p =>
+    `<option value="${p.slug}" ${p.slug === s.settings.active_pc_slug ? 'selected' : ''}>${p.name} (Lv ${p.level})</option>`
+  ).join('') || '<option value="">— kein PC —</option>';
+  renderSidebar(s.pc);
+  if (s.awaiting_roll) openRollDialog(s.awaiting_roll);
+  return s;
+}
+
+function renderSidebar(pc) {
+  const sb = $('sidebar');
+  if (!pc) { sb.innerHTML = '<h2>Kein aktiver Charakter</h2><p style="color:var(--dim)">Lege oben einen PC an.</p>'; return; }
+  const hpPct = Math.max(0, Math.min(100, pc.hp / pc.hp_max * 100));
+  const coins = pc.coins || {};
+  const fmtCoins = ['gm','sm','kp'].map(k => coins[k] ? coins[k] + ' ' + k : '').filter(Boolean).join(' ') || '0 kp';
+  let html = `<h2>${pc.name} — Level ${pc.level}</h2>
+    <div class="stat"><span>HP</span><span>${pc.hp}/${pc.hp_max} (${pc.hp_status || ''})</span></div>
+    <div class="hpbar"><div style="width:${hpPct}%"></div></div>
+    <div class="stat"><span>XP</span><span>${pc.xp}</span></div>
+    <div class="stat"><span>Boerse</span><span>${fmtCoins}</span></div>`;
+  const attr = pc.attribute || {};
+  html += '<h2>Attribute</h2>' + Object.entries(attr).map(([k,v]) =>
+    `<div class="stat"><span>${k}</span><span>${v >= 0 ? '+' + v : v}</span></div>`).join('');
+  if (pc.location) html += `<h2>Ort</h2><div>${pc.location.name}</div>`;
+  const inv = pc.inventar || [];
+  if (inv.length) html += '<h2>Inventar</h2>' + inv.map(i => `<span class="tag">${i.name} x${i.menge || 1}</span>`).join('');
+  const fx = pc.status_effekte || [];
+  if (fx.length) html += '<h2>Status</h2>' + fx.map(e => `<span class="tag">${e}</span>`).join('');
+  const quests = (pc.quests || []).filter(q => q.status !== 'abgeschlossen');
+  if (quests.length) html += '<h2>Quests</h2>' + quests.map(q => `<div>• ${q.titel} <span style="color:var(--dim)">[${q.status}]</span></div>`).join('');
+  if (pc.combat) {
+    html += `<h2 style="color:var(--red)">Kampf — Runde ${pc.combat.round} (${pc.combat.phase})</h2>` +
+      pc.combat.enemies.map(e => `<div class="stat"><span>${e.name}</span><span>${e.hp}/${e.hp_max}</span></div>`).join('');
+  }
+  sb.innerHTML = html;
+}
+
+// --- SSE-Stream verarbeiten ---
+async function consumeStream(response, dmDiv) {
+  const reader = response.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  while (true) {
+    const {done, value} = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, {stream: true});
+    const lines = buf.split('\n');
+    buf = lines.pop();
+    for (const line of lines) {
+      if (!line.startsWith('data:')) continue;
+      let ev;
+      try { ev = JSON.parse(line.slice(5)); } catch { continue; }
+      if (ev.type === 'text') {
+        if (!dmDiv) dmDiv = el('dm');
+        dmDiv.textContent += ev.text;
+        $('log').scrollTop = $('log').scrollHeight;
+      } else if (ev.type === 'tool') {
+        el('tool', '⚙ ' + ev.name + ' → ' + ev.result);
+        dmDiv = null;
+      } else if (ev.type === 'awaiting_roll') {
+        openRollDialog(ev.pending);
+      } else if (ev.type === 'gamestate') {
+        renderSidebar(ev.pc);
+      } else if (ev.type === 'lint') {
+        el('lint', 'Wiki-Lint: ' + ev.problems.join(' | '));
+      } else if (ev.type === 'error') {
+        el('error', 'Fehler: ' + ev.error);
+      }
+    }
+  }
+}
+
+async function send() {
+  const text = $('inp').value.trim();
+  if (!text || streaming) return;
+  $('inp').value = '';
+  el('user', text);
+  streaming = true; $('send').disabled = true;
+  try {
+    const r = await api('/api/chat', {method: 'POST', body: JSON.stringify({message: text})});
+    await consumeStream(r, null);
+  } catch (e) { el('error', e.message); }
+  streaming = false; $('send').disabled = false;
+}
+
+// --- Wuerfel ---
+function openRollDialog(pending) {
+  $('rollinfo').textContent =
+    `Ziel: ${pending.ziel} — Modifikator ${pending.modifikator >= 0 ? '+' : ''}${pending.modifikator}, ` +
+    `Schwierigkeit ${pending.schwierigkeit}` + (pending.beschreibung ? ' — ' + pending.beschreibung : '');
+  $('rollval').value = '';
+  $('rolldlg').classList.add('open');
+}
+
+async function submitRoll(v) {
+  if (!(v >= 1 && v <= 20)) return;
+  $('rolldlg').classList.remove('open');
+  el('user', `[Wurf: ${v}]`);
+  streaming = true; $('send').disabled = true;
+  try {
+    const r = await api('/api/roll', {method: 'POST', body: JSON.stringify({wurf: v})});
+    await consumeStream(r, null);
+  } catch (e) { el('error', e.message); }
+  streaming = false; $('send').disabled = false;
+}
+
+$('submitroll').onclick = () => submitRoll(parseInt($('rollval').value, 10));
+$('autoroll').onclick = () => {
+  const v = 1 + Math.floor(Math.random() * 20);
+  $('dieface').textContent = v;
+  setTimeout(() => submitRoll(v), 600);
+};
+
+// --- Karte ---
+let mapOpen = false;
+$('mapbtn').onclick = async () => {
+  mapOpen = !mapOpen;
+  $('mapview').classList.toggle('open', mapOpen);
+  $('log').style.display = mapOpen ? 'none' : '';
+  $('mapbtn').textContent = mapOpen ? 'Chat' : 'Karte';
+  if (!mapOpen) return;
+  const entries = await (await api('/api/map')).json();
+  const svg = $('mapsvg');
+  svg.innerHTML = entries.map(e => {
+    const [x, y] = e.koordinaten;
+    const r = e.type === 'region' ? 7 : (e.tags || []).includes('hauptstadt') ? 5 : 3;
+    const cls = e.type === 'region' ? 'mapregion' : 'mapdot';
+    return `<circle class="${cls}" cx="${x}" cy="${y}" r="${r}"><title>${e.name}</title></circle>` +
+           `<text class="maplabel" x="${x + 8}" y="${y + 3}">${e.name}</text>`;
+  }).join('');
+};
+
+// --- Header-Aktionen ---
+$('send').onclick = send;
+$('inp').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+$('savemodel').onclick = async () => {
+  await api('/api/settings', {method: 'POST', body: JSON.stringify({model: $('model').value.trim()})});
+  el('tool', 'Modell gesetzt: ' + $('model').value.trim());
+};
+$('pcsel').onchange = async () => {
+  if ($('pcsel').value) { await api(`/api/pcs/${$('pcsel').value}/activate`, {method: 'POST'}); refreshState(); }
+};
+$('newpc').onclick = async () => {
+  const name = prompt('Name des Charakters:');
+  if (!name) return;
+  try { await api('/api/pcs', {method: 'POST', body: JSON.stringify({name})}); refreshState(); }
+  catch (e) { el('error', e.message); }
+};
+$('protbtn').onclick = async () => {
+  el('tool', 'Erzeuge Session-Protokoll ...');
+  try {
+    const r = await (await api('/api/protocol', {method: 'POST'})).json();
+    el('dm', 'PROTOKOLL\n\n' + r.protokoll);
+  } catch (e) { el('error', e.message); }
+};
+
+refreshState();
+</script>
+</body>
+</html>
