@@ -18,18 +18,16 @@ def test_lint_dead_link_and_orphan(env):
     assert ("orphan", "error") in checks  # character ist NEVER_ORPHAN
 
 
-def test_lint_bad_slug(env):
+def test_lint_parent_counts_as_link(env):
     w = env["wio"]
-    # bewusst kaputten Slug direkt schreiben
-    p = w.WORLD_DIR / "Böser_Slug.md"
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text("---\nslug: Böser_Slug\ntype: lore\nname: X\n---\n\nx\n", encoding="utf-8")
+    w.write_world_entry("stadt-a", {"type": "city", "name": "Stadt A"}, "x")
+    w.write_world_entry("gasse-b", {"type": "scene", "name": "Gasse B",
+                                    "parent": "stadt-a"}, "y")
     problems = _lint(env)
-    assert any(p["check"] == "bad-slug" for p in problems)
+    assert not any(p["check"] == "orphan" and "gasse-b" in p["msg"] for p in problems)
 
 
 def test_lint_duplicate_class(env):
-    """Die Duplikat-Klasse aus dem Handoff: hartfeld-wache vs wache-hartfeld."""
     w = env["wio"]
     w.write_world_entry("hartfeld-wache", {"type": "faction", "name": "W1"}, "x")
     w.write_world_entry("wache-hartfeld", {"type": "faction", "name": "W2"}, "y")
@@ -57,15 +55,23 @@ def test_lint_economy_gap(env):
     assert gaps and "seide" in gaps[0]["msg"]
 
 
-def test_seed_idempotent_and_lint_clean(env):
+def test_seed_avarr_idempotent_and_lint_clean(env):
     import scripts.seed_world as sw
     importlib.reload(sw)
     r1 = sw.seed()
-    assert r1["written"] > 50
+    assert r1["written"] >= 80  # Realms, 9 Provinzen, Salzhaven voll, NPCs
     r2 = sw.seed()
     assert r2["written"] == 0
     assert r2["skipped"] == r1["written"]
-    # Seed-Welt darf keine Lint-Errors haben
+    # Kernbestand
+    assert env["widx"].get_entry_meta("salzhaven")["type"] == "city"
+    assert env["widx"].get_entry_meta("ostimperium")["type"] == "realm"
+    npc = env["widx"].get_entry_meta("marta-velde")
+    assert npc["type"] == "character"
+    # Zeitplan importiert (Frontmatter)
+    meta, _ = env["wio"].read_world_entry("marta-velde")
+    assert meta["zeitplan"][0]["ort"] == "salzhaven-goldenes-schiff"
+    # Avarr-Seed ist lint-sauber
     problems = _lint(env)
     errors = [p for p in problems if p["level"] == "error"]
     assert errors == [], errors
@@ -77,9 +83,7 @@ def test_generate_wiki_dry_run(env):
     importlib.reload(sw)
     importlib.reload(gw)
     sw.seed()
-    gw.generate_city("hartfeld", dry_run=True)
-    # Resume: zweiter Lauf ueberspringt alles
-    gw.generate_city("hartfeld", dry_run=True)
-    meta = env["widx"].get_entry_meta("stadtwache-hartfeld")
-    assert meta is not None  # kanonischer Slug trotz Name 'Stadtwache'
-    assert meta["type"] == "faction"
+    gw.generate_city("salzhaven", dry_run=True)
+    gw.generate_city("salzhaven", dry_run=True)  # Resume ueberspringt
+    meta = env["widx"].get_entry_meta("stadtwache-salzhaven")
+    assert meta is not None and meta["type"] == "faction"

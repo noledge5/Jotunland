@@ -1,0 +1,395 @@
+{
+  "realm_id": "ostimperium",
+  "region": {
+    "id": "suedkueste",
+    "name": "Südküste",
+    "climate": "mediterranean",
+    "layer_b_text": "The Südküste is the soft underbelly of the Ostimperium — warm, wet, and corrupt. The Binnenmeer laps at limestone cliffs and flat harbor beaches. Fishing fleets go out before dawn and come back smelling of salt and secrets. The Governor rules from behind walls, and what he doesn't see he doesn't tax. Three things move through this coast: fish, Essenz, and contraband — in roughly equal volume. Imperial garrisons are understaffed and underpaid. The merchant guilds fill the gap, setting informal law in the harbor districts. Vhaelor is visible on clear days as a dark smear on the southern horizon, which makes the superstitious nervous and the traders interested. Coastal monsters — large serpentine hunters — patrol the deeper lanes. Ships travel in pairs after dark.",
+    "coordinate_anchor": { "x": 2380000, "y": 1200000 },
+    "bounding_box": { "x_min": 2100000, "y_min": 1000000, "x_max": 2700000, "y_max": 1400000 }
+  },
+
+  "city_area": {
+    "id": "salzhaven",
+    "name": "Salzhaven",
+    "size": "city",
+    "population": 14000,
+    "coordinate_anchor": { "x": 2380000, "y": 1200000 },
+    "bounding_box": { "x_min": 2372000, "y_min": 1193000, "x_max": 2389000, "y_max": 1208000 },
+
+    "zones": [
+
+      {
+        "id": "salzhaven_gouverneursberg",
+        "name": "Gouverneursberg",
+        "type": "noble-quarter",
+        "layer_c_text": "The Gouverneursberg sits on the only hill in Salzhaven, sixty feet above the harbor stink. Stone walls, clean streets, guards at every corner who actually get paid. Governor Aldric Sorn's palace dominates the ridge — built to impress, maintained to intimidate. The noble families who have bought their way into proximity cluster in pale stone townhouses below. Servants, scribes, and tax collectors move between the buildings with the quiet efficiency of people who know they are watched. The air up here smells of cook fires, not fish. The view of the harbor is magnificent and deliberate — Sorn likes to see what comes and goes.",
+        "coordinate_anchor": { "x": 2374000, "y": 1205000 },
+        "bounding_box": { "x_min": 2372000, "y_min": 1203000, "x_max": 2377000, "y_max": 1208000 },
+
+        "scenes": [
+          {
+            "id": "salzhaven_gouverneurspalast",
+            "name": "Gouverneurspalast",
+            "type": "palace",
+            "layer_d_text": "A rectangular limestone block of a building, more fortress than residence. The entrance hall is cool and dim, its floors polished white marble shipped from somewhere expensive. Imperial banners — gold eagle on crimson — hang from iron rings between narrow windows. Two guards flank the inner door at all times, armored and bored. The smell of candle wax and old paper. Somewhere deeper in the building, scribes scratch endlessly. Sorn holds audience in the map room, not the throne hall — he prefers to sit behind a table covered in charts when he makes people uncomfortable.",
+            "coordinate_anchor": { "x": 2374000, "y": 1206000 },
+            "group_entries": [
+              { "label": "palace scribes", "description": "Three harried men in ink-stained grey robes moving between offices with armfuls of scrolls." },
+              { "label": "idle courtiers", "description": "A cluster of minor nobles in expensive clothes, standing near the entrance pretending not to be waiting for an audience." }
+            ],
+            "sub_scenes": [
+              {
+                "id": "salzhaven_gouverneurspalast_kartenraum",
+                "name": "Kartenraum",
+                "layer_d_text": "A long table dominates the room, covered in charts of the Südküste, trade ledgers, and a half-eaten plate of figs. Maps cover every wall. One window faces the harbor. This is where Governor Sorn actually governs — or pretends to.",
+                "coordinate_anchor": { "x": 2374100, "y": 1206100 },
+                "group_entries": []
+              }
+            ]
+          },
+          {
+            "id": "salzhaven_kaserne",
+            "name": "Stadtwache-Kaserne",
+            "type": "barracks",
+            "layer_d_text": "A squat building behind the palace, smelling of leather, sweat, and weapon oil. The yard holds a training ground — packed dirt, practice dummies, a water trough. The barracks itself is cramped: bunk beds bolted to the walls, equipment hooks, a long table for eating. A noticeboard by the door lists current warrants, missing persons, and duty rosters in handwriting that assumes everyone can read.",
+            "coordinate_anchor": { "x": 2373500, "y": 1205000 },
+            "group_entries": [
+              { "label": "off-duty guards", "description": "Four guards in half-armor playing cards at the long table, occasionally glancing at the door." },
+              { "label": "training recruits", "description": "Two very young soldiers sparring badly in the yard, corrected by a bored older guard." }
+            ],
+            "sub_scenes": []
+          }
+        ]
+      },
+
+      {
+        "id": "salzhaven_docksviertel",
+        "name": "Docksviertel",
+        "type": "docks",
+        "layer_c_text": "The Docksviertel never fully sleeps. Before dawn the fishing boats leave; after midnight the other boats arrive. Between them, the docks are a continuous noise of rope, wood, salt water, and argument. Three long piers extend into the harbor, each with a different character: the middle pier is imperial-licensed and taxed; the left pier belongs informally to the Fischergilden; the right pier, called the Grauer Steg, asks no questions. The smell is fish, brine, and occasionally something burnt. Gulls are everywhere. Warehouses line the inland side of the dock road, their doors wide in daylight and locked at night — mostly.",
+        "coordinate_anchor": { "x": 2385000, "y": 1197000 },
+        "bounding_box": { "x_min": 2381000, "y_min": 1193000, "x_max": 2389000, "y_max": 1202000 },
+
+        "scenes": [
+          {
+            "id": "salzhaven_fischmarkt",
+            "name": "Der Fischmarkt",
+            "type": "market",
+            "layer_d_text": "Open-air stalls on the dock road, active from before sunrise to midday. The stone ground is permanently stained and perpetually wet. Vendors shout prices in the coastal dialect — thick vowels, clipped consonants. Gutting knives flash. Cats prowl the edges. The smell is overwhelming. Beyond fish: dried Binnenmeer kelp, jars of salt, smoked eel, live crabs in barrels. In the back corner, three women sell something unlabeled in clay bottles that the Fischergilden considers medicinal.",
+            "coordinate_anchor": { "x": 2385000, "y": 1198000 },
+            "group_entries": [
+              { "label": "fishmongers", "description": "A dozen vendors in aprons and rubber boots, loudly competing for customers." },
+              { "label": "morning buyers", "description": "Cooks and servants from wealthier households picking through the catch with critical eyes." },
+              { "label": "dock cats", "description": "A loose coalition of lean cats patrolling the stall edges with professional interest." }
+            ],
+            "sub_scenes": []
+          },
+          {
+            "id": "salzhaven_lagerhaus_drei",
+            "name": "Lagerhaus Drei",
+            "type": "warehouse",
+            "layer_d_text": "The largest warehouse on the Grauer Steg. Tall, windowless stone walls. The main floor stores rope, sailcloth, barrels of salted fish, and crates whose contents are not labeled. During the day two workers move things around without explanation. The smell of fish oil and old wood. A locked iron door at the back leads to the cellar.",
+            "coordinate_anchor": { "x": 2387000, "y": 1196000 },
+            "group_entries": [
+              { "label": "dock workers", "description": "Two large men moving heavy crates with practiced efficiency, not making eye contact." }
+            ],
+            "sub_scenes": [
+              {
+                "id": "salzhaven_lagerhaus_drei_keller",
+                "name": "Lagerhaus-Keller",
+                "layer_d_text": "Below street level, accessed through the iron door. Low ceiling, dry, lit by oil lamps hung from ceiling hooks. Shelves of contraband Essenz crystals in cloth sacks, stolen imperial goods, kegs of untaxed wine from the Flusstal. A table where deals are made. Whoever operates this place is not present during daylight hours.",
+                "coordinate_anchor": { "x": 2387000, "y": 1195800 },
+                "group_entries": []
+              }
+            ]
+          },
+          {
+            "id": "salzhaven_ankerwurf",
+            "name": "Zum Ankerwurf",
+            "type": "tavern",
+            "layer_d_text": "A low-ceilinged dock tavern wedged between two warehouses. The sign — a painted anchor — is bleached by salt air. Inside: six tables, a bar made from a salvaged ship plank, and a fire that burns too hot because the chimney is badly built. It smells of fish, cheap wine, and tobacco. The clientele is entirely dock workers, sailors, and people who don't want to be recognized. The owner is a one-armed man called Foss who asks no questions and charges extra for that service.",
+            "coordinate_anchor": { "x": 2384000, "y": 1196000 },
+            "group_entries": [
+              { "label": "sailors drinking early", "description": "Three men in wet coats nursing wine at the bar, speaking quietly in a Gebirgsstaaten accent." },
+              { "label": "sleeping dock worker", "description": "A man facedown on the far table, apparently in no hurry to move." }
+            ],
+            "sub_scenes": []
+          }
+        ]
+      },
+
+      {
+        "id": "salzhaven_marktring",
+        "name": "Marktring",
+        "type": "market-district",
+        "layer_c_text": "The Marktring is the city's working center — the place where Salzhaven pretends to be a normal imperial city going about normal imperial business. A cobbled ring road surrounds the central square, lined with permanent shops, guild offices, and two inns. The square itself hosts rotating market stalls and, on the fifteenth of each month, a public hearing where the Harbor Guild reads out new regulations that everyone ignores. The streets are loud, crowded midday, and active from early morning to dusk. The smell is bread, animal, and the faint mineral sharpness of charged Essenz crystals from the trading house.",
+        "coordinate_anchor": { "x": 2380000, "y": 1201000 },
+        "bounding_box": { "x_min": 2375000, "y_min": 1197000, "x_max": 2384000, "y_max": 1205000 },
+
+        "scenes": [
+          {
+            "id": "salzhaven_goldenes_schiff",
+            "name": "Das Goldene Schiff",
+            "type": "tavern",
+            "layer_d_text": "The best inn in Salzhaven — which means it has beds with actual frames, food that won't cause regret, and a common room large enough to breathe in. The ground floor is one long hall: stone floor, heavy wooden tables, a fireplace big enough to stand in. The smell of roasting meat, spilled wine, and sawdust. Marta Velde's inn attracts merchants, minor officials, travelers in transit, and anyone who can pay six copper a night. The upper floor has eight private rooms — thin walls, but private. A board by the door lists prices, notices, and available work that the city watch doesn't advertise officially.",
+            "coordinate_anchor": { "x": 2380000, "y": 1201000 },
+            "group_entries": [
+              { "label": "morning travelers", "description": "Two merchants eating breakfast in silence, their loaded wagon visible through the window." },
+              { "label": "regulars at the bar", "description": "Three off-duty minor officials nursing morning ale and discussing nothing important loudly." },
+              { "label": "woman reading alone", "description": "A woman in road-worn clothes in the corner, eating methodically, eyes on the door." }
+            ],
+            "sub_scenes": [
+              {
+                "id": "salzhaven_goldenes_schiff_kueche",
+                "name": "Küche",
+                "layer_d_text": "Stone-floored, iron-rodded, perpetually hot. Marta runs it herself most mornings. Smells of smoked pork, onion, and bread. Not a place to linger uninvited.",
+                "coordinate_anchor": { "x": 2380100, "y": 1201100 },
+                "group_entries": []
+              }
+            ]
+          },
+          {
+            "id": "salzhaven_kristallwaage",
+            "name": "Die Kristallwaage",
+            "type": "shop",
+            "layer_d_text": "An Essenz trading house on the north side of the Marktring. Whitewashed walls, a locked iron-barred window displaying three charged crystals on velvet — just enough to show what's on offer. Inside: climate-controlled storage shelves, a brass scale for weighing gems, and a counter behind which Silas Keyn sits in his linen jacket watching every visitor with quiet calculation. The smell of mineral dust and beeswax. Transactions are quiet, precise, and documented in a ledger that does not leave the building.",
+            "coordinate_anchor": { "x": 2381000, "y": 1202000 },
+            "group_entries": [
+              { "label": "waiting customer", "description": "A well-dressed merchant waiting on the bench with the practiced patience of someone used to being made to wait." }
+            ],
+            "sub_scenes": []
+          },
+          {
+            "id": "salzhaven_marktplatz",
+            "name": "Zentraler Marktplatz",
+            "type": "market",
+            "layer_d_text": "A wide cobbled square, perhaps eighty paces across. A stone fountain at the center — the city's main water point — is surrounded by permanent vendor posts and rotating stalls. Midday it is packed and loud: cloth sellers, spice merchants, a knife grinder, a woman selling prayer charms, two boys racing between legs. The edges of the square have stone benches where the old sit and watch. At the south end, a wooden noticeboard with imperial announcements, most of them several months old.",
+            "coordinate_anchor": { "x": 2379000, "y": 1201000 },
+            "group_entries": [
+              { "label": "cloth vendors", "description": "Two competing stalls selling bolts of linen and wool, their owners pointedly ignoring each other." },
+              { "label": "fountain crowd", "description": "A cluster of people filling water vessels, exchanging news in low voices." },
+              { "label": "street boys", "description": "Four children weaving through the market with no apparent purpose and considerable skill." },
+              { "label": "spice merchant", "description": "A thin man from the Steppenvölker selling small packets of dried herbs and powders from a folding table." }
+            ],
+            "sub_scenes": []
+          },
+          {
+            "id": "salzhaven_waffenschmied",
+            "name": "Schmiede Vorn",
+            "type": "shop",
+            "layer_d_text": "A proper smithy on the Marktring's east side — forge glowing, hammer ringing from dawn to dusk. The front display holds finished blades on hooks, a few pieces of plate armor, agricultural tools. The smith, Kalder Vorn, is a short woman with forearms like bridge supports. She does not negotiate prices and does not do rush work. Her blades hold an edge; her prices reflect this. A faint mineral smell in the corner where she keeps two small Essenz crystals — used occasionally for Enhancement work on special commissions.",
+            "coordinate_anchor": { "x": 2382000, "y": 1200000 },
+            "group_entries": [
+              { "label": "waiting for repairs", "description": "A soldier leaning against the wall outside, sword belt in hand, looking bored." }
+            ],
+            "sub_scenes": []
+          }
+        ]
+      },
+
+      {
+        "id": "salzhaven_unterstadt",
+        "name": "Unterstadt",
+        "type": "slums",
+        "layer_c_text": "Below the Marktring, between the docks and the city wall, Unterstadt is where Salzhaven's poor live and its criminal economy operates in plain sight. Streets narrow to alleys, alleys to gaps between buildings. The buildings are wood and old plaster, stacked up to four stories in places, laundry strung between windows. It smells of cook smoke, animals, and open drains. Children run in packs. Adults move quickly and don't hold eye contact with strangers. The city watch enters in groups of three or more and doesn't linger. At night, lanterns are far apart and burn low.",
+        "coordinate_anchor": { "x": 2382000, "y": 1196000 },
+        "bounding_box": { "x_min": 2377000, "y_min": 1193000, "x_max": 2385000, "y_max": 1199000 },
+
+        "scenes": [
+          {
+            "id": "salzhaven_rinnsteingasse",
+            "name": "Rinnsteingasse",
+            "type": "alley",
+            "layer_d_text": "The main artery of the Unterstadt — a cobbled lane wide enough for two people to pass without touching. It runs from the Marktring wall to the dock road, passing through the full depth of the slum district. Street vendors sell food from pots hung over open fires: bean soup, grilled offal, flatbread. A pawnbroker operates from a low window. A healer-woman who charges less than the Tempelgasse sees patients in a curtained corner. At the far end, a board painted with a crude knife indicates a gambling den down a side alley.",
+            "coordinate_anchor": { "x": 2382000, "y": 1196000 },
+            "group_entries": [
+              { "label": "soup vendor", "description": "An old man ladling bean soup into clay bowls, shouting prices in a hoarse voice." },
+              { "label": "children watching strangers", "description": "A cluster of five children sitting on a windowsill, evaluating everyone who passes." },
+              { "label": "pawnbroker customer", "description": "A woman arguing quietly with the pawnbroker through his window, clutching something wrapped in cloth." }
+            ],
+            "sub_scenes": []
+          },
+          {
+            "id": "salzhaven_schwarzmarkt",
+            "name": "Hinterhof Grau",
+            "type": "alley",
+            "layer_d_text": "A courtyard behind a rotting tenement, reached through an unmarked arch. By day it looks abandoned — broken crates, a dead fire pit, one sleeping dog. After dark it becomes Salzhaven's informal black market: stolen goods change hands, untaxed Essenz crystals in worse condition than Silas Keyn's stock, information sold by the word. The operation is protected by whoever runs Lagerhaus Drei. The prices here are lower. The guarantees are not.",
+            "coordinate_anchor": { "x": 2381000, "y": 1194000 },
+            "group_entries": [],
+            "sub_scenes": []
+          }
+        ]
+      },
+
+      {
+        "id": "salzhaven_tempelgasse",
+        "name": "Tempelgasse",
+        "type": "temple-district",
+        "layer_c_text": "A quieter quarter on the west side of the city, where the streets are slightly wider and the buildings slightly taller. Three cult-houses serve Salzhaven's spiritual needs — the Imperial Twelve (official state religion, gods of law, war, and harvest), the Sea Cult (unofficial, locally powerful, centered on the Binnenmeer as a living force), and a small Essenz-Mystiker workshop that is not a religion but is treated like one. The smell of incense, dried herbs, and the sea wind that finds its way through every wall here. People in the Tempelgasse speak at lower volumes than elsewhere.",
+        "coordinate_anchor": { "x": 2375000, "y": 1200000 },
+        "bounding_box": { "x_min": 2372000, "y_min": 1196000, "x_max": 2378000, "y_max": 1203000 },
+
+        "scenes": [
+          {
+            "id": "salzhaven_tempel_zwoelf",
+            "name": "Tempel der Zwölf",
+            "type": "shrine",
+            "layer_d_text": "The official imperial temple — stone pillars, a tiled floor, twelve alcoves each with a painted deity. The smell of incense and cold stone. Services are held at dawn and dusk. The attending priest, Brother Osel, recites the liturgy with the conviction of a man reading tax forms. The temple doubles as a records office: births, deaths, marriages, and property disputes are logged here for the imperial administration. The back room is more archive than sanctuary.",
+            "coordinate_anchor": { "x": 2375000, "y": 1201000 },
+            "group_entries": [
+              { "label": "morning worshippers", "description": "Seven people in a loose semicircle, listening to the liturgy with varying degrees of attention." }
+            ],
+            "sub_scenes": []
+          },
+          {
+            "id": "salzhaven_seekult_schrein",
+            "name": "Meerschrein",
+            "type": "shrine",
+            "layer_d_text": "Not a building but a large cellar beneath an ordinary-looking house, reached by a narrow stair. The walls are hung with nets, shells, and painted fish. The air is damp and smells of brine. A stone basin in the center holds seawater brought up fresh each morning. The Sea Cult has no formal doctrine — it is part superstition, part fishing tradition, part genuine devotion to the Binnenmeer as something that should be appeased. High Keeper Rhen is the oldest person in Salzhaven and claims to hear the sea from here.",
+            "coordinate_anchor": { "x": 2374000, "y": 1199000 },
+            "group_entries": [
+              { "label": "fishers making offerings", "description": "Two fishers in worn clothes leaving small carved wooden fish beside the basin, heads bowed." }
+            ],
+            "sub_scenes": []
+          },
+          {
+            "id": "salzhaven_essenz_werkstatt",
+            "name": "Werkstatt Kevaros",
+            "type": "shop",
+            "layer_d_text": "A tall narrow building with a sign showing a crystal split by a line — the mark of an Essenz practitioner. The ground floor is workshop: benches covered in gems in various states of charge and processing, a charging basin fed by a small collected storm-crystal that generates a faint ambient energy. Kevaros herself is rarely visible from the door — she works in the back, where the glow of active Essenz sometimes leaks under the curtain. She does Enhancement work on commission and teaches nobody anything for free.",
+            "coordinate_anchor": { "x": 2376000, "y": 1200000 },
+            "group_entries": [],
+            "sub_scenes": []
+          }
+        ]
+      }
+    ]
+  },
+
+  "static_npcs": [
+    {
+      "id": "gouverneur_aldric_sorn",
+      "name": "Aldric Sorn",
+      "role": "Gouverneur der Südküste-Provinz, Ostimperium",
+      "description": "A man in his mid-fifties who has grown into his office like a fat man grows into a chair. Florid complexion, rings on most fingers, clothes expensive but slightly too warm for the climate. His eyes are sharp and move quickly, which surprises people who assume he is stupid.",
+      "personality": "Deeply corrupt but professionally competent. Manages his corruption carefully — he takes what won't cause a crisis, and stops before it would. Terrified of being recalled to Vareth. Polite to everyone, warm to no one.",
+      "faction": "ostimperium_provincial_administration",
+      "relation_score_default": 0,
+      "stats": { "perception": 16, "combat_skill": 4, "persuasion": 15 },
+      "schedule": [
+        { "hour_start": 8, "hour_end": 12, "scene_id": "salzhaven_gouverneurspalast_kartenraum" },
+        { "hour_start": 12, "hour_end": 14, "scene_id": "salzhaven_gouverneurspalast" },
+        { "hour_start": 14, "hour_end": 18, "scene_id": "salzhaven_gouverneurspalast_kartenraum" },
+        { "hour_start": 19, "hour_end": 22, "scene_id": "salzhaven_goldenes_schiff" }
+      ],
+      "knowledge": "Knows which merchants are smuggling and takes a cut. Has a private agreement with the Lagerhaus Drei operation — plausible deniability maintained carefully. Knows Vareth is watching his tax yields and is three months behind on expected revenue. Quietly looking for a way to close the gap without disrupting his informal income."
+    },
+    {
+      "id": "wachhauptmann_dura_fenk",
+      "name": "Dura Fenk",
+      "role": "Stadtwatch-Hauptmann, Salzhaven",
+      "description": "A lean woman in her early forties, close-cropped grey hair, a scar from a knife fight across her left jaw that she does not explain. Her uniform is worn but maintained. She stands like someone who expects to have to move quickly.",
+      "personality": "Honest in a city where honesty is inconvenient. Has not been promoted past Hauptmann because she refuses to participate in Sorn's arrangements. Pragmatic about what she can actually enforce. Respects competence regardless of origin. Does not suffer fools or cruelty.",
+      "faction": "ostimperium_city_watch",
+      "relation_score_default": 5,
+      "stats": { "perception": 15, "combat_skill": 14, "persuasion": 11 },
+      "schedule": [
+        { "hour_start": 6, "hour_end": 14, "scene_id": "salzhaven_kaserne" },
+        { "hour_start": 14, "hour_end": 18, "scene_id": "salzhaven_marktplatz" },
+        { "hour_start": 18, "hour_end": 20, "scene_id": "salzhaven_docksviertel" },
+        { "hour_start": 20, "hour_end": 22, "scene_id": "salzhaven_goldenes_schiff" }
+      ],
+      "knowledge": "Knows about Lagerhaus Drei but lacks evidence she could use without Sorn blocking her. Has a list of seven people she would arrest if she had backing from Vareth. Knows the Grauer Steg pier is not what it claims to be. Is quietly collecting documentation in case the political wind shifts."
+    },
+    {
+      "id": "marta_velde",
+      "name": "Marta Velde",
+      "role": "Wirtin, Das Goldene Schiff",
+      "description": "A broad-shouldered woman in her late forties with permanently reddened hands and the expression of someone who has heard every story and believes very few of them. Hair pinned back and covered with a linen cap. She moves through the common room like she owns it, which she does.",
+      "personality": "Warm toward paying, well-behaved guests. Zero patience for trouble that will cost her money or require her to clean blood off her floor. Knows everything that happens in her common room and forgets it all professionally. Discreetly loyal to Dura Fenk, who drinks here most evenings.",
+      "faction": null,
+      "relation_score_default": 10,
+      "stats": { "perception": 17, "combat_skill": 8, "persuasion": 14 },
+      "schedule": [
+        { "hour_start": 5, "hour_end": 23, "scene_id": "salzhaven_goldenes_schiff" }
+      ],
+      "knowledge": "Knows who in the city is sleeping with whom, who owes whom money, and which official drinks too much. Has housed a Gebirgsstaaten trader for the past six nights who asks too many questions about Essenz transport routes. Knows Governor Sorn dines here on Thursdays and always orders the same thing."
+    },
+    {
+      "id": "silas_keyn",
+      "name": "Silas Keyn",
+      "role": "Essenzhändler, Die Kristallwaage",
+      "description": "A thin man of about fifty with colorless hair combed flat and the precise, contained gestures of someone who has spent decades around fragile expensive things. Linen jacket, no jewelry — he considers it unprofessional to advertise wealth when selling wealth.",
+      "personality": "Analytical, patient, never visibly surprised. Approaches every transaction as a puzzle with a correct solution. Has no opinions about how his Essenz is used once the sale is complete. Has strong opinions about quality, weight, and contract terms.",
+      "faction": "harbour_merchant_guild",
+      "relation_score_default": 0,
+      "stats": { "perception": 15, "combat_skill": 5, "persuasion": 16 },
+      "schedule": [
+        { "hour_start": 7, "hour_end": 19, "scene_id": "salzhaven_kristallwaage" },
+        { "hour_start": 19, "hour_end": 21, "scene_id": "salzhaven_goldenes_schiff" }
+      ],
+      "knowledge": "Knows the quality and source of every Essenz crystal he sells. Has a secondary supply line through the Grauer Steg that he does not document. Knows that someone has been buying low-grade crystals in bulk from the Hinterhof Grau — unusual quantity, unusual buyer profile. Has not decided whether to report this or approach the buyer directly."
+    },
+    {
+      "id": "kalder_vorn",
+      "name": "Kalder Vorn",
+      "role": "Waffenschmiedin",
+      "description": "Short, muscular, with forearms that communicate her profession before she speaks. She is thirty-eight and looks fifty in the best way — worn by work, not age. Her hands are calloused and scarred. She wears her hair braided and pinned out of the way of forge work.",
+      "personality": "Direct, fair, no small talk. Respects people who know what they want and can explain why. Has a code: she will not make weapons for anyone she has seen behave badly toward someone weaker. Has enforced this once, at some cost.",
+      "faction": null,
+      "relation_score_default": 5,
+      "stats": { "perception": 12, "combat_skill": 13, "persuasion": 8 },
+      "schedule": [
+        { "hour_start": 5, "hour_end": 18, "scene_id": "salzhaven_waffenschmied" },
+        { "hour_start": 18, "hour_end": 20, "scene_id": "salzhaven_fischmarkt" }
+      ],
+      "knowledge": "Repaired a blade last month with an unusual alloy she had not seen before — light for its strength, possibly Essenz-worked metal from the Gebirgsstaaten. Kept a filing of the metal. Has been asked twice in the past year for untraceable blades — declined both times, remembers the faces."
+    },
+    {
+      "id": "rhen_seekult",
+      "name": "Rhen",
+      "role": "Hoher Hüter, Meerschrein — Sea Cult Keeper",
+      "description": "The oldest person most people in Salzhaven have met — somewhere past seventy, with white hair loose to the shoulders and the slow movements of someone who has stopped hurrying. Gender ambiguous, addressed as Hüter by the faithful. Eyes that focus on something slightly behind whoever they are speaking to.",
+      "personality": "Unhurried, cryptic in the way of someone who genuinely sees patterns others miss rather than performing mysticism. Not unkind. Deeply uninterested in politics or money. Interested in weather, currents, and the behavior of the deep-water fauna.",
+      "faction": "sea_cult",
+      "relation_score_default": 5,
+      "stats": { "perception": 18, "combat_skill": 2, "persuasion": 13 },
+      "schedule": [
+        { "hour_start": 4, "hour_end": 7, "scene_id": "salzhaven_seekult_schrein" },
+        { "hour_start": 7, "hour_end": 11, "scene_id": "salzhaven_docksviertel" },
+        { "hour_start": 11, "hour_end": 16, "scene_id": "salzhaven_seekult_schrein" },
+        { "hour_start": 16, "hour_end": 20, "scene_id": "salzhaven_tempelgasse" }
+      ],
+      "knowledge": "Has observed Binnenmeer behavioral changes in the coastal fauna for six months — migration patterns wrong for the season, deep-water species appearing near shore. Does not know what it means. Knows the Essenz-storm frequency has increased. Knows things about Vhaelor's coastal currents that no imperial sailor knows."
+    },
+    {
+      "id": "kevaros_essenz",
+      "name": "Kevaros",
+      "role": "Essenz-Praktikerin, Werkstatt Kevaros",
+      "description": "A woman of about forty-five whose exact appearance is difficult to recall after meeting her — medium height, dark clothes, nothing distinctive. This is deliberate. Essenz Users who advertise themselves in imperial territory tend to get visited by tax assessors.",
+      "personality": "Careful, thorough, generous with technical information but stingy with personal information. Has a deep professional dislike for sloppy work with Essenz. Dislikes the Governor and has a complicated respect for Fenk.",
+      "faction": null,
+      "relation_score_default": 0,
+      "stats": { "perception": 14, "combat_skill": 6, "persuasion": 10, "essenz_skill": 16 },
+      "schedule": [
+        { "hour_start": 7, "hour_end": 20, "scene_id": "salzhaven_essenz_werkstatt" }
+      ],
+      "knowledge": "Is aware of one other Essenz User in Salzhaven — not Silas Keyn, who is merely a trader. Has noted the unusual bulk purchases of low-grade crystals and has a theory about who is doing it and why. Has not acted on this theory yet. Has a commission from an unnamed client for a Force Projection demonstration piece — unusual request, paying very well."
+    },
+    {
+      "id": "foss_ankerwurf",
+      "name": "Foss",
+      "role": "Wirt, Zum Ankerwurf",
+      "description": "A wide man in his late fifties with one arm — the right, lost to a rope accident at sea years ago. He runs the tavern with his left hand and a practiced economy of movement. Deeply tanned, shaved head, speaks rarely.",
+      "personality": "Transactional. Not cruel but not warm. Has one rule: no violence in the bar. Has enforced this against people much larger than himself. Everything else is the customer's business.",
+      "faction": "grauer_steg_informal",
+      "relation_score_default": -5,
+      "stats": { "perception": 13, "combat_skill": 11, "persuasion": 6 },
+      "schedule": [
+        { "hour_start": 10, "hour_end": 2, "scene_id": "salzhaven_ankerwurf" }
+      ],
+      "knowledge": "Knows about the Lagerhaus Drei operation — takes a small fee for sending people there who ask correctly. Has a signal system with the Grauer Steg dock workers. Knows the names of six people the city watch is looking for and where four of them currently sleep."
+    }
+  ]
+}

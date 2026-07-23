@@ -1,0 +1,21 @@
+{
+  "world": {
+    "name": "Avarr",
+
+    "starting_state": {
+      "location_scene_id": "salzhaven_goldenes_schiff",
+      "coordinate": { "x": 2380000, "y": 1200000 },
+      "calendar": {
+        "year": 743,
+        "month": 4,
+        "day": 12,
+        "hour": 9,
+        "minute": 0
+      }
+    },
+
+    "constants": {
+      "layer_a_text": "Avarr is a world where power is measured in steel, grain, and Essenz. The Ostimperium dominates the eastern continent — vast, rich, rotting from within. Its Emperor grows old in Vareth; his nine Governors circle like vultures. The Gebirgsstaaten hoard their crystal mines and trust no one. The Steppenvölker raid deeper each year as their eastern pastures dry out. The Binnenmeer feeds everyone and answers to no one. Essenz is real — it sharpens blades, hardens armor, and in the hands of the trained few, bends matter itself. It is rare enough to kill for and common enough to tax. Most people live and die without ever touching it. Magic does not exist. Gods are silent or absent. What shapes the world is hunger, ambition, and the slow turn of seasons. It is the year 743 of the Imperial Calendar. The harvest last year was poor. A Governor's war is coming."
+    }
+  }
+}

@@ -40,9 +40,13 @@ def _scan() -> dict:
                 "type": meta.get("type", "unbekannt"),
                 "name": meta.get("name", slug),
                 "region": meta.get("region"),
+                "parent": meta.get("parent"),
                 "status": meta.get("status"),
+                "scope": meta.get("scope", "welt"),
+                "pc": meta.get("pc"),
                 "tags": meta.get("tags") or [],
                 "koordinaten": meta.get("koordinaten"),
+                "bounding_box": meta.get("bounding_box"),
                 "links": links,
                 "path": str(p.relative_to(WORLD_DIR)),
             }

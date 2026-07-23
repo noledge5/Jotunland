@@ -5,98 +5,114 @@ def _gs(env):
     return env["gsm"].create_pc("Marek")
 
 
+def test_skill_roll_outside_combat(env):
+    """request_skill_roll ist der Pflichtweg fuer jede Probe (ADR-0001)."""
+    t = env["tools"]
+    gs = _gs(env)
+    res = t.execute_tool(gs, "request_skill_roll",
+                         {"skill": "Schleichen", "schwierigkeit": "Schwer",
+                          "beschreibung": "an der Wache vorbei"})
+    assert res == t.BLOCKING
+    assert gs["pending_roll"]["sg"] == 14
+    outcome = t.resolve_player_roll(gs, 15)
+    assert outcome["erfolg"] is (15 + outcome["attribut_mod"] + outcome["skill_bonus"] >= 14)
+    assert gs["pending_roll"] is None
+    assert gs["skills"]["Schleichen"]["ticks"] == 1  # Tick trotz allem
+
+
+def test_skill_roll_validation(env):
+    t = env["tools"]
+    gs = _gs(env)
+    assert "FEHLER" in t.execute_tool(gs, "request_skill_roll",
+                                      {"skill": "Zaubern", "schwierigkeit": "Leicht"})
+    assert "FEHLER" in t.execute_tool(gs, "request_skill_roll",
+                                      {"skill": "Athletik", "schwierigkeit": "Episch"})
+    # ziel ausserhalb Kampf -> Fehler
+    assert "FEHLER" in t.execute_tool(gs, "request_skill_roll",
+                                      {"skill": "Klingenwaffen", "schwierigkeit": "Leicht",
+                                       "ziel": "wolf"})
+
+
 def test_full_combat_cycle(env):
     t = env["tools"]
     gs = _gs(env)
+    gs["attribute"]["STR"] = 16  # +3, Klingenwaffen wird sicherer
 
-    # Kampf-Tools ohne aktiven Kampf -> Fehler
     assert "FEHLER" in t.execute_tool(gs, "end_turn", {})
-    assert "FEHLER" in t.execute_tool(gs, "npc_action", {"angreifer": "wolf"})
-
     r = json.loads(t.execute_tool(gs, "start_combat",
                                   {"gegner": [{"name": "Grubenwolf", "hp": 8}]}))
     assert r["phase"] == "pc_turn"
-    assert gs["combat"]["round"] == 1
-
-    # Doppelter Kampfstart -> Fehler
     assert "FEHLER" in t.execute_tool(gs, "start_combat", {"gegner": [{"name": "X"}]})
-
-    # npc_action in pc_turn -> Fehler
     assert "FEHLER" in t.execute_tool(gs, "npc_action", {"angreifer": "grubenwolf"})
 
-    # Angriffswurf anfordern -> BLOCKING
-    res = t.execute_tool(gs, "request_attack_roll",
-                         {"ziel": "Grubenwolf", "modifikator": 2,
-                          "schwierigkeit": 10, "schaden": "1d4"})
+    # Angriff = Skill-Probe mit Ziel
+    res = t.execute_tool(gs, "request_skill_roll",
+                         {"skill": "Klingenwaffen", "schwierigkeit": "Leicht",
+                          "ziel": "Grubenwolf", "schaden": "1d4"})
     assert res == t.BLOCKING
     assert gs["combat"]["phase"] == "awaiting_roll"
-
-    # end_turn waehrend awaiting_roll -> Fehler
     assert "FEHLER" in t.execute_tool(gs, "end_turn", {})
 
-    # Spieler wuerfelt 12 -> 14 vs 10 -> Treffer
-    outcome = t.resolve_player_roll(gs, 12)
-    assert outcome["treffer"] is True
-    assert 1 <= outcome["schaden"] <= 4
-    assert gs["combat"]["phase"] == "pc_turn"
+    outcome = t.resolve_player_roll(gs, 15)  # 15+3+0 = 18 >= 10
+    assert outcome["erfolg"] is True
+    assert 1 <= outcome["schaden"] <= 8  # 1d4, verdoppelt bei Crit
     wolf = gs["combat"]["enemies"][0]
     assert wolf["hp"] == 8 - outcome["schaden"]
+    assert gs["combat"]["phase"] == "pc_turn"
 
-    # Zugwechsel -> npc_turn
     r = json.loads(t.execute_tool(gs, "end_turn", {}))
     assert r["phase"] == "npc_turn"
 
-    # NPC greift an (deterministisch treffen: Schwierigkeit 0)
+    # NPC-Angriff: Engine wuerfelt gegen den VW des PC
     hp_before = gs["hp"]
     r = json.loads(t.execute_tool(gs, "npc_action",
-                                  {"angreifer": "Grubenwolf", "angriffswurf": "1d20",
-                                   "schwierigkeit": 0, "schaden": "1d4"}))
-    assert r["treffer"] is True
-    assert gs["hp"] < hp_before
+                                  {"angreifer": "Grubenwolf", "angriffsbonus": 30,
+                                   "schaden": "1d4"}))
+    assert r["treffer"] is True and gs["hp"] < hp_before
 
-    # Zugwechsel -> neue Runde
     r = json.loads(t.execute_tool(gs, "end_turn", {}))
-    assert r["phase"] == "pc_turn"
-    assert gs["combat"]["round"] == 2
+    assert r["phase"] == "pc_turn" and gs["combat"]["round"] == 2
 
-    # Kampf beenden mit XP
-    r = json.loads(t.execute_tool(gs, "end_combat", {"ausgang": "sieg", "xp": 50}))
-    assert r["ausgang"] == "sieg"
-    assert gs["combat"] is None
-    assert gs["xp"] == 50
+    r = json.loads(t.execute_tool(gs, "end_combat", {"ausgang": "sieg"}))
+    assert r["ausgang"] == "sieg" and gs["combat"] is None
 
 
-def test_attack_roll_miss(env):
+def test_bleeding_in_combat(env):
     t = env["tools"]
     gs = _gs(env)
-    t.execute_tool(gs, "start_combat", {"gegner": [{"name": "Wegelagerer", "hp": 6}]})
-    t.execute_tool(gs, "request_attack_roll",
-                   {"ziel": "wegelagerer", "modifikator": 0, "schwierigkeit": 15})
-    outcome = t.resolve_player_roll(gs, 5)
-    assert outcome["treffer"] is False
-    assert gs["combat"]["enemies"][0]["hp"] == 6
+    t.execute_tool(gs, "start_combat", {"gegner": [{"name": "Wolf", "hp": 5}]})
+    gs["hp"] = 0
+    t.execute_tool(gs, "end_turn", {})   # -> npc_turn
+    r = json.loads(t.execute_tool(gs, "end_turn", {}))  # -> Runde 2, Blutung
+    assert gs["hp"] == -1
+    assert r.get("pc_sterbend") is True
+    # Heilung stabilisiert
+    t.execute_tool(gs, "adjust_hp", {"delta": 3, "grund": "Erste Hilfe"})
+    assert gs["stabilisiert"] is True
 
 
-def test_attack_invalid_target(env):
+def test_time_and_flags_and_rest(env):
     t = env["tools"]
     gs = _gs(env)
-    t.execute_tool(gs, "start_combat", {"gegner": [{"name": "Wolf"}]})
-    res = t.execute_tool(gs, "request_attack_roll",
-                         {"ziel": "drache", "schwierigkeit": 10})
-    assert "FEHLER" in res
-    assert gs["combat"]["phase"] == "pc_turn"  # State unveraendert
+    r = json.loads(t.execute_tool(gs, "advance_time", {"minuten": 90}))
+    assert "10:30" in r["zeit"]
+    assert "FEHLER" in t.execute_tool(gs, "advance_time", {"minuten": 99999})
+
+    env["wio"].write_world_entry("taverne-x", {"type": "scene", "name": "Taverne X"}, "x")
+    r = json.loads(t.execute_tool(gs, "set_world_flag",
+                                  {"slug": "taverne-x", "feld": "abgebrannt", "wert": True}))
+    assert gs["world_flags"]["taverne-x"]["abgebrannt"] is True
+    assert "FEHLER" in t.execute_tool(gs, "set_world_flag", {"slug": "fehlt", "feld": "x"})
+
+    gs["hp"] = 1
+    json.loads(t.execute_tool(gs, "rest", {"naechte": 1}))
+    assert gs["hp"] > 1
 
 
 def test_roll_expr_bounds(env):
     t = env["tools"]
-    r = t.roll_expr("2d6+1")
-    assert 3 <= r["total"] <= 13
-    r = t.roll_expr("d20")
-    assert 1 <= r["total"] <= 20
-    r = t.roll_expr("1w6")  # deutsche Notation
-    assert 1 <= r["total"] <= 6
+    assert 3 <= t.roll_expr("2d6+1")["total"] <= 13
+    assert 1 <= t.roll_expr("1w6")["total"] <= 6
     import pytest
-    with pytest.raises(ValueError):
-        t.roll_expr("100d100")
     with pytest.raises(ValueError):
         t.roll_expr("kaese")

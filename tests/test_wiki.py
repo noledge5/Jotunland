@@ -127,10 +127,37 @@ def test_tool_location_needs_wiki_entry(env):
 
 def test_tool_economy(env):
     t = env["tools"]
-    gs = env["gsm"].create_pc("Marek")  # startet mit 2 sm 5 kp = 25 kp
+    gs = env["gsm"].create_pc("Marek")  # startet mit 500 kp = 5 gm
     r = json.loads(t.execute_tool(gs, "pay", {"betrag_kp": 7, "empfaenger": "Wirt"}))
-    assert r["boerse"] == "1 sm 8 kp"
-    r = t.execute_tool(gs, "pay", {"betrag_kp": 999})
+    assert r["boerse"] == "4 gm 9 sm 3 kp"
+    r = t.execute_tool(gs, "pay", {"betrag_kp": 9999})
     assert "FEHLER" in r
     r = json.loads(t.execute_tool(gs, "receive_coins", {"gm": 1, "quelle": "Auftrag"}))
-    assert r["boerse"] == "1 gm 1 sm 8 kp"
+    assert r["boerse"] == "5 gm 9 sm 3 kp"
+
+
+def test_flags_overlay_and_schedule(env):
+    """Zwei-Schichten-Modell (ADR-0002): Flags ueberlagern das Wiki;
+    Zeitplan-NPCs erscheinen nur waehrend ihrer Schicht."""
+    g, w, wctx, t = env["gsm"], env["wio"], env["wctx"], env["tools"]
+    w.write_world_entry("canon", {"type": "canon", "name": "Canon"}, "Weltgesetze.")
+    w.write_world_entry("hafenstadt", {"type": "city", "name": "Hafenstadt"}, "Stadt.")
+    w.write_world_entry("schenke", {"type": "scene", "name": "Schenke",
+                                    "parent": "hafenstadt"}, "Dunkle Schenke.")
+    w.write_world_entry("wirt-bo", {"type": "character", "name": "Bo",
+                                    "links": ["schenke"],
+                                    "zeitplan": [{"ort": "schenke", "von": 8, "bis": 22}]},
+                        "Der Wirt.")
+    gs = g.create_pc("Marek")
+    t.execute_tool(gs, "set_location", {"slug": "schenke", "name": "Schenke"})
+    assert gs["location_stack"] == ["hafenstadt", "schenke"]  # parent-Kette
+    gs["kalender"]["stunde"] = 12
+    ctx = wctx.build_context(gs)
+    assert "Der Wirt" in ctx          # Schicht laeuft -> anwesend
+    gs["kalender"]["stunde"] = 3
+    ctx = wctx.build_context(gs)
+    assert "Der Wirt" not in ctx      # keine Schicht -> nicht da
+    # Flag-Overlay
+    t.execute_tool(gs, "set_world_flag", {"slug": "schenke", "feld": "abgebrannt", "wert": True})
+    ctx = wctx.build_context(gs)
+    assert "abgebrannt=True" in ctx

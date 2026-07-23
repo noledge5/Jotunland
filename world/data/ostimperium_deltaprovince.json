@@ -1,0 +1,134 @@
+{
+  "realm_id": "ostimperium",
+  "region": {
+    "id": "deltaprovince",
+    "name": "Deltaprovince",
+    "climate": "temperate",
+    "layer_b_text": "The Deltaprovince is the Ostimperium's beating heart and its most poisonous artery. The Avar river splits into five mouths here before meeting the Binnenmeer, and between those mouths lies Vareth — the largest city on the continent, seat of the Emperor, nexus of every trade route, rumor, and conspiracy the empire produces. The delta itself is flat, fertile, and waterlogged — canal networks crisscross the farmland between river branches, feeding the city with grain and livestock. The smell of river mud is permanent. Traffic on the water never stops. Imperial barges, merchant vessels, fishing boats, and military galleys share the channels in a negotiated chaos that has its own logic. Wealth here is extreme and visible. Poverty is also extreme and less visible, pressed into the back districts of Vareth and the canal-side hovels of the delta villages.",
+    "coordinate_anchor": { "x": 2350000, "y": 1600000 },
+    "bounding_box": { "x_min": 2200000, "y_min": 1400000, "x_max": 2600000, "y_max": 1800000 }
+  },
+
+  "city_area": {
+    "id": "vareth",
+    "name": "Vareth",
+    "size": "capital",
+    "population": 180000,
+    "coordinate_anchor": { "x": 2350000, "y": 1600000 },
+    "bounding_box": { "x_min": 2330000, "y_min": 1585000, "x_max": 2370000, "y_max": 1618000 },
+
+    "zones": [
+      {
+        "id": "vareth_kaiserpalast_viertel",
+        "name": "Kaiserliches Viertel",
+        "type": "noble-quarter",
+        "layer_c_text": "The elevated northern district of Vareth, walled within the city's walls. The Imperial Palace dominates — a compound of white marble and red-tiled roofs covering thirty acres, surrounded by manicured grounds and four layers of guards. The Senate Hall sits opposite, its pillars visible from across the city. Between them: the mansions of the great noble houses, the Grand Weighing Houses where Essenz is officially traded and taxed, and the military headquarters. The streets here are wide enough for four horses abreast and are cleaned twice daily. Access requires documentation.",
+        "coordinate_anchor": { "x": 2350000, "y": 1615000 },
+        "bounding_box": { "x_min": 2340000, "y_min": 1610000, "x_max": 2360000, "y_max": 1618000 },
+        "scenes": [
+          {
+            "id": "vareth_senatshalle",
+            "name": "Senatshalle",
+            "type": "palace",
+            "layer_d_text": "Forty marble pillars support a roof open to the sky at its center. The floor is a mosaic map of the empire — walked on daily by people arguing about it. The curved benches of the Senate fill three sides. The fourth side holds the Emperor's chair, occupied once a month on formal days and otherwise conspicuously empty. The acoustics are excellent — whispers carry. The air smells of old stone and ambition.",
+            "coordinate_anchor": { "x": 2349000, "y": 1616000 },
+            "group_entries": [
+              { "label": "senators in debate", "description": "A cluster of robed men arguing at the base of the pillars while scribes take notes nearby." },
+              { "label": "petitioners waiting", "description": "Twelve people in formal dress seated along the outer wall, expressions ranging from hope to dread." }
+            ],
+            "sub_scenes": []
+          },
+          {
+            "id": "vareth_grosse_waagehalle",
+            "name": "Große Waagehalle",
+            "type": "market",
+            "layer_d_text": "The official Essenz exchange — a vaulted hall with twenty trading stations, each a brass-fitted counter behind glass. Imperial assessors weigh and grade crystals on certified scales; transactions are logged in triplicate. The hum of charged crystals is faintly audible. The air has a mineral edge. Guards at every door. Access is by merchant license — which can be obtained for a fee that is not small.",
+            "coordinate_anchor": { "x": 2351000, "y": 1614000 },
+            "group_entries": [
+              { "label": "licensed merchants", "description": "A dozen traders in various stages of transaction — waiting, arguing, checking ledgers." },
+              { "label": "imperial assessors", "description": "Four officials in grey uniforms examining crystals with professional disinterest." }
+            ],
+            "sub_scenes": []
+          }
+        ]
+      },
+      {
+        "id": "vareth_handelsstadt",
+        "name": "Handelsstadt",
+        "type": "market-district",
+        "layer_c_text": "The middle ring of Vareth — the commercial city that actually makes the empire run. Street after street of guild halls, merchant warehouses, banking houses, inns, and permanent market halls. The architecture is mixed: old imperial stone next to newer timber-frame construction, everything busy and slightly overcrowded. Six major guilds have their headquarters here, each a compound with its own internal security. The noise is constant. The money flow is enormous. The corruption is structural.",
+        "coordinate_anchor": { "x": 2350000, "y": 1600000 },
+        "bounding_box": { "x_min": 2335000, "y_min": 1593000, "x_max": 2365000, "y_max": 1610000 },
+        "scenes": [
+          {
+            "id": "vareth_grosse_markt",
+            "name": "Großer Markt",
+            "type": "market",
+            "layer_d_text": "A sprawling open market covering four city blocks — the largest in the empire. Permanent stone stalls line the edges; portable tables fill the interior. Every commodity the empire produces passes through here eventually. The noise is absolute: vendors, animals, argument, music from a corner busker. The smell is everything simultaneously. Pickpockets work the crowd; so do informants.",
+            "coordinate_anchor": { "x": 2350000, "y": 1602000 },
+            "group_entries": [
+              { "label": "spice sellers", "description": "A row of Steppenvölker traders with colorful awnings selling dried goods from the eastern routes." },
+              { "label": "imperial tax collectors", "description": "Two officials in green sashes moving through the stalls, documenting transactions." },
+              { "label": "crowd", "description": "Dense, mixed population — every class and profession visible within fifty paces." }
+            ],
+            "sub_scenes": []
+          },
+          {
+            "id": "vareth_haendlersinn",
+            "name": "Zum Goldenen Avar",
+            "type": "tavern",
+            "layer_d_text": "Vareth's finest traveling inn — five floors, thirty private rooms, a kitchen with an actual trained cook, a cellar of wines from the Flusstal province. Frequented by wealthy merchants, senior officials, and anyone who needs to meet someone discreetly in comfort. The common room has private alcoves separated by carved wooden screens. Two door guards. The owner is a former Senate clerk who knows how to keep a register and which pages to leave blank.",
+            "coordinate_anchor": { "x": 2352000, "y": 1600000 },
+            "group_entries": [
+              { "label": "wealthy merchants dining", "description": "Four men at a large table, maps spread between the dishes, speaking in lowered voices." },
+              { "label": "lone official", "description": "A woman in imperial grey eating alone with a sealed document case beside her chair." }
+            ],
+            "sub_scenes": []
+          }
+        ]
+      },
+      {
+        "id": "vareth_hafen",
+        "name": "Varethhaven",
+        "type": "docks",
+        "layer_c_text": "The river harbor of Vareth — twelve piers extending into the Avar's main channel, capable of handling two hundred vessels simultaneously. Upstream traffic brings grain, timber, ore, and livestock. Downstream and from the Binnenmeer come Essenz crystals, spices, foreign goods, and people. The Harbor Administration is a bureaucracy unto itself, employing eight hundred people just to track what moves through. The docks are rough, busy, and dangerous after dark.",
+        "coordinate_anchor": { "x": 2355000, "y": 1590000 },
+        "bounding_box": { "x_min": 2345000, "y_min": 1585000, "x_max": 2365000, "y_max": 1595000 },
+        "scenes": [
+          {
+            "id": "vareth_hafenamt",
+            "name": "Hafenamt",
+            "type": "barracks",
+            "layer_d_text": "A long administrative building at the base of the main pier — part office, part customs hall, part holding cells. Inspectors process cargo manifests at long counters. Flagged shipments go to the inspection room; flagged persons go to the cells. The filing system is legendary in its incomprehensibility, which is believed by most to be intentional.",
+            "coordinate_anchor": { "x": 2355000, "y": 1592000 },
+            "group_entries": [
+              { "label": "manifest queue", "description": "A line of twelve ship captains or their agents waiting to file paperwork, in varying states of impatience." }
+            ],
+            "sub_scenes": []
+          }
+        ]
+      }
+    ]
+  },
+
+  "secondary_settlements": [
+    {
+      "id": "avar_kreuzung",
+      "name": "Avar-Kreuzung",
+      "size": "town",
+      "population": 8000,
+      "coordinate_anchor": { "x": 2320000, "y": 1650000 },
+      "description": "A river crossing town forty km upriver from Vareth — strategic bridge point, toll station, mid-size market. Imperial garrison of two hundred. Known for river boat repairs.",
+      "layer_c_text": "Where the northern road from the Nordmark crosses the Avar by the great stone bridge. Everything moving between Vareth and the northern provinces passes through. The toll station is imperial-run but locally staffed — bribeable at predictable rates. The town exists to service the crossing: inns, stables, boatyards, a small market."
+    },
+    {
+      "id": "deltadorf_vassen",
+      "name": "Vassen",
+      "size": "village",
+      "population": 1200,
+      "coordinate_anchor": { "x": 2390000, "y": 1570000 },
+      "description": "A delta fishing village on a secondary river mouth. Modest. Known for eel-smoking trade.",
+      "layer_c_text": "Low wooden houses on stilts at the delta edge. The village lives by fishing and eel-smoking — the smoked eels of Vassen are sold in Vareth's markets. Imperial presence is a single customs observer who comes quarterly and is generously entertained when he does."
+    }
+  ]
+}

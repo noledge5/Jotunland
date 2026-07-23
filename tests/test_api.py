@@ -15,7 +15,7 @@ def client(env):
 def test_index_served(client):
     r = client.get("/")
     assert r.status_code == 200
-    assert "NOVATERRUM" in r.text
+    assert "JOTUNLAND" in r.text
 
 
 def test_state_and_settings_roundtrip(client):
@@ -29,16 +29,30 @@ def test_pc_lifecycle(client):
     r = client.post("/api/pcs", json={"name": "Marek"})
     assert r.status_code == 200
     assert r.json()["slug"] == "marek"
+    assert r.json()["attribute"]["STR"] == 13  # Default-Verteilung
     # Duplikat -> 409
     assert client.post("/api/pcs", json={"name": "Marek"}).status_code == 409
-    # Auto-aktiviert
-    state = client.get("/api/state").json()
-    assert state["pc"]["name"] == "Marek"
-    # Zweiter PC + Wechsel
-    client.post("/api/pcs", json={"name": "Leian"})
+    # Wizard mit Punktepools
+    r = client.post("/api/pcs", json={
+        "name": "Vela", "klasse": "Schurke",
+        "attribute": {"STR": 15, "GES": 14, "KON": 13, "INT": 12, "WEI": 12, "CHA": 12},
+        "skills": {"Schleichen": 30}})
+    assert r.status_code == 200
+    # Pool-Fehler -> 400
+    r = client.post("/api/pcs", json={
+        "name": "Kaputt",
+        "attribute": {"STR": 18, "GES": 18, "KON": 18, "INT": 18, "WEI": 18, "CHA": 18},
+        "skills": {}})
+    assert r.status_code == 400
     client.post("/api/pcs/marek/activate")
     assert client.get("/api/state").json()["pc"]["slug"] == "marek"
     assert client.post("/api/pcs/gibtsnicht/activate").status_code == 404
+
+
+def test_rules_endpoint(client):
+    r = client.get("/api/rules").json()
+    assert r["attr_pool"] == 78 and r["skill_pool"] == 80
+    assert len(r["skills"]) == 32 and "Krieger" in r["classes"]
 
 
 def test_chat_requires_pc(client):
@@ -64,13 +78,13 @@ def test_map_and_wiki_endpoints(client, env):
     importlib.reload(sw)
     sw.seed()
     entries = client.get("/api/map").json()
-    assert any(e["slug"] == "hartfeld" for e in entries)
+    assert any(e["slug"] == "salzhaven" for e in entries)
     assert all(e.get("koordinaten") for e in entries)
-    r = client.get("/api/wiki/hartfeld").json()
-    assert r["meta"]["type"] == "location"
+    r = client.get("/api/wiki/salzhaven").json()
+    assert r["meta"]["type"] == "city"
     assert client.get("/api/wiki/fehlt").status_code == 404
-    factions = client.get("/api/wiki", params={"type": "faction"}).json()
-    assert len(factions) >= 5  # 5 globale + Stadt-Institutionen
+    npcs = client.get("/api/wiki", params={"type": "character"}).json()
+    assert len(npcs) >= 8  # Salzhaven-NPCs + Provinz-NPCs
 
 
 def test_wiki_edit_and_graph(client, env):
@@ -78,30 +92,32 @@ def test_wiki_edit_and_graph(client, env):
     importlib.reload(sw)
     sw.seed()
 
-    # Editieren: Status + Body
-    r = client.put("/api/wiki/greta-eisenhand",
+    # Editieren: Status + Body + Koordinaten
+    r = client.put("/api/wiki/marta-velde",
                    json={"status": "verschollen", "body": "Neuer Text."})
     assert r.status_code == 200
     assert r.json()["meta"]["status"] == "verschollen"
-    assert client.get("/api/wiki/greta-eisenhand").json()["body"].strip() == "Neuer Text."
-    # Tote Links werden abgelehnt
-    assert client.put("/api/wiki/hartfeld",
+    r = client.put("/api/wiki/salzhaven", json={"koordinaten": [2381000, 1201000]})
+    assert r.json()["meta"]["koordinaten"] == [2381000, 1201000]
+    assert client.put("/api/wiki/salzhaven",
                       json={"links": ["gibtsnicht"]}).status_code == 400
     assert client.put("/api/wiki/fehlt", json={"body": "x"}).status_code == 404
 
-    # Neu anlegen (mit kanonischem Institutions-Slug)
-    r = client.post("/api/wiki", json={"type": "faction", "name": "Tempelwache",
-                                       "stadt": "Grauwall", "body": "Waechter."})
+    # Klick-to-Add: neuer Eintrag mit Koordinaten (z.B. Fauna)
+    r = client.post("/api/wiki", json={"type": "fauna", "name": "Binnenmeer-Schlange",
+                                       "body": "Serpentiner Jaeger der tiefen Routen.",
+                                       "koordinaten": [2200000, 1100000]})
     assert r.status_code == 200
+    assert client.get("/api/wiki/binnenmeer-schlange").json()["meta"]["koordinaten"] == [2200000, 1100000]
     # Duplikat -> 400
-    assert client.post("/api/wiki", json={"type": "faction", "name": "Stadtwache",
-                                          "stadt": "Hartfeld", "body": "x"}).status_code == 400
+    assert client.post("/api/wiki", json={"type": "city", "name": "Salzhaven",
+                                          "body": "x"}).status_code == 400
 
-    # Graph: Knoten + Kanten, Region-Kanten implizit
+    # Graph: Knoten + implizite parent-Kanten
     g = client.get("/api/graph").json()
     slugs = {n["slug"] for n in g["nodes"]}
-    assert "hartfeld" in slugs and "stadtwache-hartfeld" in slugs
-    assert ["eisenmark", "hartfeld"] in [sorted(e) for e in g["edges"]]
+    assert "salzhaven" in slugs and "salzhaven-goldenes-schiff" in slugs
+    assert ["salzhaven", "suedkueste"] in [sorted(e) for e in g["edges"]]
 
 
 def test_history_bounded_persistence(env):

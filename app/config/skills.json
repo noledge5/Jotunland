@@ -1,0 +1,58 @@
+{
+  "skills": [
+    {"id": "SKILL-101", "name": "Klingenwaffen",        "category": "Kampf-Nah",    "attrs": ["STR","GES"]},
+    {"id": "SKILL-102", "name": "Wuchtwaffen",          "category": "Kampf-Nah",    "attrs": ["STR"]},
+    {"id": "SKILL-103", "name": "Stangenwaffen",        "category": "Kampf-Nah",    "attrs": ["STR","GES"]},
+    {"id": "SKILL-104", "name": "Waffenloser Kampf",    "category": "Kampf-Nah",    "attrs": ["STR","GES"]},
+    {"id": "SKILL-105", "name": "Bogen",                "category": "Kampf-Fern",   "attrs": ["GES"]},
+    {"id": "SKILL-106", "name": "Armbrust",             "category": "Kampf-Fern",   "attrs": ["GES"]},
+    {"id": "SKILL-107", "name": "Wurfwaffen",           "category": "Kampf-Fern",   "attrs": ["STR","GES"]},
+    {"id": "SKILL-108", "name": "Parade",               "category": "Kampf-Taktik", "attrs": ["STR","KON"]},
+    {"id": "SKILL-109", "name": "Rüstungsgewöhnung",   "category": "Kampf-Taktik", "attrs": ["KON","STR"]},
+    {"id": "SKILL-110", "name": "Kriegskunst",          "category": "Kampf-Taktik", "attrs": ["INT"]},
+    {"id": "SKILL-201", "name": "Schleichen",           "category": "Diebeskunst",  "attrs": ["GES"]},
+    {"id": "SKILL-202", "name": "Schlösser knacken",   "category": "Diebeskunst",  "attrs": ["GES"]},
+    {"id": "SKILL-203", "name": "Taschendiebstahl",    "category": "Diebeskunst",  "attrs": ["GES"]},
+    {"id": "SKILL-204", "name": "Fallenkunde",          "category": "Diebeskunst",  "attrs": ["INT","GES"]},
+    {"id": "SKILL-301", "name": "Überzeugen",           "category": "Soziales",     "attrs": ["CHA"]},
+    {"id": "SKILL-302", "name": "Täuschen",             "category": "Soziales",     "attrs": ["CHA"]},
+    {"id": "SKILL-303", "name": "Einschüchtern",        "category": "Soziales",     "attrs": ["STR","CHA"]},
+    {"id": "SKILL-304", "name": "Feilschen",            "category": "Soziales",     "attrs": ["CHA","INT"]},
+    {"id": "SKILL-305", "name": "Menschenkenntnis",    "category": "Soziales",     "attrs": ["WEI"]},
+    {"id": "SKILL-306", "name": "Anführen",             "category": "Soziales",     "attrs": ["CHA"]},
+    {"id": "SKILL-307", "name": "Verführen",            "category": "Soziales",     "attrs": ["CHA"]},
+    {"id": "SKILL-401", "name": "Erste Hilfe",          "category": "Körper",       "attrs": ["INT","WEI"]},
+    {"id": "SKILL-402", "name": "Überleben",            "category": "Körper",       "attrs": ["WEI"]},
+    {"id": "SKILL-403", "name": "Athletik",             "category": "Körper",       "attrs": ["STR","KON"]},
+    {"id": "SKILL-404", "name": "Akrobatik",            "category": "Körper",       "attrs": ["GES"]},
+    {"id": "SKILL-405", "name": "Wahrnehmung",          "category": "Körper",       "attrs": ["WEI"]},
+    {"id": "SKILL-501", "name": "Handwerk",             "category": "Wissen",       "attrs": ["INT","GES"]},
+    {"id": "SKILL-502", "name": "Alchemie",             "category": "Wissen",       "attrs": ["INT"]},
+    {"id": "SKILL-503", "name": "Naturkunde",           "category": "Wissen",       "attrs": ["INT","WEI"]},
+    {"id": "SKILL-504", "name": "Reiten",               "category": "Wissen",       "attrs": ["GES"]},
+    {"id": "SKILL-601", "name": "Essenz-Transmutation", "category": "Essenz",       "attrs": ["INT","WEI"]},
+    {"id": "SKILL-602", "name": "Essenz-Kraftprojektion","category": "Essenz",      "attrs": ["INT","WEI"]}
+  ],
+  "classes": {
+    "Krieger": {
+      "description": "Veteran der Schlachtfelder. Lebt von Disziplin und Stahl.",
+      "starting_items": ["Langschwert", "Kettenhemd"]
+    },
+    "Schurke": {
+      "description": "Schatten der Städte. Lebt von Information und Geschick.",
+      "starting_items": ["Dolch", "Lederweste", "Dietrichset"]
+    },
+    "Händler": {
+      "description": "Reisender Kaufmann. Lebt von Kontakten und Chancen.",
+      "starting_items": ["Dolch", "Handelsbuch", "Feine Kleidung"]
+    },
+    "Essenzkundiger": {
+      "description": "Studiert die verborgenen Kräfte der Welt.",
+      "starting_items": ["Essenz-Fokuskristall", "Gelehrtenrobe"]
+    },
+    "Waldläufer": {
+      "description": "Jäger und Spurenleser. Lebt zwischen Zivilisation und Wildnis.",
+      "starting_items": ["Kurzbogen", "20 Pfeile", "Jagdmesser"]
+    }
+  }
+}

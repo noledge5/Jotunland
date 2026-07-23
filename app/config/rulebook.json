@@ -1,0 +1,53 @@
+{
+  "difficulty_tiers": {
+    "Sehr Leicht": 8,
+    "Leicht": 10,
+    "Durchschnitt": 12,
+    "Schwer": 14,
+    "Sehr Schwer": 16,
+    "Heroisch": 18,
+    "Extrem": 20
+  },
+  "critical_success_roll": 20,
+  "critical_failure_roll": 1,
+  "dice_sides": 20,
+  "ticks_per_action": 1,
+  "tick_thresholds": {
+    "0": 3,
+    "21": 5,
+    "41": 8,
+    "61": 12,
+    "81": 20
+  },
+  "skill_ups_for_char_level": 10,
+  "attr_point_per_char_level": 1,
+  "attr_max": 20,
+  "attr_start_max": 18,
+  "attr_start_min": 6,
+  "attr_start_pool": 78,
+  "skill_start_pool": 80,
+  "skill_start_max": 30,
+  "hp_base": 10,
+  "hp_per_level": 2,
+  "vw_base": 10,
+  "healing": {
+    "natural_rest_min": 1,
+    "extended_rest_days": 3,
+    "extended_rest_multiplier": 2,
+    "first_aid_sg": 10,
+    "first_aid_dice_sides": 6
+  },
+  "dying": {
+    "ko_threshold": 0,
+    "death_threshold": -10,
+    "bleed_per_round": 1
+  },
+  "starting_gold": 500,
+  "combat_status_values": ["active", "incapacitated", "fled", "surrendered", "dead"],
+  "max_time_delta_minutes": 4320,
+  "synopsis_every_n_turns": 20,
+  "max_synopses_in_context": 2,
+  "context_token_targets": {
+    "layer_a": 200, "layer_b": 300, "layer_c": 200, "layer_d": 200, "layer_e": 500
+  }
+}

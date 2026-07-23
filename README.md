@@ -1,41 +1,36 @@
-# NovaTerrum
+# Jotunland — Avarr Solo-RPG
 
-Grimdark Solo-Pen-and-Paper-RPG als Web-App fuer einen einzelnen Spieler.
-Ein LLM ist der Spielleiter (DM) — aber es erzaehlt nicht frei ins Blaue:
-jede Spielmechanik laeuft ueber Tools gegen einen echten, persistenten
-Spielzustand auf Disk.
+Duesteres Low-Fantasy-Solo-Rollenspiel als Web-App: ein Spieler, ein
+LLM als Spielleiter, die Welt **Avarr** (Ostimperium, Jahr 743 IC,
+Essenz statt Magie). Das LLM erzaehlt — aber es rechnet nichts selbst:
+jede Spielmechanik laeuft ueber typisierte Engine-Tools gegen einen
+persistenten Spielstand auf Disk.
 
-## Kernidee
+Begriffe und Regeln: **CONTEXT.md** (Engine-Glossar),
+**world/CONTEXT.md** (Welt-Glossar), **DM.md** (Regelwerk, wird in den
+DM-Prompt geladen), **docs/adr/** (Architektur-Entscheidungen).
 
-Drei Prinzipien tragen das Projekt:
+## Kernprinzipien
 
-1. **Das LLM erzaehlt, der Code rechnet.** Muenzen, HP, XP, Wuerfe,
-   Kampfrunden — alles geht durch typisierte Tools mit Validierung.
-   Das LLM darf keine Zahl behaupten, die nicht durch ein Tool gelaufen
-   ist. Dadurch bleibt der Spielstand konsistent, egal wie das Modell
-   halluziniert.
-2. **Die Welt ist ein Wiki, kein Prompt.** Jeder Ort, NPC, jede Fraktion
-   ist eine Markdown-Datei mit Frontmatter unter `wiki/world/`. Ein
-   6-Schichten-Context-Builder stellt pro Zug genau das Weltwissen
-   zusammen, das die Szene braucht (Canon, Spielstand, gepinnte
-   Eintraege, Ort, anwesende NPCs, Quest-Wissen, letzte Ereignisse).
-   Die Welt waechst im Spiel — neue Eintraege entstehen per Tool und
-   werden sofort Kanon.
-3. **Der Spieler wuerfelt selbst.** Angriffswuerfe blockieren den
-   Agent-Loop: das LLM fordert einen d20 an, die UI zeigt den
-   Wuerfel-Dialog, erst der echte Wurf setzt die Erzaehlung fort.
-   Alles andere wuerfelt der Server.
+1. **Das LLM erzaehlt, der Code rechnet.** Jede Probe laeuft ueber
+   `request_skill_roll` (Skill + Difficulty Tier); der Spieler wuerfelt
+   seinen W20 physisch, die Engine rechnet Ergebnis, Crits und Ticks.
+   Ein regelbasierter Validator prueft jede Erzaehlung (ADR-0001).
+2. **Die Welt ist ein Wiki, kein Prompt.** Markdown mit Frontmatter
+   unter `wiki/world/`, Meter-Koordinaten (3000x3000 km), Hierarchie
+   realm -> region -> city -> zone -> scene. Zwei Schichten: das Wiki
+   ist permanenter Weltkanon; Spielfolgen sind Flags pro Durchlauf
+   (ADR-0002).
+3. **Zeit ist real.** In-Game-Uhr, jede Aktion kostet Minuten, NPCs
+   folgen Zeitplaenen — wer keine Schicht hat, ist nicht da.
 
-## Stack
+## Regelwerk (Kurzfassung)
 
-- Backend: **FastAPI** (`app/main.py`), Python 3.11, keine Datenbank —
-  Markdown-Wiki + per-PC `gamestate.json` auf Disk, atomare Writes
-- Frontend: single-file `app/static/index.html`, inline CSS/JS, kein Framework
-- LLM: unified Adapter (`app/llm_adapter.py`) mit Streaming + Tool-Use
-  ueber drei Provider: **Anthropic**, **Google** (REST), **OpenRouter**
-  (OpenAI-kompatible SSE). Routing ueber Modell-ID-Praefix
-  (`or/...`, `gemini-...`, `claude-...`)
-- Waehrung: 1 gm = 10 sm = 100 kp, Wechselgeld macht das Backend
+W20 + Attributsmod + Skill-Bonus gegen SG 8-20 (7 Tiers), Nat 20/1
+kritisch. 6 Attribute (STR/GES/KON/INT/WEI/CHA), 32 Skills (0-100) mit
+Tick-Steigerung (Learning-by-Doing), 10 Skill-Ups = 1 Level. VW statt
+Verteidigungswurf, Sterben bei 0 HP (Blutung, tot bei -10, endgueltig).
+1 gm = 10 sm = 100 kp, Start 500 kp. Details: DM.md.
 
 ## Start
 
@@ -46,58 +41,39 @@ python3 -m scripts.seed_world
 env $(cat .env | xargs) python3 app/main.py    # Port 3111
 ```
 
-Dann http://127.0.0.1:3111 oeffnen, PC anlegen, losspielen.
-`[META] ...` im Chat gibt Regie-Anweisungen an den DM ohne Erzaehltext.
+Charaktererstellung im Wizard: 78 Attributpunkte, 80 Skillpunkte,
+Klasse als narratives Label mit Startausruestung.
 
-## Regelwerk & Welt
+## Ansichten & Eingabe-Modi
 
-- **DM.md** ist die kanonische Regelquelle (Proben, Kampf, Muenzen,
-  Magie/Duennung, Grimdark-Prinzipien) und wird in den DM-Prompt geladen.
-- Der Seed baut eine **dicht vorkonstruierte Welt** (~210 Eintraege):
-  alle 11 Staedte mit Vierteln, Personen und Institutionen, 12
-  Adelshaeuser, Regionalrecht, Wirtschaftsnetz mit produces/imports,
-  Chroniken und aktive Lore-Hooks. Quelle: `scripts/world_data.py`
-  (versioniert — die Welt ist reproduzierbar).
-
-## Ansichten
-
-- **Chat** — das Spiel selbst, mit Wuerfel-Dialog bei Angriffswuerfen.
-- **Karte** — Regionen und Orte nach Koordinaten.
-- **Netz** — der Wiki-Graph: alle Eintraege als Knoten, Links als
-  Kanten (Force-Layout, Pan/Zoom, Typ-Filter, Suche). Knoten anklicken
-  oeffnet den Editor (Name, Status, Tags, Links, Text) — Aenderungen
-  schreiben direkt in die Markdown-Dateien. `Neu` legt Eintraege an,
-  mit kanonischen Slugs fuer Stadt-Institutionen.
+- **Chat** mit vier Modi: Handeln, Sprechen, DM-Frage (Zeit=0),
+  Korrektur (Zeit=0). Wuerfel-Dialog bei jeder Probe.
+- **Welt** — ein Editor, zwei Layouts:
+  - **Netz**: alle Eintraege als Link-Graph (Force-Layout, Filter, Suche).
+  - **Karte**: koordinatengebundene Eintraege an ihrer Meter-Position,
+    zoombar von Weltkarte bis Stadt. **Klick auf leere Stelle legt einen
+    neuen Eintrag an** (Ort, Zone, Szene, Charakter, Lore, Flora, Fauna),
+    Ziehen verschiebt Koordinaten, Klick auf Knoten oeffnet den Editor —
+    alles schreibt direkt in die Markdown-Dateien.
 
 ## Module
 
 | Modul | Aufgabe |
 |---|---|
-| `app/main.py` | Routen, Agent-Loop mit Continuations, Blocking-Queue fuer Spielerwuerfe, History mit Archiv-Deckel, Session-Protokoll, Wiki-Lint-Fallback |
-| `app/gamestate.py` | Spielstand-Schema, atomare Writes, XP/Level, HP-Status, Coin-Math |
-| `app/tools.py` | Tool-Registry (19 DM-Tools) + Kampf-State-Machine |
-| `app/llm_adapter.py` | Provider-Routing, `stream_with_tools`, Payload-Builder je Provider |
-| `app/wiki_context.py` | 6-Schichten-Context-Builder mit Zeichen-Budgets |
-| `app/wiki_io.py` | Frontmatter-Markdown-IO, kanonische Slugs (Pinpoint-Regel), Journal |
-| `app/wiki_index.py` | Slug-Index-Cache, produced_by/imported_by, Duplikat-Erkennung |
-| `scripts/seed_world.py` | Idempotenter Welt-Seed: Canon, 5 Regionen, 40 Subregionen, 11 Staedte, 5 Factions, 4 Lore |
-| `scripts/generate_wiki.py` | 4-Stufen-City-Pass (geography/people/politics/institutions), Resume, Provider-Fallback, `--dry-run` |
-| `scripts/wiki_lint.py` | dead-link / orphan / bad-slug / duplicate / status-conflict / economy-gap |
-
-## Kampf-Ablauf
-
-```
-start_combat -> pc_turn --request_attack_roll--> awaiting_roll
-                  ^                                  |
-                  |                        (Spieler wuerfelt d20)
-                  +------- Treffer/Fehlschlag <------+
-pc_turn --end_turn--> npc_turn --npc_action*--> end_turn -> Runde+1
-... -> end_combat (XP-Vergabe)
-```
+| `app/main.py` | Routen, Agent-Loop, Blocking-Wuerfe, Validator, History-Deckel |
+| `app/rules.py` | Regel-Engine: Proben, Ticks, Level, VW, Sterben (Config: `app/config/`) |
+| `app/gamestate.py` | Spielstand, Kalender, Coin-Math, Charaktererstellung |
+| `app/tools.py` | 22 DM-Tools inkl. Kampf-State-Machine, Flags, Zeit |
+| `app/llm_adapter.py` | Streaming + Tool-Use fuer Anthropic/Google/OpenRouter |
+| `app/wiki_context.py` | Layer-Kontext mit Flag-Overlay und Zeitplan-Anwesenheit |
+| `app/wiki_io.py` / `wiki_index.py` | Markdown-IO, kanonische Slugs, Index, Duplikat-Erkennung |
+| `scripts/seed_world.py` | Avarr-Import aus `world/data/*.json` (81 Eintraege, idempotent) |
+| `scripts/generate_wiki.py` | 4-Stufen-City-Generator (Resume, Fallback, --dry-run) |
+| `scripts/wiki_lint.py` | 6 Konsistenz-Checks, Exit 1 bei Errors |
 
 ## Tests
 
 ```bash
-python3 -m pytest tests/ -q     # 44 Tests, laufen ohne API-Keys
-python3 -m scripts.wiki_lint    # Welt-Konsistenz
+python3 -m pytest tests/ -q     # 52 Tests, laufen ohne API-Keys
+python3 -m scripts.wiki_lint
 ```

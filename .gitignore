@@ -5,6 +5,7 @@ __pycache__/
 venv/
 .pytest_cache/
 # Laufzeitdaten (Spielstand, Wiki, Verlauf) bleiben lokal —
-# scripts/seed_world.py erzeugt die Welt reproduzierbar neu
-data/
-wiki/
+# scripts/seed_world.py erzeugt die Welt reproduzierbar neu.
+# /data/ nur im Projektroot (nicht world/data/ — das ist Autorenwelt).
+/data/
+/wiki/

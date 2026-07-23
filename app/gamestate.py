@@ -20,12 +20,6 @@ WIKI_DIR = BASE_DIR / "wiki"
 PC_DIR = WIKI_DIR / "pc"
 SETTINGS_PATH = BASE_DIR / "data" / "settings.json"
 
-# --- XP / Level ---------------------------------------------------------
-# Schwelle fuer Level n (Index n-1). Level 1 startet bei 0.
-XP_THRESHOLDS = [0, 100, 300, 600, 1000, 1500, 2100, 2800, 3600, 4500,
-                 5500, 6600, 7800, 9100, 10500]
-MAX_LEVEL = len(XP_THRESHOLDS)
-
 # --- Muenzen ------------------------------------------------------------
 KP_PER_SM = 10
 KP_PER_GM = 100
@@ -124,42 +118,61 @@ def hp_status_tag(hp: int, hp_max: int) -> str:
     return "schwer verwundet"
 
 
-# --- Level --------------------------------------------------------------
+# --- Kalender (12 Monate x 30 Tage, Imperialer Kalender) ----------------
 
-def level_for_xp(xp: int) -> int:
-    level = 1
-    for i, threshold in enumerate(XP_THRESHOLDS, start=1):
-        if xp >= threshold:
-            level = i
-    return min(level, MAX_LEVEL)
+def default_kalender() -> dict:
+    return {"jahr": 743, "monat": 4, "tag": 12, "stunde": 9, "minute": 0}
 
 
-def xp_to_next(xp: int) -> int | None:
-    lvl = level_for_xp(xp)
-    if lvl >= MAX_LEVEL:
-        return None
-    return XP_THRESHOLDS[lvl] - xp
+def advance_kalender(kal: dict, minuten: int) -> dict:
+    total = kal["minute"] + minuten
+    kal["minute"] = total % 60
+    total_h = kal["stunde"] + total // 60
+    kal["stunde"] = total_h % 24
+    total_d = kal["tag"] + total_h // 24
+    kal["tag"] = (total_d - 1) % 30 + 1
+    total_m = kal["monat"] + (total_d - 1) // 30
+    kal["monat"] = (total_m - 1) % 12 + 1
+    kal["jahr"] += (total_m - 1) // 12
+    return kal
+
+
+def format_kalender(kal: dict) -> str:
+    return (f"{kal['tag']:02d}.{kal['monat']:02d}.{kal['jahr']} IC, "
+            f"{kal['stunde']:02d}:{kal['minute']:02d}")
 
 
 # --- PC-Gamestate -------------------------------------------------------
 
 def default_gamestate(name: str, slug: str) -> dict:
+    from . import rules
+    attribute = {a: 13 for a in rules.ATTRS}  # 6x13 = 78 (voller Pool)
+    hp = rules.max_hp_for(attribute, 1)
     return {
         "slug": slug,
         "name": name,
+        "klasse": "Krieger",
+        "hintergrund": "",
         "level": 1,
-        "xp": 0,
-        "hp": 12,
-        "hp_max": 12,
-        "attribute": {"staerke": 0, "geschick": 0, "verstand": 0, "wille": 0},
+        "skill_ups": 0,
+        "attr_punkte_frei": 0,
+        "hp": hp,
+        "hp_max": hp,
+        "attribute": attribute,          # STR/GES/KON/INT/WEI/CHA, 1-20
+        "skills": {},                    # {name: {wert, ticks}}
         "inventar": [],
-        "coins": {"gm": 0, "sm": 2, "kp": 5},
+        "coins": consolidate_coins(500),  # rulebook starting_gold (Kupfer)
         "status_effekte": [],
-        "location": None,           # {"slug": ..., "name": ...}
-        "location_stack": [],       # Pfad von Region bis aktueller Ort
-        "anwesende_npcs": [],       # Slugs
-        "quests": [],               # {id, titel, status, entities}
-        "pinned": [],               # Wiki-Slugs, immer im Kontext
+        "verletzungen": [],              # [{name, modifikator}]
+        "stabilisiert": False,
+        "location": None,                # {"slug": ..., "name": ...}
+        "location_stack": [],            # Realm -> Region -> Stadt -> Zone -> Szene
+        "position": {"x": 2380000, "y": 1200000},
+        "kalender": default_kalender(),
+        "anwesende_npcs": [],            # Slugs (manuelle Overrides)
+        "quests": [],
+        "pinned": [],
+        "world_flags": {},               # {entity_slug: {feld: wert}} — Character-Scope
         "combat": None,
         "erstellt": now_iso(),
         "aktualisiert": now_iso(),
@@ -180,11 +193,29 @@ def save_pc(gs: dict) -> None:
     atomic_write_json(pc_path(gs["slug"]), gs)
 
 
-def create_pc(name: str) -> dict:
+def create_pc(name: str, klasse: str | None = None, hintergrund: str = "",
+              attribute: dict | None = None, skills: dict | None = None) -> dict:
+    """PC anlegen. Mit attribute/skills laeuft die Punktepool-Validierung
+    (78 Attributpunkte, 80 Skillpunkte); ohne gibt es Standardwerte."""
+    from . import rules
     slug = slugify(name)
     if load_pc(slug) is not None:
         raise ValueError(f"PC '{slug}' existiert bereits")
     gs = default_gamestate(name, slug)
+    if klasse:
+        if klasse not in rules.CLASSES:
+            raise ValueError(f"Unbekannte Klasse: {klasse}")
+        gs["klasse"] = klasse
+    gs["hintergrund"] = hintergrund
+    if attribute is not None or skills is not None:
+        errors = rules.validate_creation(attribute or {}, skills or {})
+        if errors:
+            raise ValueError("; ".join(errors))
+        gs["attribute"] = attribute
+        gs["skills"] = {n: {"wert": w, "ticks": 0} for n, w in (skills or {}).items() if w > 0}
+        gs["hp"] = gs["hp_max"] = rules.max_hp_for(attribute, 1)
+    for item in rules.CLASSES[gs["klasse"]]["starting_items"]:
+        gs["inventar"].append({"name": item, "menge": 1, "equipped": True})
     save_pc(gs)
     return gs
 
@@ -201,28 +232,15 @@ def list_pcs() -> list[dict]:
     return result
 
 
-def add_xp(gs: dict, amount: int) -> dict:
-    """XP gutschreiben. Liefert {neue_xp, level, level_up: bool, hp_bonus}."""
-    if amount < 0:
-        raise ValueError("Negatives XP")
-    old_level = gs["level"]
-    gs["xp"] += amount
-    new_level = level_for_xp(gs["xp"])
-    hp_bonus = 0
-    if new_level > old_level:
-        hp_bonus = 3 * (new_level - old_level)
-        gs["hp_max"] += hp_bonus
-        gs["hp"] = gs["hp_max"]  # Level-Up heilt voll
-        gs["level"] = new_level
-    return {"xp": gs["xp"], "level": gs["level"],
-            "level_up": new_level > old_level, "hp_bonus": hp_bonus,
-            "bis_naechstes_level": xp_to_next(gs["xp"])}
-
-
 def adjust_hp(gs: dict, delta: int) -> dict:
+    """HP aendern. Bei Schaden faellt die Stabilisierung weg; unter 0
+    ist der PC sterbend (Blutung), bei -10 tot (rules.is_dead)."""
     gs["hp"] = max(min(gs["hp"] + delta, gs["hp_max"]), -10)
+    if delta < 0:
+        gs["stabilisiert"] = False
     return {"hp": gs["hp"], "hp_max": gs["hp_max"],
-            "status": hp_status_tag(gs["hp"], gs["hp_max"])}
+            "status": hp_status_tag(gs["hp"], gs["hp_max"]),
+            "sterbend": gs["hp"] <= 0}
 
 
 # --- Settings (always-read-from-disk gegen Settings-Race) ---------------

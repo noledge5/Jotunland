@@ -20,7 +20,7 @@ SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 # nur als Teil einer Stadt und muessen von dort verlinkt sein.
 NEVER_ORPHAN = {"character", "noble_house"}
 # Typen, die verwaist sein DUERFEN (Wurzeln der Hierarchie / Meta).
-ORPHAN_OK = {"canon", "region", "lore", "chronicle", "law"}
+ORPHAN_OK = {"canon", "realm", "region", "lore", "chronicle", "law"}
 
 
 def run_lint() -> list[dict]:
@@ -34,14 +34,24 @@ def run_lint() -> list[dict]:
     from app.gamestate import slugify
 
     all_slugs = set(entries)
+    # Regionen sind ueber Slug ODER Namen referenzierbar (id vs name)
+    name_to_slug = {slugify(e["name"]): slug for slug, e in entries.items()}
+
+    def resolve(ref: str | None) -> str | None:
+        if not ref:
+            return None
+        r = slugify(ref)
+        return r if r in all_slugs else name_to_slug.get(r)
+
     linked_from: dict[str, list[str]] = {}
     for slug, e in entries.items():
         for target in e["links"]:
             linked_from.setdefault(target, []).append(slug)
-        # region-Zugehoerigkeit zaehlt als impliziter Link Region -> Eintrag
-        region = e.get("region")
-        if region and slugify(region) in all_slugs:
-            linked_from.setdefault(slug, []).append(slugify(region))
+        # region-/parent-Zugehoerigkeit zaehlt als impliziter Link
+        for ref in (e.get("region"), e.get("parent")):
+            resolved = resolve(ref)
+            if resolved:
+                linked_from.setdefault(slug, []).append(resolved)
 
     for slug, e in entries.items():
         # bad-slug
@@ -60,10 +70,13 @@ def run_lint() -> list[dict]:
             level = "error" if e["type"] in NEVER_ORPHAN else "warning"
             add(level, "orphan", f"'{slug}' ({e['type']}) wird nirgends verlinkt")
 
-        # region-referenz
+        # region-/parent-referenz
         region = e.get("region")
-        if region and slugify(region) not in all_slugs:
+        if region and resolve(region) is None:
             add("warning", "dead-link", f"'{slug}' referenziert unbekannte Region '{region}'")
+        parent = e.get("parent")
+        if parent and resolve(parent) is None:
+            add("warning", "dead-link", f"'{slug}' referenziert unbekannten Parent '{parent}'")
 
     # duplicate (Pinpoint-Slug-Klasse: hartfeld-wache vs stadtwache-hartfeld)
     reported = set()

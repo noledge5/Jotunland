@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -36,34 +37,51 @@ HISTORY_ARCHIVE_CHUNK = 200     # so viele wandern dann ins Archiv
 _pending_responses: dict[str, dict] = {}
 
 
-SYSTEM_PROMPT = """Du bist der Spielleiter (DM) eines grimdark Low-Fantasy-Solo-Rollenspiels.
-Sprache: Deutsch. Ton: duester, konkret, koerperlich — aber nie wahllos grausam.
-Der Spieler steuert genau einen Charakter (PC). Du steuerst Welt und NPCs.
+SYSTEM_PROMPT = """Du bist der Spielleiter (DM) eines duesteren Low-Fantasy-Solo-Rollenspiels
+in der Welt Avarr (Ostimperium, Jahr 743 IC). Sprache: Deutsch. Ton: konkret,
+koerperlich, politisch — nie wahllos grausam. Der Spieler steuert genau einen
+Charakter (PC). Du steuerst Welt und NPCs. Es gibt keine Magie und keine
+Goetter — nur Essenz (selten, teuer, besteuert).
 
-REGELN:
-- Nutze IMMER die Tools fuer Spielmechanik: Muenzen (pay/receive_coins),
-  HP (adjust_hp), XP (add_xp), Inventar, Orte (set_location), Kampf.
-  Erfinde keine Zahlen im Text, die nicht durch ein Tool gelaufen sind.
-- Neue Orte, Personen, Fraktionen: erst add_wiki_entry, dann erzaehlen.
-  Bei Stadt-Institutionen den Parameter 'stadt' setzen.
-- Kampf laeuft ueber die State-Machine: start_combat -> pc_turn
-  (request_attack_roll blockiert bis der Spieler wuerfelt) -> end_turn ->
-  npc_turn (npc_action) -> end_turn -> naechste Runde -> end_combat.
-- Wichtige Wendungen ins Journal (append_journal).
-- Der Spieler wuerfelt selbst nur seine Angriffe (d20). Alles andere
-  wuerfelst du serverseitig mit roll_dice.
+MECHANIK (PFLICHT):
+- JEDE Aktion mit unsicherem Ausgang laeuft ueber request_skill_roll
+  (Skill aus der Skill-Liste + Difficulty Tier). Das Tool blockiert, bis der
+  Spieler seinen W20 physisch wuerfelt; die Engine berechnet Ergebnis, Crits
+  und Ticks. Du loest NIEMALS eine unsichere Aktion nur in Prosa auf.
+- Erfinde keine Zahlen: Muenzen nur ueber pay/receive_coins, HP nur ueber
+  adjust_hp, Zeit nur ueber advance_time/rest. Ein Validator prueft deine
+  Erzaehlung gegen den Spielstand.
+- Nach jeder erzaehlten Aktion advance_time aufrufen (Gespraech 5-15 min,
+  Wege je Distanz, Einkauf 10-30 min).
+- Kampf: start_combat -> pc_turn (request_skill_roll mit ziel+schaden) ->
+  end_turn -> npc_turn (npc_action: Engine wuerfelt gegen den VW des PC) ->
+  end_turn -> naechste Runde. Sterbende bluten. end_combat beendet.
+- NPC-Wissen: Ein NPC weiss nur, was er wissen kann. Kein NPC kennt den
+  Namen des PC vor einer Vorstellung.
+
+WELT (Zwei Schichten):
+- Neue Orte, wichtige Personen, Fraktionen, Flora/Fauna: erst
+  add_wiki_entry (Weltkanon), dann erzaehlen. Situative Klein-NPCs mit
+  scope=charakter. Bei Stadt-Institutionen 'stadt' setzen.
+- Aenderungen an BESTEHENDEN Welt-Eintraegen (zerstoert, Besitzer tot,
+  Ruf verspielt) IMMER ueber set_world_flag — nie update_wiki_entry im Spiel.
+- Ortswechsel ueber set_location, wichtige Wendungen ins Journal.
 
 SZENEN-KONTINUITAET:
-- Bleibe in der aktuellen Szene bis der Spieler sie verlaesst oder ein
-  Tool (set_location) den Ort wechselt.
-- Keine Zeitspruenge, keine neuen Figuren aus dem Nichts, kein Umdeuten
-  etablierter Fakten. Was im Wiki oder Journal steht, ist kanonisch.
-- Antworte knapp: 2-6 Absaetze, dann Handlungsoptionen offen lassen
-  (keine Aufzaehlung von Optionen, der Spieler entscheidet frei).
+- Bleibe in der aktuellen Szene bis der Spieler sie verlaesst. Keine
+  Zeitspruenge ohne advance_time, keine Figuren aus dem Nichts, kein
+  Umdeuten etablierter Fakten. Wiki und Journal sind kanonisch.
+- Antworte knapp: 2-6 Absaetze, dann Handlungsfreiheit lassen (keine
+  Optionslisten).
 
-META:
-- Nachrichten, die mit [META] beginnen, sind Regie-Anweisungen des
-  Spielers an dich — beantworte sie direkt, ohne Erzaehltext."""
+EINGABE-MODI (Prefix der Spieler-Nachricht):
+- [SPRECHEN]: sozialer Zug — Dialog im Fokus, Proben nur bei Druck/Luege.
+- [DM-FRAGE]: Regie-Frage an dich. Antworte direkt aus dem Spielstand,
+  ohne Erzaehltext, ohne Zeitfortschritt, ohne Tools ausser Nachschlagen.
+- [KORREKTUR]: Der Spieler korrigiert einen Fehler deiner letzten
+  Erzaehlung. Uebernimm die Korrektur (noetigenfalls set_world_flag/
+  adjust-Tools), bestaetige kurz, kein Zeitfortschritt.
+- Ohne Prefix: normales Handeln."""
 
 
 def build_system_prompt() -> str:
@@ -116,6 +134,7 @@ def llm_window(history: list[dict], window: int) -> list[dict]:
 
 class ChatIn(BaseModel):
     message: str
+    mode: str = "handeln"  # handeln | sprechen | dm | korrektur
 
 
 class RollIn(BaseModel):
@@ -130,6 +149,10 @@ class SettingsIn(BaseModel):
 
 class PCIn(BaseModel):
     name: str
+    klasse: str | None = None
+    hintergrund: str = ""
+    attribute: dict[str, int] | None = None
+    skills: dict[str, int] | None = None
 
 
 # --- Basis-Routen -------------------------------------------------------
@@ -168,11 +191,26 @@ def get_pcs():
 @app.post("/api/pcs")
 def post_pc(body: PCIn):
     try:
-        gs = gsm.create_pc(body.name)
+        gs = gsm.create_pc(body.name, klasse=body.klasse,
+                           hintergrund=body.hintergrund,
+                           attribute=body.attribute, skills=body.skills)
     except ValueError as e:
-        raise HTTPException(409, str(e))
+        code = 409 if "existiert bereits" in str(e) else 400
+        raise HTTPException(code, str(e))
     gsm.set_active_pc_slug(gs["slug"])
     return gs
+
+
+@app.get("/api/rules")
+def get_rules():
+    from . import rules
+    return {"attrs": list(rules.ATTRS), "skills": list(rules.SKILLS.values()),
+            "classes": rules.CLASSES, "tiers": rules.TIERS,
+            "attr_pool": rules.RULEBOOK["attr_start_pool"],
+            "attr_min": rules.RULEBOOK["attr_start_min"],
+            "attr_max": rules.RULEBOOK["attr_start_max"],
+            "skill_pool": rules.RULEBOOK["skill_start_pool"],
+            "skill_max": rules.RULEBOOK["skill_start_max"]}
 
 
 @app.post("/api/pcs/{slug}/activate")
@@ -186,7 +224,7 @@ def activate_pc(slug: str):
 def get_map():
     idx = wiki_index.get_index()["entries"]
     return [e for e in idx.values()
-            if e["type"] in ("location", "region", "subregion") and e.get("koordinaten")]
+            if e["type"] in tools.COORD_TYPES and e.get("koordinaten")]
 
 
 @app.get("/api/wiki")
@@ -212,8 +250,10 @@ class WikiEditIn(BaseModel):
     name: str | None = None
     status: str | None = None
     region: str | None = None
+    parent: str | None = None
     tags: list[str] | None = None
     links: list[str] | None = None
+    koordinaten: list[int] | None = None
     body: str | None = None
 
 
@@ -224,7 +264,9 @@ class WikiCreateIn(BaseModel):
     slug: str | None = None
     region: str | None = None
     stadt: str | None = None
+    parent: str | None = None
     status: str | None = None
+    koordinaten: list[int] | None = None
 
 
 @app.put("/api/wiki/{slug}")
@@ -258,19 +300,24 @@ def post_wiki(body: WikiCreateIn):
 @app.get("/api/graph")
 def get_graph():
     idx = wiki_index.get_index(force=True)["entries"]
+    active = gsm.load_settings()["active_pc_slug"]
+    # Fremde Character-Scope-Eintraege bleiben unsichtbar (ADR-0002)
+    visible = {s: e for s, e in idx.items()
+               if e.get("scope", "welt") == "welt" or e.get("pc") == active}
     nodes = [{"slug": e["slug"], "name": e["name"], "type": e["type"],
-              "status": e.get("status"), "tags": e.get("tags") or []}
-             for e in idx.values()]
+              "status": e.get("status"), "scope": e.get("scope", "welt"),
+              "koordinaten": e.get("koordinaten"), "tags": e.get("tags") or []}
+             for e in visible.values()]
     edges = set()
-    for e in idx.values():
+    for e in visible.values():
         for target in e["links"]:
-            if target in idx and target != e["slug"]:
+            if target in visible and target != e["slug"]:
                 edges.add(tuple(sorted((e["slug"], target))))
-        region = e.get("region")
-        if region:
-            rslug = gsm.slugify(region)
-            if rslug in idx and rslug != e["slug"]:
-                edges.add(tuple(sorted((e["slug"], rslug))))
+        for rel in (e.get("region"), e.get("parent")):
+            if rel:
+                rslug = gsm.slugify(rel)
+                if rslug in visible and rslug != e["slug"]:
+                    edges.add(tuple(sorted((e["slug"], rslug))))
     return {"nodes": nodes, "edges": sorted(edges)}
 
 
@@ -289,8 +336,8 @@ def _sse(event: dict) -> str:
 
 
 def _quick_lint(user_message: str) -> list[str]:
-    """Wiki-Lint-Fallback nach jedem Zug — aber nicht bei [META]-Regie."""
-    if user_message.startswith("[META]"):
+    """Wiki-Lint-Fallback nach jedem Zug — nicht bei Regie-Nachrichten."""
+    if user_message.startswith(("[META]", "[DM-FRAGE]", "[KORREKTUR]")):
         return []
     try:
         from scripts.wiki_lint import run_lint
@@ -300,8 +347,30 @@ def _quick_lint(user_message: str) -> list[str]:
         return []
 
 
+COIN_RE = re.compile(r"\b(\d+)\s*(kp|sm|gm|kupfer|silber|gold(?:mark)?)\b", re.IGNORECASE)
+HP_RE = re.compile(r"\b(\d+)\s*(?:LP|HP|Lebenspunkte)\b")
+
+
+def validate_narration(text: str, tool_names: list[str], gs: dict) -> list[str]:
+    """Regelbasierter Narrator-Validator (ADR-0001): prueft die Erzaehlung
+    gegen Gamestate und Tool-Calls, ohne LLM."""
+    problems = []
+    if COIN_RE.search(text) and not {"pay", "receive_coins"} & set(tool_names):
+        problems.append("Muenzbetrag erzaehlt, aber kein pay/receive_coins aufgerufen")
+    for m in HP_RE.finditer(text):
+        val = int(m.group(1))
+        if val not in (gs["hp"], gs["hp_max"]):
+            problems.append(f"Erzaehlte HP ({val}) passen nicht zum Spielstand "
+                            f"({gs['hp']}/{gs['hp_max']})")
+            break
+    if not {"advance_time", "rest", "request_skill_roll"} & set(tool_names):
+        problems.append("Kein Zeitfortschritt in diesem Zug (advance_time fehlt)")
+    return problems
+
+
 async def _agent_stream(pc_slug: str, history: list[dict],
-                        resume_tool_result: dict | None = None):
+                        resume_tool_result: dict | None = None,
+                        mode: str = "handeln"):
     """Der eigentliche Agent-Loop. Streamt SSE-Events, fuehrt Tools aus,
     macht Continuations bis das LLM fertig ist oder ein Blocking-Tool
     auf den Spieler wartet."""
@@ -317,6 +386,8 @@ async def _agent_stream(pc_slug: str, history: list[dict],
                         "name": resume_tool_result["name"],
                         "content": resume_tool_result["content"]})
 
+    turn_text = ""
+    turn_tools: list[str] = []
     try:
         for _round in range(MAX_CONTINUATIONS):
             system = build_system_prompt() + "\n\n" + wiki_context.build_context(gs)
@@ -335,6 +406,8 @@ async def _agent_stream(pc_slug: str, history: list[dict],
                 elif ev["type"] == "stop":
                     stop_reason = ev["reason"]
 
+            turn_text += assistant_text
+            turn_tools += [t["name"] for t in tool_calls]
             history.append({"role": "assistant", "content": assistant_text,
                             "tool_calls": [{"id": t["id"], "name": t["name"],
                                             "args": t["args"]} for t in tool_calls]})
@@ -350,8 +423,9 @@ async def _agent_stream(pc_slug: str, history: list[dict],
                         "tool_call_id": tc["id"], "name": tc["name"]}
                     gsm.save_pc(gs)
                     save_history(pc_slug, history)
-                    yield _sse({"type": "awaiting_roll",
-                                "pending": gs["combat"]["pending_roll"]})
+                    pending = ((gs.get("combat") or {}).get("pending_roll")
+                               or gs.get("pending_roll"))
+                    yield _sse({"type": "awaiting_roll", "pending": pending})
                     blocked = True
                     break
                 yield _sse({"type": "tool", "name": tc["name"],
@@ -366,12 +440,20 @@ async def _agent_stream(pc_slug: str, history: list[dict],
 
     gsm.save_pc(gs)
     save_history(pc_slug, history)
+    if mode in ("handeln", "sprechen") and turn_text.strip():
+        problems = validate_narration(turn_text, turn_tools, gs)
+        if problems:
+            yield _sse({"type": "validator", "problems": problems})
     last_user = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
     lint = _quick_lint(last_user if isinstance(last_user, str) else "")
     if lint:
         yield _sse({"type": "lint", "problems": lint})
     yield _sse({"type": "gamestate", "pc": gsm.load_pc(pc_slug)})
     yield _sse({"type": "done"})
+
+
+MODE_PREFIX = {"handeln": "", "sprechen": "[SPRECHEN] ",
+               "dm": "[DM-FRAGE] ", "korrektur": "[KORREKTUR] "}
 
 
 @app.post("/api/chat")
@@ -382,9 +464,11 @@ async def chat(body: ChatIn):
         raise HTTPException(400, "Kein aktiver PC. Erst /api/pcs anlegen.")
     if pc_slug in _pending_responses:
         raise HTTPException(409, "Es steht noch ein Wuerfelwurf aus (/api/roll).")
+    if body.mode not in MODE_PREFIX:
+        raise HTTPException(400, f"Unbekannter Modus '{body.mode}'.")
     history = load_history(pc_slug)
-    history.append({"role": "user", "content": body.message})
-    return StreamingResponse(_agent_stream(pc_slug, history),
+    history.append({"role": "user", "content": MODE_PREFIX[body.mode] + body.message})
+    return StreamingResponse(_agent_stream(pc_slug, history, mode=body.mode),
                              media_type="text/event-stream")
 
 

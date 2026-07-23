@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NovaTerrum</title>
+<title>Jotunland — Avarr</title>
 <link rel="icon" href="data:,">
 <style>
   :root {
@@ -39,11 +39,20 @@
   .msg.tool { font-family: monospace; font-size: 12px; color: var(--dim); }
   .msg.error { color: var(--red); font-family: monospace; font-size: 13px; }
   .msg.lint { color: #8a6d3b; font-family: monospace; font-size: 12px; }
-  #inputbar { display: flex; gap: 8px; padding: 10px 14px; background: var(--panel); border-top: 1px solid var(--border); }
-  #inputbar textarea {
+  #inputbar { padding: 8px 14px 10px; background: var(--panel); border-top: 1px solid var(--border); }
+  #modes { display: flex; gap: 6px; margin-bottom: 6px; }
+  .modebtn { font-size: 12px; padding: 3px 10px; color: var(--dim); }
+  .modebtn.active { border-color: var(--gold); color: var(--gold); }
+  #inputrow { display: flex; gap: 8px; }
+  #inputrow textarea {
     flex: 1; resize: none; height: 58px; background: var(--panel2); color: var(--text);
     border: 1px solid var(--border); padding: 8px; font: inherit; border-radius: 3px;
   }
+  .laybtn { font-size: 12px; }
+  .laybtn.active { border-color: var(--gold); color: var(--gold); }
+  .wizgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px 10px; font-size: 12px; }
+  .wizgrid label { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .wizgrid input { width: 52px; text-align: center; }
   aside {
     width: 290px; background: var(--panel); border-left: 1px solid var(--border);
     padding: 14px; overflow-y: auto; font-size: 13px;
@@ -56,26 +65,23 @@
   .tag { display: inline-block; background: var(--panel2); border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; margin: 2px 2px 0 0; font-size: 12px; }
   #combatbox { border: 1px solid var(--red); border-radius: 3px; padding: 8px; margin-top: 6px; display: none; }
   #combatbox.active { display: block; }
-  /* Wuerfel-Dialog */
-  #rolldlg {
+  /* Modale Dialoge */
+  .modal, #rolldlg {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65);
     align-items: center; justify-content: center; z-index: 10;
   }
-  #rolldlg.open { display: flex; }
-  #rolldlg .box {
+  .modal.open, #rolldlg.open { display: flex; }
+  .modal .box, #rolldlg .box {
     background: var(--panel); border: 1px solid var(--gold); border-radius: 4px;
     padding: 22px; width: 340px; text-align: center;
   }
-  #rolldlg .box h3 { color: var(--gold); margin-bottom: 8px; font-weight: normal; }
+  .modal .box h3, #rolldlg .box h3 { color: var(--gold); margin-bottom: 8px; font-weight: normal; }
   #rolldlg .die { font-size: 42px; color: var(--gold); margin: 10px 0; font-family: Georgia, serif; }
-  /* Karte */
-  #mapview { display: none; flex: 1; padding: 10px; }
-  #mapview.open { display: block; }
-  #mapview svg { width: 100%; height: 100%; background: #171310; border: 1px solid var(--border); border-radius: 4px; }
-  .maplabel { fill: var(--dim); font-size: 10px; font-family: Georgia, serif; }
-  .mapdot { fill: var(--gold); }
-  .mapregion { fill: var(--accent); }
-  /* Netz (Wiki-Graph) */
+  .modal select, .modal input, .modal textarea {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    padding: 6px; font: inherit; font-size: 13px; border-radius: 3px;
+  }
+  /* Netz / Karte (Wiki-Graph) */
   #graphview { display: none; flex: 1; min-height: 0; }
   #graphview.open { display: flex; }
   #graphwrap { flex: 1; padding: 10px; min-width: 0; position: relative; }
@@ -111,11 +117,10 @@
 </head>
 <body>
 <header>
-  <h1>NOVATERRUM</h1>
+  <h1>JOTUNLAND</h1>
   <select id="pcsel" title="Charakter"></select>
   <button id="newpc">Neuer PC</button>
-  <button id="mapbtn">Karte</button>
-  <button id="graphbtn">Netz</button>
+  <button id="graphbtn">Welt</button>
   <button id="protbtn" title="Session-Protokoll ins Journal schreiben">Protokoll</button>
   <div class="spacer"></div>
   <input type="text" id="model" size="30" title="Modell-ID (or/..., gemini-..., claude-...)">
@@ -124,11 +129,12 @@
 <main>
   <div id="chatcol">
     <div id="log"></div>
-    <div id="mapview"><svg id="mapsvg" viewBox="0 0 800 720"></svg></div>
     <div id="graphview">
       <div id="graphwrap">
         <svg id="graphsvg"></svg>
         <div id="graphtools">
+          <button id="layout-netz" class="laybtn active">Netz</button>
+          <button id="layout-karte" class="laybtn">Karte</button>
           <input type="text" id="graphsearch" placeholder="Suche...">
           <button id="gnew" title="Neuen Eintrag anlegen">Neu</button>
         </div>
@@ -136,12 +142,58 @@
       <div id="editor"></div>
     </div>
     <div id="inputbar">
-      <textarea id="inp" placeholder="Was tust du? ([META] fuer Regie-Anweisungen)"></textarea>
-      <button id="send" class="primary">Senden</button>
+      <div id="modes">
+        <button class="modebtn active" data-mode="handeln">Handeln</button>
+        <button class="modebtn" data-mode="sprechen">Sprechen</button>
+        <button class="modebtn" data-mode="dm">DM-Frage</button>
+        <button class="modebtn" data-mode="korrektur">Korrektur</button>
+      </div>
+      <div id="inputrow">
+        <textarea id="inp" placeholder="Was tust du?"></textarea>
+        <button id="send" class="primary">Senden</button>
+      </div>
     </div>
   </div>
   <aside id="sidebar"></aside>
 </main>
+
+<div id="newdlg" class="modal">
+  <div class="box" style="width:380px; text-align:left;">
+    <h3>Neuer Eintrag</h3>
+    <div id="newdlg-coords" style="color:var(--dim); font-size:12px; margin-bottom:8px;"></div>
+    <select id="nd-type">
+      <option value="location">Ort</option><option value="city">Stadt</option>
+      <option value="zone">Zone</option><option value="scene">Szene</option>
+      <option value="character">Charakter</option><option value="lore">Lore</option>
+      <option value="flora">Flora</option><option value="fauna">Fauna</option>
+      <option value="faction">Fraktion</option>
+    </select>
+    <input type="text" id="nd-name" placeholder="Name" style="width:100%; margin:6px 0;">
+    <textarea id="nd-body" placeholder="Beschreibung" style="width:100%; min-height:90px;"></textarea>
+    <div style="margin-top:10px; display:flex; gap:8px; justify-content:flex-end;">
+      <button id="nd-cancel">Abbrechen</button>
+      <button id="nd-save" class="primary">Anlegen</button>
+    </div>
+  </div>
+</div>
+
+<div id="wizdlg" class="modal">
+  <div class="box" style="width:560px; max-height:88vh; overflow-y:auto; text-align:left;">
+    <h3>Neuer Charakter</h3>
+    <input type="text" id="wz-name" placeholder="Name (Pflicht)" style="width:100%; margin:6px 0;">
+    <select id="wz-klasse" style="width:100%;"></select>
+    <textarea id="wz-hg" placeholder="Hintergrund (optional, nur Flavor)" style="width:100%; min-height:50px; margin:6px 0;"></textarea>
+    <h4 style="color:var(--gold); margin:10px 0 4px;">Attribute — Pool: <span id="wz-apool"></span></h4>
+    <div id="wz-attrs" class="wizgrid"></div>
+    <h4 style="color:var(--gold); margin:10px 0 4px;">Skills — Pool: <span id="wz-spool"></span></h4>
+    <div id="wz-skills" class="wizgrid"></div>
+    <div id="wz-err" style="color:var(--red); font-size:12px; margin-top:6px;"></div>
+    <div style="margin-top:10px; display:flex; gap:8px; justify-content:flex-end;">
+      <button id="wz-cancel">Abbrechen</button>
+      <button id="wz-save" class="primary">Erstellen</button>
+    </div>
+  </div>
+</div>
 
 <div id="rolldlg">
   <div class="box">
@@ -192,23 +244,39 @@ async function refreshState() {
   return s;
 }
 
+function fmtKal(k) {
+  if (!k) return '';
+  const p = n => String(n).padStart(2, '0');
+  return `${p(k.tag)}.${p(k.monat)}.${k.jahr} IC — ${p(k.stunde)}:${p(k.minute)}`;
+}
+
 function renderSidebar(pc) {
   const sb = $('sidebar');
   if (!pc) { sb.innerHTML = '<h2>Kein aktiver Charakter</h2><p style="color:var(--dim)">Lege oben einen PC an.</p>'; return; }
   const hpPct = Math.max(0, Math.min(100, pc.hp / pc.hp_max * 100));
   const coins = pc.coins || {};
   const fmtCoins = ['gm','sm','kp'].map(k => coins[k] ? coins[k] + ' ' + k : '').filter(Boolean).join(' ') || '0 kp';
-  let html = `<h2>${pc.name} — Level ${pc.level}</h2>
+  const mod = v => { const m = Math.floor((v - 10) / 2); return m >= 0 ? '+' + m : m; };
+  let html = `<h2>${pc.name} — ${pc.klasse || ''}, Level ${pc.level}</h2>
+    <div class="stat"><span>Zeit</span><span>${fmtKal(pc.kalender)}</span></div>
     <div class="stat"><span>HP</span><span>${pc.hp}/${pc.hp_max} (${pc.hp_status || ''})</span></div>
-    <div class="hpbar"><div style="width:${hpPct}%"></div></div>
-    <div class="stat"><span>XP</span><span>${pc.xp}</span></div>
+    <div class="hpbar"><div style="width:${hpPct}%${pc.hp <= 0 ? ';background:var(--red)' : ''}"></div></div>`;
+  if (pc.hp <= 0 && !pc.stabilisiert) html += `<div style="color:var(--red)">STERBEND — blutet jede Runde</div>`;
+  html += `<div class="stat"><span>Skill-Ups</span><span>${pc.skill_ups || 0} (Level bei ${(pc.level) * 10})</span></div>
     <div class="stat"><span>Boerse</span><span>${fmtCoins}</span></div>`;
+  if (pc.attr_punkte_frei) html += `<div class="stat" style="color:var(--gold)"><span>Freie Attributpunkte</span><span>${pc.attr_punkte_frei}</span></div>`;
   const attr = pc.attribute || {};
   html += '<h2>Attribute</h2>' + Object.entries(attr).map(([k,v]) =>
-    `<div class="stat"><span>${k}</span><span>${v >= 0 ? '+' + v : v}</span></div>`).join('');
+    `<div class="stat"><span>${k}</span><span>${v} (${mod(v)})</span></div>`).join('');
+  const skills = Object.entries(pc.skills || {}).filter(([,s]) => s.wert > 0)
+    .sort((a,b) => b[1].wert - a[1].wert);
+  if (skills.length) html += '<h2>Skills</h2>' + skills.map(([n,s]) =>
+    `<div class="stat"><span>${n}</span><span>${s.wert} <span style="color:var(--dim)">(${s.ticks}t)</span></span></div>`).join('');
   if (pc.location) html += `<h2>Ort</h2><div>${pc.location.name}</div>`;
+  const verl = pc.verletzungen || [];
+  if (verl.length) html += '<h2>Verletzungen</h2>' + verl.map(v => `<span class="tag">${v.name} (${v.modifikator})</span>`).join('');
   const inv = pc.inventar || [];
-  if (inv.length) html += '<h2>Inventar</h2>' + inv.map(i => `<span class="tag">${i.name} x${i.menge || 1}</span>`).join('');
+  if (inv.length) html += '<h2>Inventar</h2>' + inv.map(i => `<span class="tag">${i.name} x${i.menge || 1}${i.equipped ? ' ✦' : ''}</span>`).join('');
   const fx = pc.status_effekte || [];
   if (fx.length) html += '<h2>Status</h2>' + fx.map(e => `<span class="tag">${e}</span>`).join('');
   const quests = (pc.quests || []).filter(q => q.status !== 'abgeschlossen');
@@ -248,6 +316,8 @@ async function consumeStream(response, dmDiv) {
         renderSidebar(ev.pc);
       } else if (ev.type === 'lint') {
         el('lint', 'Wiki-Lint: ' + ev.problems.join(' | '));
+      } else if (ev.type === 'validator') {
+        el('lint', 'Validator: ' + ev.problems.join(' | '));
       } else if (ev.type === 'error') {
         el('error', 'Fehler: ' + ev.error);
       }
@@ -255,14 +325,24 @@ async function consumeStream(response, dmDiv) {
   }
 }
 
+let currentMode = 'handeln';
+document.querySelectorAll('.modebtn').forEach(b => b.onclick = () => {
+  currentMode = b.dataset.mode;
+  document.querySelectorAll('.modebtn').forEach(x => x.classList.toggle('active', x === b));
+  $('inp').placeholder = {handeln: 'Was tust du?', sprechen: 'Was sagst du?',
+    dm: 'Frage an den Spielleiter (kein Zeitfortschritt)',
+    korrektur: 'Was war falsch an der letzten Erzaehlung?'}[currentMode];
+});
+
 async function send() {
   const text = $('inp').value.trim();
   if (!text || streaming) return;
   $('inp').value = '';
-  el('user', text);
+  el('user', (currentMode !== 'handeln' ? `[${currentMode.toUpperCase()}] ` : '') + text);
   streaming = true; $('send').disabled = true;
   try {
-    const r = await api('/api/chat', {method: 'POST', body: JSON.stringify({message: text})});
+    const r = await api('/api/chat', {method: 'POST',
+      body: JSON.stringify({message: text, mode: currentMode})});
     await consumeStream(r, null);
   } catch (e) { el('error', e.message); }
   streaming = false; $('send').disabled = false;
@@ -270,9 +350,10 @@ async function send() {
 
 // --- Wuerfel ---
 function openRollDialog(pending) {
-  $('rollinfo').textContent =
-    `Ziel: ${pending.ziel} — Modifikator ${pending.modifikator >= 0 ? '+' : ''}${pending.modifikator}, ` +
-    `Schwierigkeit ${pending.schwierigkeit}` + (pending.beschreibung ? ' — ' + pending.beschreibung : '');
+  let info = `${pending.skill} — ${pending.tier} (SG ${pending.sg})`;
+  if (pending.ziel) info += ` — Angriff auf ${pending.ziel}`;
+  if (pending.beschreibung) info += ' — ' + pending.beschreibung;
+  $('rollinfo').textContent = info;
   $('rollval').value = '';
   $('rolldlg').classList.add('open');
 }
@@ -296,39 +377,28 @@ $('autoroll').onclick = () => {
   setTimeout(() => submitRoll(v), 600);
 };
 
-// --- Ansichten: chat / map / graph ---
+// --- Ansichten: chat / graph (Netz+Karte) ---
 let view = 'chat';
 function showView(v) {
   view = v;
   $('log').style.display = v === 'chat' ? '' : 'none';
   $('inputbar').style.display = v === 'chat' ? '' : 'none';
-  $('mapview').classList.toggle('open', v === 'map');
   $('graphview').classList.toggle('open', v === 'graph');
-  $('mapbtn').textContent = v === 'map' ? 'Chat' : 'Karte';
-  $('graphbtn').textContent = v === 'graph' ? 'Chat' : 'Netz';
+  $('graphbtn').textContent = v === 'graph' ? 'Chat' : 'Welt';
 }
-$('mapbtn').onclick = async () => {
-  if (view === 'map') return showView('chat');
-  showView('map');
-  const entries = await (await api('/api/map')).json();
-  const svg = $('mapsvg');
-  svg.innerHTML = entries.map(e => {
-    const [x, y] = e.koordinaten;
-    const r = e.type === 'region' ? 7 : (e.tags || []).includes('hauptstadt') ? 5 : 3;
-    const cls = e.type === 'region' ? 'mapregion' : 'mapdot';
-    return `<circle class="${cls}" cx="${x}" cy="${y}" r="${r}"><title>${e.name}</title></circle>` +
-           `<text class="maplabel" x="${x + 8}" y="${y + 3}">${e.name}</text>`;
-  }).join('');
-};
 
-// --- Netz: Wiki-Graph mit Force-Layout und Editor ---
+// --- Welt-Editor: EIN Editor, zwei Layouts (Netz = Link-Graph,
+//     Karte = Meter-Koordinaten). Klick auf leere Kartenstelle legt an.
 const TYPE_COLORS = {
-  canon: '#d4c9a0', region: '#b8963f', subregion: '#6e5f3d', location: '#5d7a4c',
+  canon: '#d4c9a0', realm: '#d4a017', region: '#b8963f', city: '#c8a040',
+  zone: '#8a7a45', scene: '#6e5f3d', location: '#5d7a4c',
   character: '#5c7a9c', faction: '#a33b2e', noble_house: '#8a5c9c',
   lore: '#b8863f', economy: '#4c8a7a', law: '#8a8a7a', chronicle: '#707070',
+  flora: '#4c8a4c', fauna: '#8a6a3c',
 };
-let G = {nodes: [], edges: [], adj: {}, sel: null, hiddenTypes: new Set(['subregion']),
-         vb: {x: 0, y: 0, w: 1200, h: 900}, anim: null};
+const M2U = 2500;  // Meter pro viewBox-Einheit (3.000 km -> 1200 Einheiten)
+let G = {nodes: [], edges: [], adj: {}, sel: null, hiddenTypes: new Set(['scene']),
+         layout: 'netz', vb: {x: 0, y: 0, w: 1200, h: 900}, anim: null};
 
 async function openGraph() {
   showView('graph');
@@ -358,8 +428,31 @@ async function openGraph() {
 function visibleNodes() {
   const q = $('graphsearch').value.trim().toLowerCase();
   return G.nodes.filter(n => !G.hiddenTypes.has(n.type) &&
+    (G.layout !== 'karte' || n.koordinaten) &&
     (!q || n.slug.includes(q) || n.name.toLowerCase().includes(q)));
 }
+
+function nodePos(n) {
+  if (G.layout === 'karte' && n.koordinaten)
+    return {x: n.koordinaten[0] / M2U, y: 1200 - n.koordinaten[1] / M2U};
+  return {x: n.x, y: n.y};
+}
+
+function setLayout(l) {
+  G.layout = l;
+  $('layout-netz').classList.toggle('active', l === 'netz');
+  $('layout-karte').classList.toggle('active', l === 'karte');
+  if (l === 'karte') {
+    if (G.anim) cancelAnimationFrame(G.anim);
+    G.vb = {x: 770, y: 290, w: 400, h: 460};  // Start: Ostimperium komplett
+    renderGraph();
+  } else {
+    G.vb = {x: 0, y: 0, w: 1200, h: 900};
+    runSim(60);
+  }
+}
+$('layout-netz').onclick = () => setLayout('netz');
+$('layout-karte').onclick = () => setLayout('karte');
 
 function runSim(ticks) {
   if (G.anim) cancelAnimationFrame(G.anim);
@@ -413,21 +506,29 @@ function renderGraph() {
   svg.setAttribute('viewBox', `${G.vb.x} ${G.vb.y} ${G.vb.w} ${G.vb.h}`);
   const vis = new Set(visibleNodes().map(n => n.slug));
   const selAdj = G.sel ? new Set([G.sel, ...(G.adj[G.sel] || [])]) : null;
+  const karte = G.layout === 'karte';
+  const scale = G.vb.w / 1200;
   let out = '';
   for (const [a, b] of G.edges) {
     if (!vis.has(a) || !vis.has(b)) continue;
-    const na = G.bySlug[a], nb = G.bySlug[b];
+    const pa = nodePos(G.bySlug[a]), pb = nodePos(G.bySlug[b]);
     const hl = G.sel && (a === G.sel || b === G.sel);
-    out += `<line class="gedge${hl ? ' hl' : ''}" x1="${na.x.toFixed(1)}" y1="${na.y.toFixed(1)}" x2="${nb.x.toFixed(1)}" y2="${nb.y.toFixed(1)}"/>`;
+    if (karte && !hl) continue;  // Karte: nur Kanten der Auswahl
+    out += `<line class="gedge${hl ? ' hl' : ''}" x1="${pa.x.toFixed(1)}" y1="${pa.y.toFixed(1)}" x2="${pb.x.toFixed(1)}" y2="${pb.y.toFixed(1)}"/>`;
   }
   const zoomed = G.vb.w < 900;
   for (const n of G.nodes) {
     if (!vis.has(n.slug)) continue;
+    const p = nodePos(n);
     const dim = selAdj && !selAdj.has(n.slug);
-    const r = 4 + Math.min(Math.sqrt(n.deg) * 2, 10);
-    out += `<circle class="gnode${n.slug === G.sel ? ' sel' : ''}" data-slug="${n.slug}" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${r}" fill="${TYPE_COLORS[n.type] || '#888'}" opacity="${dim ? 0.25 : 1}"><title>${n.name} [${n.type}]</title></circle>`;
-    if (zoomed || n.deg >= 6 || n.slug === G.sel)
-      out += `<text class="glabel" x="${(n.x + r + 2).toFixed(1)}" y="${(n.y + 3).toFixed(1)}" opacity="${dim ? 0.25 : 1}">${n.name}</text>`;
+    const base = karte ? ({realm: 8, region: 6, city: 5, zone: 3.5, scene: 2.5}[n.type] || 3) * scale * 2
+                       : 4 + Math.min(Math.sqrt(n.deg) * 2, 10);
+    const r = Math.max(karte ? base : base, 1.5);
+    out += `<circle class="gnode${n.slug === G.sel ? ' sel' : ''}" data-slug="${n.slug}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r.toFixed(1)}" fill="${TYPE_COLORS[n.type] || '#888'}" opacity="${dim ? 0.25 : 1}"><title>${n.name} [${n.type}]</title></circle>`;
+    const label = karte ? (zoomed || ['realm', 'region', 'city'].includes(n.type) || n.slug === G.sel)
+                        : (zoomed || n.deg >= 6 || n.slug === G.sel);
+    if (label)
+      out += `<text class="glabel" x="${(p.x + r + 2).toFixed(1)}" y="${(p.y + 3).toFixed(1)}" font-size="${karte ? Math.max(9 * scale, 2).toFixed(1) : 9}" opacity="${dim ? 0.25 : 1}">${n.name}</text>`;
   }
   svg.innerHTML = out;
 }
@@ -462,26 +563,46 @@ function buildTypeFilter() {
   svg.addEventListener('mousedown', ev => {
     const slug = ev.target.dataset && ev.target.dataset.slug;
     if (slug) { drag = {n: G.bySlug[slug], moved: false}; drag.n.pinned = true; }
-    else { pan = {x: ev.clientX, y: ev.clientY, vx: G.vb.x, vy: G.vb.y}; svg.classList.add('panning'); }
+    else { pan = {x: ev.clientX, y: ev.clientY, vx: G.vb.x, vy: G.vb.y, moved: false}; svg.classList.add('panning'); }
   });
   svg.addEventListener('mousemove', ev => {
     if (drag) {
       const p = pt(ev);
-      drag.n.x = p.x; drag.n.y = p.y; drag.moved = true;
+      if (G.layout === 'karte') {
+        if (!drag.n.koordinaten) return;
+        drag.n.koordinaten = [Math.round(p.x * M2U), Math.round((1200 - p.y) * M2U)];
+      } else { drag.n.x = p.x; drag.n.y = p.y; }
+      drag.moved = true;
       renderGraph();
     } else if (pan) {
       const r = svg.getBoundingClientRect();
-      G.vb.x = pan.vx - (ev.clientX - pan.x) / r.width * G.vb.w;
-      G.vb.y = pan.vy - (ev.clientY - pan.y) / r.height * G.vb.h;
+      const nx = pan.vx - (ev.clientX - pan.x) / r.width * G.vb.w;
+      const ny = pan.vy - (ev.clientY - pan.y) / r.height * G.vb.h;
+      if (Math.abs(nx - G.vb.x) + Math.abs(ny - G.vb.y) > 0.5) pan.moved = true;
+      G.vb.x = nx; G.vb.y = ny;
       renderGraph();
     }
   });
-  window.addEventListener('mouseup', ev => {
+  window.addEventListener('mouseup', async ev => {
     if (drag) {
       if (!drag.moved) selectNode(drag.n.slug);
+      else if (G.layout === 'karte' && drag.n.koordinaten) {
+        // Verschieben auf der Karte = Koordinaten speichern
+        try { await api('/api/wiki/' + drag.n.slug, {method: 'PUT',
+          body: JSON.stringify({koordinaten: drag.n.koordinaten})}); } catch {}
+      }
       drag.n.pinned = false; drag = null;
+      return;
     }
-    if (pan) { pan = null; svg.classList.remove('panning'); }
+    if (pan) {
+      const wasClick = !pan.moved;
+      pan = null; svg.classList.remove('panning');
+      // Klick auf leere Kartenstelle -> neuen Eintrag hier anlegen
+      if (wasClick && G.layout === 'karte' && ev.target.tagName === 'svg') {
+        const p = pt(ev);
+        openNewDialog([Math.round(p.x * M2U), Math.round((1200 - p.y) * M2U)]);
+      }
+    }
   });
   svg.addEventListener('wheel', ev => {
     ev.preventDefault();
@@ -560,15 +681,27 @@ async function openGraphRefresh() {
 
 $('graphbtn').onclick = () => view === 'graph' ? showView('chat') : openGraph();
 $('graphsearch').oninput = () => renderGraph();
-$('gnew').onclick = async () => {
-  const name = prompt('Name des neuen Eintrags:');
+
+// --- Neuer Eintrag (Dialog, optional mit Kartenkoordinaten) ---
+let newCoords = null;
+function openNewDialog(coords) {
+  newCoords = coords || null;
+  $('newdlg-coords').textContent = coords
+    ? `Position: x=${(coords[0] / 1000).toFixed(1)} km, y=${(coords[1] / 1000).toFixed(1)} km`
+    : 'Ohne Koordinaten (nur im Netz sichtbar)';
+  $('nd-name').value = ''; $('nd-body').value = '';
+  $('newdlg').classList.add('open');
+}
+$('gnew').onclick = () => openNewDialog(null);
+$('nd-cancel').onclick = () => $('newdlg').classList.remove('open');
+$('nd-save').onclick = async () => {
+  const name = $('nd-name').value.trim();
   if (!name) return;
-  const type = prompt('Typ (location/character/faction/noble_house/lore/economy/law/chronicle):', 'location');
-  if (!type) return;
-  const stadt = prompt('Stadt (fuer Institutionen, sonst leer):') || undefined;
+  const payload = {type: $('nd-type').value, name, body: $('nd-body').value || '...'};
+  if (newCoords) payload.koordinaten = newCoords;
   try {
-    const r = await (await api('/api/wiki', {method: 'POST', body: JSON.stringify(
-      {type, name, body: '...', stadt})})).json();
+    const r = await (await api('/api/wiki', {method: 'POST', body: JSON.stringify(payload)})).json();
+    $('newdlg').classList.remove('open');
     await openGraphRefresh();
     selectNode(r.angelegt);
   } catch (err) { alert(err.message); }
@@ -586,11 +719,41 @@ $('savemodel').onclick = async () => {
 $('pcsel').onchange = async () => {
   if ($('pcsel').value) { await api(`/api/pcs/${$('pcsel').value}/activate`, {method: 'POST'}); refreshState(); }
 };
+// --- Charakter-Wizard (Punktepools aus dem Rulebook) ---
+let RULES = null;
 $('newpc').onclick = async () => {
-  const name = prompt('Name des Charakters:');
-  if (!name) return;
-  try { await api('/api/pcs', {method: 'POST', body: JSON.stringify({name})}); refreshState(); }
-  catch (e) { el('error', e.message); }
+  if (!RULES) RULES = await (await api('/api/rules')).json();
+  $('wz-klasse').innerHTML = Object.entries(RULES.classes).map(([k, c]) =>
+    `<option value="${k}">${k} — ${c.starting_items.join(', ')}</option>`).join('');
+  $('wz-attrs').innerHTML = RULES.attrs.map(a =>
+    `<label>${a}<input type="number" class="wz-attr" data-attr="${a}" value="13" min="${RULES.attr_min}" max="${RULES.attr_max}"></label>`).join('');
+  $('wz-skills').innerHTML = RULES.skills.map(s =>
+    `<label title="${s.attrs.join('/')}">${s.name}<input type="number" class="wz-skill" data-skill="${s.name}" value="0" min="0" max="${RULES.skill_max}"></label>`).join('');
+  const updatePools = () => {
+    const asum = [...document.querySelectorAll('.wz-attr')].reduce((t, i) => t + (+i.value || 0), 0);
+    const ssum = [...document.querySelectorAll('.wz-skill')].reduce((t, i) => t + (+i.value || 0), 0);
+    $('wz-apool').textContent = `${asum}/${RULES.attr_pool}`;
+    $('wz-apool').style.color = asum === RULES.attr_pool ? 'var(--green)' : 'var(--red)';
+    $('wz-spool').textContent = `${ssum}/${RULES.skill_pool}`;
+    $('wz-spool').style.color = ssum <= RULES.skill_pool ? 'var(--green)' : 'var(--red)';
+  };
+  document.querySelectorAll('.wz-attr, .wz-skill').forEach(i => i.oninput = updatePools);
+  updatePools();
+  $('wz-err').textContent = '';
+  $('wizdlg').classList.add('open');
+};
+$('wz-cancel').onclick = () => $('wizdlg').classList.remove('open');
+$('wz-save').onclick = async () => {
+  const attribute = {}, skills = {};
+  document.querySelectorAll('.wz-attr').forEach(i => attribute[i.dataset.attr] = +i.value || 0);
+  document.querySelectorAll('.wz-skill').forEach(i => { if (+i.value > 0) skills[i.dataset.skill] = +i.value; });
+  try {
+    await api('/api/pcs', {method: 'POST', body: JSON.stringify({
+      name: $('wz-name').value.trim(), klasse: $('wz-klasse').value,
+      hintergrund: $('wz-hg').value.trim(), attribute, skills})});
+    $('wizdlg').classList.remove('open');
+    refreshState();
+  } catch (e) { $('wz-err').textContent = e.message; }
 };
 $('protbtn').onclick = async () => {
   el('tool', 'Erzeuge Session-Protokoll ...');
