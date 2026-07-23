@@ -66,6 +66,15 @@ META:
   Spielers an dich — beantworte sie direkt, ohne Erzaehltext."""
 
 
+def build_system_prompt() -> str:
+    """DM-Verhalten + Regelwerk. DM.md im Projektroot ist die kanonische
+    Regelquelle; fehlt sie, gilt nur der eingebaute Prompt."""
+    dm_path = gsm.BASE_DIR / "DM.md"
+    if dm_path.exists():
+        return SYSTEM_PROMPT + "\n\n# REGELWERK\n\n" + dm_path.read_text(encoding="utf-8")
+    return SYSTEM_PROMPT
+
+
 # --- History (bounded persistence) --------------------------------------
 
 def history_path(pc_slug: str) -> Path:
@@ -199,6 +208,72 @@ def get_wiki(slug: str):
     return {"meta": meta, "body": body}
 
 
+class WikiEditIn(BaseModel):
+    name: str | None = None
+    status: str | None = None
+    region: str | None = None
+    tags: list[str] | None = None
+    links: list[str] | None = None
+    body: str | None = None
+
+
+class WikiCreateIn(BaseModel):
+    type: str
+    name: str
+    body: str
+    slug: str | None = None
+    region: str | None = None
+    stadt: str | None = None
+    status: str | None = None
+
+
+@app.put("/api/wiki/{slug}")
+def put_wiki(slug: str, patch: WikiEditIn):
+    from .wiki_io import read_world_entry, write_world_entry
+    entry = read_world_entry(slug)
+    if entry is None:
+        raise HTTPException(404, f"'{slug}' nicht gefunden")
+    meta, body = entry
+    data = patch.model_dump(exclude_none=True)
+    new_body = data.pop("body", body)
+    if "links" in data:
+        idx = wiki_index.get_index()["entries"]
+        dead = [l for l in data["links"] if l not in idx and l != slug]
+        if dead:
+            raise HTTPException(400, f"Links auf fehlende Eintraege: {', '.join(dead)}")
+    meta.update(data)
+    meta["aktualisiert"] = gsm.now_iso()
+    write_world_entry(slug, meta, new_body)
+    return {"meta": meta, "body": new_body}
+
+
+@app.post("/api/wiki")
+def post_wiki(body: WikiCreateIn):
+    result = tools.add_wiki_entry({}, body.model_dump(exclude_none=True))
+    if result.startswith(("FEHLER", "WARNUNG")):
+        raise HTTPException(400, result)
+    return json.loads(result)
+
+
+@app.get("/api/graph")
+def get_graph():
+    idx = wiki_index.get_index(force=True)["entries"]
+    nodes = [{"slug": e["slug"], "name": e["name"], "type": e["type"],
+              "status": e.get("status"), "tags": e.get("tags") or []}
+             for e in idx.values()]
+    edges = set()
+    for e in idx.values():
+        for target in e["links"]:
+            if target in idx and target != e["slug"]:
+                edges.add(tuple(sorted((e["slug"], target))))
+        region = e.get("region")
+        if region:
+            rslug = gsm.slugify(region)
+            if rslug in idx and rslug != e["slug"]:
+                edges.add(tuple(sorted((e["slug"], rslug))))
+    return {"nodes": nodes, "edges": sorted(edges)}
+
+
 @app.get("/api/journal")
 def get_journal():
     settings = gsm.load_settings()
@@ -244,7 +319,7 @@ async def _agent_stream(pc_slug: str, history: list[dict],
 
     try:
         for _round in range(MAX_CONTINUATIONS):
-            system = SYSTEM_PROMPT + "\n\n" + wiki_context.build_context(gs)
+            system = build_system_prompt() + "\n\n" + wiki_context.build_context(gs)
             window = llm_window(history, settings["history_window"])
             assistant_text = ""
             tool_calls: list[dict] = []

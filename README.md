@@ -49,6 +49,26 @@ env $(cat .env | xargs) python3 app/main.py    # Port 3111
 Dann http://127.0.0.1:3111 oeffnen, PC anlegen, losspielen.
 `[META] ...` im Chat gibt Regie-Anweisungen an den DM ohne Erzaehltext.
 
+## Regelwerk & Welt
+
+- **DM.md** ist die kanonische Regelquelle (Proben, Kampf, Muenzen,
+  Magie/Duennung, Grimdark-Prinzipien) und wird in den DM-Prompt geladen.
+- Der Seed baut eine **dicht vorkonstruierte Welt** (~210 Eintraege):
+  alle 11 Staedte mit Vierteln, Personen und Institutionen, 12
+  Adelshaeuser, Regionalrecht, Wirtschaftsnetz mit produces/imports,
+  Chroniken und aktive Lore-Hooks. Quelle: `scripts/world_data.py`
+  (versioniert — die Welt ist reproduzierbar).
+
+## Ansichten
+
+- **Chat** — das Spiel selbst, mit Wuerfel-Dialog bei Angriffswuerfen.
+- **Karte** — Regionen und Orte nach Koordinaten.
+- **Netz** — der Wiki-Graph: alle Eintraege als Knoten, Links als
+  Kanten (Force-Layout, Pan/Zoom, Typ-Filter, Suche). Knoten anklicken
+  oeffnet den Editor (Name, Status, Tags, Links, Text) — Aenderungen
+  schreiben direkt in die Markdown-Dateien. `Neu` legt Eintraege an,
+  mit kanonischen Slugs fuer Stadt-Institutionen.
+
 ## Module
 
 | Modul | Aufgabe |

@@ -1,5 +1,7 @@
-"""Seed: Canon + 5 Regionen + 40 Subregionen + 4 Hauptstaedte +
-7 Sekundaer-Orte + 5 Factions + 4 Lore. Idempotent (write_if_absent).
+"""Seed: Basis-Welt (Canon, Regionen, Subregionen, Staedte, Factions,
+Lore) plus dichte Vorkonstruktion aus scripts/world_data.py —
+alle 11 Staedte ausgebaut, Adelshaeuser, Recht, Wirtschaft, Chroniken.
+Idempotent (write_if_absent); Backlinks werden immer nachgezogen.
 
 Aufruf:  python3 -m scripts.seed_world
 """
@@ -12,7 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.gamestate import slugify  # noqa: E402
 from app.tools import auto_coords  # noqa: E402
-from app.wiki_io import write_world_entry  # noqa: E402
+from app.wiki_io import read_world_entry, update_entry_meta, write_world_entry  # noqa: E402
+from scripts import world_data  # noqa: E402
 
 CANON = """Die Welt ist alt, kalt und verschuldet. Drei Generationen nach dem
 Aschekrieg halten fuenf Regionen ein bruechiges Buendnis: Velara im Westen,
@@ -128,7 +131,103 @@ def seed() -> dict:
     for name, desc in LORE.items():
         w(slugify(name), {"type": "lore", "name": name, "status": "ruhend"}, desc)
 
+    dense = seed_dense(w)
+    _link(dense)
+
     return {"written": written, "skipped": skipped}
+
+
+def seed_dense(w) -> dict:
+    """Schreibt die dichte Welt aus world_data.py. Liefert die Link-Map
+    {host_slug: [kind_slugs]} fuer den Backlink-Pass."""
+    links: dict[str, set] = {}
+
+    def anchor(host: str, child: str) -> None:
+        links.setdefault(host, set()).add(child)
+
+    for city_slug, data in world_data.CITIES.items():
+        city_meta = (read_world_entry(city_slug) or ({}, ""))[0]
+        region = city_meta.get("region", "")
+        city_name = city_meta.get("name", city_slug.capitalize())
+        for name, body in data["locations"]:
+            slug = slugify(name)
+            w(slug, {"type": "location", "name": name, "region": region,
+                     "tags": ["viertel"], "links": [city_slug]}, body)
+            anchor(city_slug, slug)
+        for name, status, body in data["characters"]:
+            slug = slugify(name)
+            w(slug, {"type": "character", "name": name, "region": region,
+                     "status": status, "links": [city_slug]}, body)
+            anchor(city_slug, slug)
+        for inst in data["institutions"]:
+            key, body = inst[0], inst[1]
+            produces = inst[2] if len(inst) > 2 else []
+            imports = inst[3] if len(inst) > 3 else []
+            slug = f"{key}-{city_slug}"
+            meta = {"type": "faction", "name": f"{key.capitalize()} {city_name}",
+                    "region": region, "links": [city_slug]}
+            if produces:
+                meta["produces"] = produces
+            if imports:
+                meta["imports"] = imports
+            w(slug, meta, body)
+            anchor(city_slug, slug)
+
+    for region, houses in world_data.NOBLE_HOUSES.items():
+        rslug = slugify(region)
+        for name, status, seat, body in houses:
+            slug = slugify(name)
+            w(slug, {"type": "noble_house", "name": name, "region": region,
+                     "status": status, "links": [seat]}, body)
+            anchor(rslug, slug)
+            anchor(seat, slug)
+
+    name, status, body = world_data.FALLEN_HOUSE
+    slug = slugify(name)
+    w(slug, {"type": "noble_house", "name": name, "region": "Eisenmark",
+             "status": status, "links": ["der-aschekrieg"]}, body)
+    anchor(slugify("Eisenmark"), slug)
+
+    for region, (name, body) in world_data.LAWS.items():
+        slug = slugify(name)
+        w(slug, {"type": "law", "name": name, "region": region}, body)
+        anchor(slugify(region), slug)
+
+    for region, (name, produces, imports, body) in world_data.ECONOMY.items():
+        slug = slugify(name)
+        w(slug, {"type": "economy", "name": name, "region": region,
+                 "produces": produces, "imports": imports}, body)
+        anchor(slugify(region), slug)
+
+    for name, body in world_data.CHRONICLES:
+        w(slugify(name), {"type": "chronicle", "name": name}, body)
+
+    for name, status, body in world_data.LORE_EXTRA:
+        w(slugify(name), {"type": "lore", "name": name, "status": status}, body)
+
+    for name, host, body in world_data.WANDERERS:
+        slug = slugify(name)
+        w(slug, {"type": "character", "name": name, "status": "lebendig",
+                 "links": [host]}, body)
+        anchor(host, slug)
+
+    for faction_slug, host in world_data.FACTION_ANCHORS.items():
+        anchor(host, faction_slug)
+
+    return links
+
+
+def _link(link_map: dict[str, set]) -> None:
+    """Backlink-Pass: Hosts (Staedte/Regionen) verlinken ihre Kinder.
+    Laeuft auch bei Re-Seed, damit Links vollstaendig bleiben."""
+    for host, children in link_map.items():
+        entry = read_world_entry(host)
+        if entry is None:
+            continue
+        meta, _ = entry
+        merged = sorted(set(meta.get("links") or []) | children)
+        if merged != sorted(meta.get("links") or []):
+            update_entry_meta(host, {"links": merged})
 
 
 if __name__ == "__main__":

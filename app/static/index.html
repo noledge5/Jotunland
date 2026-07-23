@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NovaTerrum</title>
+<link rel="icon" href="data:,">
 <style>
   :root {
     --bg: #14110f; --panel: #1d1916; --panel2: #241f1b; --border: #3a322b;
@@ -74,6 +75,37 @@
   .maplabel { fill: var(--dim); font-size: 10px; font-family: Georgia, serif; }
   .mapdot { fill: var(--gold); }
   .mapregion { fill: var(--accent); }
+  /* Netz (Wiki-Graph) */
+  #graphview { display: none; flex: 1; min-height: 0; }
+  #graphview.open { display: flex; }
+  #graphwrap { flex: 1; padding: 10px; min-width: 0; position: relative; }
+  #graphsvg { width: 100%; height: 100%; background: #171310; border: 1px solid var(--border); border-radius: 4px; cursor: grab; }
+  #graphsvg.panning { cursor: grabbing; }
+  .gedge { stroke: #3a322b; stroke-width: 1; }
+  .gedge.hl { stroke: var(--gold); stroke-width: 1.5; }
+  .gnode { cursor: pointer; stroke: #000; stroke-width: .5; }
+  .gnode.sel { stroke: var(--gold); stroke-width: 2.5; }
+  .glabel { fill: #9a8f80; font-size: 9px; font-family: Georgia, serif; pointer-events: none; }
+  #graphtools { position: absolute; top: 18px; left: 18px; display: flex; gap: 6px; flex-wrap: wrap; max-width: 60%; }
+  #graphtools .tag { cursor: pointer; user-select: none; }
+  #graphtools .tag.off { opacity: .35; }
+  #graphsearch { width: 150px; }
+  #editor {
+    width: 320px; background: var(--panel); border-left: 1px solid var(--border);
+    padding: 14px; overflow-y: auto; font-size: 13px; display: none;
+  }
+  #editor.open { display: block; }
+  #editor h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: var(--dim); margin: 12px 0 4px; }
+  #editor h2:first-child { margin-top: 0; }
+  #editor input[type=text], #editor textarea, #editor select {
+    width: 100%; background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); padding: 6px; font: inherit; font-size: 13px;
+    border-radius: 3px; margin-bottom: 4px;
+  }
+  #editor textarea { min-height: 180px; resize: vertical; }
+  #ed-msg { font-size: 12px; margin-top: 6px; }
+  #ed-msg.ok { color: var(--green); } #ed-msg.err { color: var(--red); }
+  .backlink { display: inline-block; color: var(--gold); cursor: pointer; margin-right: 8px; font-size: 12px; }
   @media (max-width: 720px) { aside { display: none; } }
 </style>
 </head>
@@ -83,6 +115,7 @@
   <select id="pcsel" title="Charakter"></select>
   <button id="newpc">Neuer PC</button>
   <button id="mapbtn">Karte</button>
+  <button id="graphbtn">Netz</button>
   <button id="protbtn" title="Session-Protokoll ins Journal schreiben">Protokoll</button>
   <div class="spacer"></div>
   <input type="text" id="model" size="30" title="Modell-ID (or/..., gemini-..., claude-...)">
@@ -92,6 +125,16 @@
   <div id="chatcol">
     <div id="log"></div>
     <div id="mapview"><svg id="mapsvg" viewBox="0 0 800 720"></svg></div>
+    <div id="graphview">
+      <div id="graphwrap">
+        <svg id="graphsvg"></svg>
+        <div id="graphtools">
+          <input type="text" id="graphsearch" placeholder="Suche...">
+          <button id="gnew" title="Neuen Eintrag anlegen">Neu</button>
+        </div>
+      </div>
+      <div id="editor"></div>
+    </div>
     <div id="inputbar">
       <textarea id="inp" placeholder="Was tust du? ([META] fuer Regie-Anweisungen)"></textarea>
       <button id="send" class="primary">Senden</button>
@@ -253,14 +296,20 @@ $('autoroll').onclick = () => {
   setTimeout(() => submitRoll(v), 600);
 };
 
-// --- Karte ---
-let mapOpen = false;
+// --- Ansichten: chat / map / graph ---
+let view = 'chat';
+function showView(v) {
+  view = v;
+  $('log').style.display = v === 'chat' ? '' : 'none';
+  $('inputbar').style.display = v === 'chat' ? '' : 'none';
+  $('mapview').classList.toggle('open', v === 'map');
+  $('graphview').classList.toggle('open', v === 'graph');
+  $('mapbtn').textContent = v === 'map' ? 'Chat' : 'Karte';
+  $('graphbtn').textContent = v === 'graph' ? 'Chat' : 'Netz';
+}
 $('mapbtn').onclick = async () => {
-  mapOpen = !mapOpen;
-  $('mapview').classList.toggle('open', mapOpen);
-  $('log').style.display = mapOpen ? 'none' : '';
-  $('mapbtn').textContent = mapOpen ? 'Chat' : 'Karte';
-  if (!mapOpen) return;
+  if (view === 'map') return showView('chat');
+  showView('map');
   const entries = await (await api('/api/map')).json();
   const svg = $('mapsvg');
   svg.innerHTML = entries.map(e => {
@@ -270,6 +319,259 @@ $('mapbtn').onclick = async () => {
     return `<circle class="${cls}" cx="${x}" cy="${y}" r="${r}"><title>${e.name}</title></circle>` +
            `<text class="maplabel" x="${x + 8}" y="${y + 3}">${e.name}</text>`;
   }).join('');
+};
+
+// --- Netz: Wiki-Graph mit Force-Layout und Editor ---
+const TYPE_COLORS = {
+  canon: '#d4c9a0', region: '#b8963f', subregion: '#6e5f3d', location: '#5d7a4c',
+  character: '#5c7a9c', faction: '#a33b2e', noble_house: '#8a5c9c',
+  lore: '#b8863f', economy: '#4c8a7a', law: '#8a8a7a', chronicle: '#707070',
+};
+let G = {nodes: [], edges: [], adj: {}, sel: null, hiddenTypes: new Set(['subregion']),
+         vb: {x: 0, y: 0, w: 1200, h: 900}, anim: null};
+
+async function openGraph() {
+  showView('graph');
+  const data = await (await api('/api/graph')).json();
+  const N = data.nodes.length;
+  const R = 450 + N * 1.2;
+  G.nodes = data.nodes.map((n, i) => ({
+    ...n,
+    x: 600 + R * 0.5 * Math.cos(i * 2.399) * (0.3 + (i % 97) / 97),
+    y: 450 + R * 0.4 * Math.sin(i * 2.399) * (0.3 + (i % 89) / 89),
+    vx: 0, vy: 0, deg: 0,
+  }));
+  const bySlug = {};
+  G.nodes.forEach(n => bySlug[n.slug] = n);
+  G.adj = {};
+  G.edges = data.edges.filter(([a, b]) => bySlug[a] && bySlug[b]);
+  G.edges.forEach(([a, b]) => {
+    bySlug[a].deg++; bySlug[b].deg++;
+    (G.adj[a] = G.adj[a] || []).push(b);
+    (G.adj[b] = G.adj[b] || []).push(a);
+  });
+  G.bySlug = bySlug;
+  buildTypeFilter();
+  runSim(280);
+}
+
+function visibleNodes() {
+  const q = $('graphsearch').value.trim().toLowerCase();
+  return G.nodes.filter(n => !G.hiddenTypes.has(n.type) &&
+    (!q || n.slug.includes(q) || n.name.toLowerCase().includes(q)));
+}
+
+function runSim(ticks) {
+  if (G.anim) cancelAnimationFrame(G.anim);
+  let t = 0;
+  const step = () => {
+    const nodes = G.nodes, k = 42;
+    for (let i = 0; i < 3; i++) simTick(nodes, k);
+    t += 3;
+    renderGraph();
+    if (t < ticks) G.anim = requestAnimationFrame(step);
+  };
+  step();
+}
+
+function simTick(nodes, k) {
+  const cool = 0.85;
+  for (const a of nodes) { a.fx = (600 - a.x) * 0.002; a.fy = (450 - a.y) * 0.002; }
+  // Abstossung (gitterfrei O(n²), reicht fuer ~300 Knoten)
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j];
+      let dx = a.x - b.x, dy = a.y - b.y;
+      let d2 = dx * dx + dy * dy;
+      if (d2 < 1) { dx = Math.random() - .5; dy = Math.random() - .5; d2 = 1; }
+      if (d2 > 90000) continue;
+      const f = (k * k) / d2 * 0.9;
+      const d = Math.sqrt(d2);
+      a.fx += dx / d * f; a.fy += dy / d * f;
+      b.fx -= dx / d * f; b.fy -= dy / d * f;
+    }
+  }
+  // Federn entlang Kanten
+  for (const [s1, s2] of G.edges) {
+    const a = G.bySlug[s1], b = G.bySlug[s2];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const d = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+    const f = (d - k * 2.2) * 0.015;
+    a.fx += dx / d * f * 2; a.fy += dy / d * f * 2;
+    b.fx -= dx / d * f * 2; b.fy -= dy / d * f * 2;
+  }
+  for (const a of nodes) {
+    if (a.pinned) continue;
+    a.vx = (a.vx + a.fx) * cool; a.vy = (a.vy + a.fy) * cool;
+    a.x += Math.max(-8, Math.min(8, a.vx));
+    a.y += Math.max(-8, Math.min(8, a.vy));
+  }
+}
+
+function renderGraph() {
+  const svg = $('graphsvg');
+  svg.setAttribute('viewBox', `${G.vb.x} ${G.vb.y} ${G.vb.w} ${G.vb.h}`);
+  const vis = new Set(visibleNodes().map(n => n.slug));
+  const selAdj = G.sel ? new Set([G.sel, ...(G.adj[G.sel] || [])]) : null;
+  let out = '';
+  for (const [a, b] of G.edges) {
+    if (!vis.has(a) || !vis.has(b)) continue;
+    const na = G.bySlug[a], nb = G.bySlug[b];
+    const hl = G.sel && (a === G.sel || b === G.sel);
+    out += `<line class="gedge${hl ? ' hl' : ''}" x1="${na.x.toFixed(1)}" y1="${na.y.toFixed(1)}" x2="${nb.x.toFixed(1)}" y2="${nb.y.toFixed(1)}"/>`;
+  }
+  const zoomed = G.vb.w < 900;
+  for (const n of G.nodes) {
+    if (!vis.has(n.slug)) continue;
+    const dim = selAdj && !selAdj.has(n.slug);
+    const r = 4 + Math.min(Math.sqrt(n.deg) * 2, 10);
+    out += `<circle class="gnode${n.slug === G.sel ? ' sel' : ''}" data-slug="${n.slug}" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${r}" fill="${TYPE_COLORS[n.type] || '#888'}" opacity="${dim ? 0.25 : 1}"><title>${n.name} [${n.type}]</title></circle>`;
+    if (zoomed || n.deg >= 6 || n.slug === G.sel)
+      out += `<text class="glabel" x="${(n.x + r + 2).toFixed(1)}" y="${(n.y + 3).toFixed(1)}" opacity="${dim ? 0.25 : 1}">${n.name}</text>`;
+  }
+  svg.innerHTML = out;
+}
+
+function buildTypeFilter() {
+  const types = [...new Set(G.nodes.map(n => n.type))].sort();
+  const tools = $('graphtools');
+  tools.querySelectorAll('.tag').forEach(el => el.remove());
+  for (const t of types) {
+    const el = document.createElement('span');
+    el.className = 'tag' + (G.hiddenTypes.has(t) ? ' off' : '');
+    el.style.borderColor = TYPE_COLORS[t] || '#888';
+    el.textContent = t;
+    el.onclick = () => {
+      G.hiddenTypes.has(t) ? G.hiddenTypes.delete(t) : G.hiddenTypes.add(t);
+      el.classList.toggle('off');
+      renderGraph();
+    };
+    tools.appendChild(el);
+  }
+}
+
+// Pan / Zoom / Drag / Klick
+(() => {
+  const svg = $('graphsvg');
+  let drag = null, pan = null;
+  const pt = ev => {
+    const r = svg.getBoundingClientRect();
+    return {x: G.vb.x + (ev.clientX - r.left) / r.width * G.vb.w,
+            y: G.vb.y + (ev.clientY - r.top) / r.height * G.vb.h};
+  };
+  svg.addEventListener('mousedown', ev => {
+    const slug = ev.target.dataset && ev.target.dataset.slug;
+    if (slug) { drag = {n: G.bySlug[slug], moved: false}; drag.n.pinned = true; }
+    else { pan = {x: ev.clientX, y: ev.clientY, vx: G.vb.x, vy: G.vb.y}; svg.classList.add('panning'); }
+  });
+  svg.addEventListener('mousemove', ev => {
+    if (drag) {
+      const p = pt(ev);
+      drag.n.x = p.x; drag.n.y = p.y; drag.moved = true;
+      renderGraph();
+    } else if (pan) {
+      const r = svg.getBoundingClientRect();
+      G.vb.x = pan.vx - (ev.clientX - pan.x) / r.width * G.vb.w;
+      G.vb.y = pan.vy - (ev.clientY - pan.y) / r.height * G.vb.h;
+      renderGraph();
+    }
+  });
+  window.addEventListener('mouseup', ev => {
+    if (drag) {
+      if (!drag.moved) selectNode(drag.n.slug);
+      drag.n.pinned = false; drag = null;
+    }
+    if (pan) { pan = null; svg.classList.remove('panning'); }
+  });
+  svg.addEventListener('wheel', ev => {
+    ev.preventDefault();
+    const f = ev.deltaY > 0 ? 1.15 : 0.87;
+    const p = pt(ev);
+    G.vb.w *= f; G.vb.h *= f;
+    G.vb.x = p.x - (p.x - G.vb.x) * f;
+    G.vb.y = p.y - (p.y - G.vb.y) * f;
+    renderGraph();
+  }, {passive: false});
+})();
+
+async function selectNode(slug) {
+  G.sel = slug;
+  renderGraph();
+  const e = await (await api('/api/wiki/' + slug)).json();
+  const m = e.meta;
+  const backlinks = G.edges.filter(([a, b]) => a === slug || b === slug)
+    .map(([a, b]) => a === slug ? b : a);
+  $('editor').innerHTML = `
+    <h2>${m.type} — ${slug}</h2>
+    <input type="text" id="ed-name" value="${(m.name || '').replace(/"/g, '&quot;')}" placeholder="Name">
+    <h2>Status</h2><input type="text" id="ed-status" value="${m.status || ''}" placeholder="z.B. aktiv, tot, ruhend">
+    <h2>Tags</h2><input type="text" id="ed-tags" value="${(m.tags || []).join(', ')}" placeholder="komma, getrennt">
+    <h2>Links (ausgehend)</h2><input type="text" id="ed-links" value="${(m.links || []).join(', ')}">
+    <h2>Text</h2><textarea id="ed-body">${e.body.replace(/</g, '&lt;')}</textarea>
+    <button id="ed-save" class="primary">Speichern</button>
+    <button id="ed-close">Schliessen</button>
+    <div id="ed-msg"></div>
+    <h2>Verbunden mit</h2>
+    <div>${backlinks.map(b => `<span class="backlink" data-goto="${b}">${b}</span>`).join('') || '—'}</div>`;
+  $('editor').classList.add('open');
+  $('ed-save').onclick = async () => {
+    const payload = {
+      name: $('ed-name').value.trim(),
+      status: $('ed-status').value.trim(),
+      tags: $('ed-tags').value.split(',').map(s => s.trim()).filter(Boolean),
+      links: $('ed-links').value.split(',').map(s => s.trim()).filter(Boolean),
+      body: $('ed-body').value,
+    };
+    if (!payload.status) delete payload.status;
+    const msg = $('ed-msg');
+    try {
+      await api('/api/wiki/' + slug, {method: 'PUT', body: JSON.stringify(payload)});
+      msg.textContent = 'Gespeichert.'; msg.className = 'ok';
+      const n = G.bySlug[slug];
+      if (n) n.name = payload.name || n.name;
+      openGraphRefresh();
+    } catch (err) { msg.textContent = err.message; msg.className = 'err'; }
+  };
+  $('ed-close').onclick = () => { G.sel = null; $('editor').classList.remove('open'); renderGraph(); };
+  $('editor').querySelectorAll('[data-goto]').forEach(el =>
+    el.onclick = () => selectNode(el.dataset.goto));
+}
+
+async function openGraphRefresh() {
+  // Kanten neu laden ohne Layout-Reset
+  const data = await (await api('/api/graph')).json();
+  const known = new Set(G.nodes.map(n => n.slug));
+  for (const n of data.nodes) {
+    if (!known.has(n.slug)) {
+      const nn = {...n, x: 600 + (Math.random() - .5) * 200, y: 450 + (Math.random() - .5) * 200, vx: 0, vy: 0, deg: 0};
+      G.nodes.push(nn); G.bySlug[n.slug] = nn;
+    }
+  }
+  G.edges = data.edges.filter(([a, b]) => G.bySlug[a] && G.bySlug[b]);
+  G.nodes.forEach(n => n.deg = 0);
+  G.adj = {};
+  G.edges.forEach(([a, b]) => {
+    G.bySlug[a].deg++; G.bySlug[b].deg++;
+    (G.adj[a] = G.adj[a] || []).push(b);
+    (G.adj[b] = G.adj[b] || []).push(a);
+  });
+  runSim(60);
+}
+
+$('graphbtn').onclick = () => view === 'graph' ? showView('chat') : openGraph();
+$('graphsearch').oninput = () => renderGraph();
+$('gnew').onclick = async () => {
+  const name = prompt('Name des neuen Eintrags:');
+  if (!name) return;
+  const type = prompt('Typ (location/character/faction/noble_house/lore/economy/law/chronicle):', 'location');
+  if (!type) return;
+  const stadt = prompt('Stadt (fuer Institutionen, sonst leer):') || undefined;
+  try {
+    const r = await (await api('/api/wiki', {method: 'POST', body: JSON.stringify(
+      {type, name, body: '...', stadt})})).json();
+    await openGraphRefresh();
+    selectNode(r.angelegt);
+  } catch (err) { alert(err.message); }
 };
 
 // --- Header-Aktionen ---

@@ -40,9 +40,14 @@ ist die fehleranfaelligste Stelle.
 ## Bekannter Stand (2026-07)
 
 - Rebuild aus Handoff-Doc vom 2026-07-02; Original-Code von Mai 2026
-  existierte nicht mehr. Welt-Seed liefert 66 Eintraege, der alte Stand
-  (~430 Eintraege, 11 generierte Staedte) muss per
-  `scripts/generate_wiki.py --all` mit echten Keys neu erzeugt werden.
+  existierte nicht mehr. Regelwerk (DM.md) ebenfalls rekonstruiert —
+  main.py laedt es in den System-Prompt.
+- Welt ist dicht vorkonstruiert: Seed schreibt ~212 Eintraege aus
+  `scripts/world_data.py` (alle 11 Staedte ausgebaut, Adel, Recht,
+  Wirtschaft, Chroniken, Lore-Hooks). Lint: 0 Errors, 0 Warnings.
+  `scripts/generate_wiki.py` kann mit Keys weiter verdichten.
+- Frontend hat drei Ansichten: Chat, Karte, Netz (Wiki-Graph-Editor,
+  schreibt via PUT/POST /api/wiki direkt in die Markdowns).
 - Google Free Tier ist per-Modell rate-limited (250 RPD flash) —
   OpenRouter ist der zuverlaessige Weg.
 - Deployment-Ziel Docker/Synology ist weiterhin offen; lokal laeuft

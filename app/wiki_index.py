@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 from .gamestate import atomic_write_json, read_json
-from .wiki_io import WORLD_DIR, parse_frontmatter
+from .wiki_io import INSTITUTION_KEYWORDS, WORLD_DIR, parse_frontmatter
 
 INDEX_PATH = WORLD_DIR / "_index.json"
 LINK_RE = re.compile(r"\[\[([a-z0-9-]+)\]\]")
@@ -76,17 +76,25 @@ def slugs_of_type(entry_type: str) -> list[str]:
     return [s for s, e in get_index()["entries"].items() if e["type"] == entry_type]
 
 
+_STOPWORDS = {"der", "die", "das", "des", "von", "vom", "im", "zur", "zum"}
+
+
+def _word_set(slug: str) -> frozenset:
+    """Wortmenge eines Slugs, normalisiert: Stoppwoerter raus,
+    Institutions-Aliasse vereinheitlicht (wache -> stadtwache)."""
+    return frozenset(INSTITUTION_KEYWORDS.get(w, w)
+                     for w in slug.split("-") if w not in _STOPWORDS)
+
+
 def find_similar_slugs(slug: str) -> list[str]:
-    """Findet potentielle Duplikate: gleiche Wortmenge in anderer Reihenfolge
-    oder Teilmengen-Ueberlappung (hartfeld-wache vs stadtwache-hartfeld)."""
-    words = set(slug.split("-"))
+    """Findet potentielle Duplikate: gleiche normalisierte Wortmenge
+    (hartfeld-wache vs stadtwache-hartfeld) oder echte Teilmenge."""
+    words = _word_set(slug)
     hits = []
     for other in get_index()["entries"]:
         if other == slug:
             continue
-        ow = set(other.split("-"))
-        shared = words & ow
-        # Ueberlappung von mind. 2 Woertern oder identische Wortmenge
-        if words == ow or (len(shared) >= 2 and shared != {"der", "die", "das", "von"}):
+        ow = _word_set(other)
+        if words == ow or (len(words) > 1 and words < ow) or (len(ow) > 1 and ow < words):
             hits.append(other)
     return hits

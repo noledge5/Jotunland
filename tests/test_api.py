@@ -70,7 +70,38 @@ def test_map_and_wiki_endpoints(client, env):
     assert r["meta"]["type"] == "location"
     assert client.get("/api/wiki/fehlt").status_code == 404
     factions = client.get("/api/wiki", params={"type": "faction"}).json()
-    assert len(factions) == 5
+    assert len(factions) >= 5  # 5 globale + Stadt-Institutionen
+
+
+def test_wiki_edit_and_graph(client, env):
+    import scripts.seed_world as sw
+    importlib.reload(sw)
+    sw.seed()
+
+    # Editieren: Status + Body
+    r = client.put("/api/wiki/greta-eisenhand",
+                   json={"status": "verschollen", "body": "Neuer Text."})
+    assert r.status_code == 200
+    assert r.json()["meta"]["status"] == "verschollen"
+    assert client.get("/api/wiki/greta-eisenhand").json()["body"].strip() == "Neuer Text."
+    # Tote Links werden abgelehnt
+    assert client.put("/api/wiki/hartfeld",
+                      json={"links": ["gibtsnicht"]}).status_code == 400
+    assert client.put("/api/wiki/fehlt", json={"body": "x"}).status_code == 404
+
+    # Neu anlegen (mit kanonischem Institutions-Slug)
+    r = client.post("/api/wiki", json={"type": "faction", "name": "Tempelwache",
+                                       "stadt": "Grauwall", "body": "Waechter."})
+    assert r.status_code == 200
+    # Duplikat -> 400
+    assert client.post("/api/wiki", json={"type": "faction", "name": "Stadtwache",
+                                          "stadt": "Hartfeld", "body": "x"}).status_code == 400
+
+    # Graph: Knoten + Kanten, Region-Kanten implizit
+    g = client.get("/api/graph").json()
+    slugs = {n["slug"] for n in g["nodes"]}
+    assert "hartfeld" in slugs and "stadtwache-hartfeld" in slugs
+    assert ["eisenmark", "hartfeld"] in [sorted(e) for e in g["edges"]]
 
 
 def test_history_bounded_persistence(env):
