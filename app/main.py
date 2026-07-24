@@ -463,11 +463,17 @@ async def _agent_stream(pc_slug: str, history: list[dict],
         yield _sse({"type": "error", "error": f"PC '{pc_slug}' nicht gefunden"})
         return
 
+    def _gs_event():
+        """Live-Snapshot fuer die Sidebar (HP-Status frisch berechnet)."""
+        gs["hp_status"] = gsm.hp_status_tag(gs["hp"], gs["hp_max"])
+        return _sse({"type": "gamestate", "pc": gs})
+
     if resume_tool_result is not None:
         history.append({"role": "tool",
                         "tool_call_id": resume_tool_result["tool_call_id"],
                         "name": resume_tool_result["name"],
                         "content": resume_tool_result["content"]})
+        yield _gs_event()  # Wurf-Folgen (Tick/HP) sofort sichtbar, vor der Erzaehlung
 
     turn_text = ""
     turn_tools: list[str] = []
@@ -515,6 +521,7 @@ async def _agent_stream(pc_slug: str, history: list[dict],
                             "result": result[:500]})
                 history.append({"role": "tool", "tool_call_id": tc["id"],
                                 "name": tc["name"], "content": result})
+                yield _gs_event()  # Sidebar direkt nach jedem Tool aktualisieren
             if blocked:
                 return
             gsm.save_pc(gs)
