@@ -20,6 +20,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
+from . import classifier
 from . import gamestate as gsm
 from . import llm_adapter, tools, wiki_context, wiki_index
 from .wiki_io import append_pc_journal, read_journal_tail
@@ -47,10 +48,21 @@ MECHANIK (PFLICHT):
 - JEDE Aktion mit unsicherem Ausgang laeuft ueber request_skill_roll
   (Skill aus der Skill-Liste + Difficulty Tier). Das Tool blockiert, bis der
   Spieler seinen W20 physisch wuerfelt; die Engine berechnet Ergebnis, Crits
-  und Ticks. Du loest NIEMALS eine unsichere Aktion nur in Prosa auf.
-- Erfinde keine Zahlen: Muenzen nur ueber pay/receive_coins, HP nur ueber
-  adjust_hp, Zeit nur ueber advance_time/rest. Ein Validator prueft deine
-  Erzaehlung gegen den Spielstand.
+  und Ticks. Du loest NIEMALS eine unsichere Aktion nur in Prosa auf —
+  weder Ueberreden/Einschuechtern/Taeuschen gegen einen NPC mit eigenem
+  Willen, noch Schleichen, Stehlen, Angriff, Wahrnehmung o.ae. Steht der
+  Ausgang schon durch eine gerade gewuerfelte Probe fest, erzaehle ihn und
+  fordere KEINE zweite Probe fuer dieselbe Handlung.
+- Mechanik-Werte gehoeren NICHT in die Prosa: nenne nie Ticks, XP,
+  Skillpunkte, Level-Ups, HP-Zahlen oder den VW. Die Engine fuehrt sie,
+  das Zustandspanel zeigt sie. Sag hoechstens "du wirst sicherer darin",
+  nie "du hast jetzt 1/3 Ticks".
+- Geld: Preise darf ein NPC frei nennen. Aber sobald Muenzen tatsaechlich
+  die Hand wechseln, IMMER pay/receive_coins aufrufen — und fuehre keine
+  eigene Buchhaltung in der Prosa (keine Ausgaben-Summen, kein Boersen-
+  Stand im Text). Der Boersen-Stand im Panel ist die einzige Wahrheit.
+- HP nur ueber adjust_hp, Zeit nur ueber advance_time/rest. Ein Validator
+  prueft deine Erzaehlung gegen den Spielstand.
 - Nach jeder erzaehlten Aktion advance_time aufrufen (Gespraech 5-15 min,
   Wege je Distanz, Einkauf 10-30 min).
 - Kampf: start_combat -> pc_turn (request_skill_roll mit ziel+schaden) ->
@@ -145,6 +157,8 @@ class SettingsIn(BaseModel):
     model: str | None = None
     active_pc_slug: str | None = None
     history_window: int | None = None
+    use_classifier: bool | None = None
+    classifier_model: str | None = None
 
 
 class PCIn(BaseModel):
@@ -167,8 +181,9 @@ def get_state():
     settings = gsm.load_settings()
     pc = gsm.load_pc(settings["active_pc_slug"]) if settings["active_pc_slug"] else None
     awaiting = None
-    if pc and pc.get("combat") and pc["combat"].get("pending_roll"):
-        awaiting = pc["combat"]["pending_roll"]
+    if pc:
+        awaiting = ((pc.get("combat") or {}).get("pending_roll")
+                    or pc.get("pending_roll"))
     return {"settings": settings, "pc": pc, "awaiting_roll": awaiting,
             "providers": llm_adapter.available_providers()}
 
@@ -387,16 +402,29 @@ def _quick_lint(user_message: str) -> list[str]:
         return []
 
 
-COIN_RE = re.compile(r"\b(\d+)\s*(kp|sm|gm|kupfer|silber|gold(?:mark)?)\b", re.IGNORECASE)
 HP_RE = re.compile(r"\b(\d+)\s*(?:LP|HP|Lebenspunkte)\b")
+# Geld, das die Hand wechselt: Zahlwort/Ziffer + Muenze in Naehe eines
+# Transaktionsverbs (zahlen/geben/kosten dich...). Reine Preisnennung eines
+# NPC ist erlaubt; nur echte Ausgaben brauchen ein Tool.
+_ZAHL = r"(?:\d+|ein(?:en|e)?|zwei|drei|vier|fuenf|fünf|sechs|sieben|acht|neun|zehn|elf|zwoelf|zwölf)"
+_MUENZE = r"(?:kp|sm|gm|kupfer\w*|silber\w*|gold\w*)"
+COIN_TX_RE = re.compile(
+    rf"(?:zahl\w*|bezahl\w*|gibst|gabst|gib|gab|entrichte\w*|kostet\s+dich|abgezogen|aus\s+der\s+Börse)"
+    rf".{{0,30}}?{_ZAHL}\s*{_MUENZE}|{_ZAHL}\s*{_MUENZE}.{{0,20}}?(?:bezahlt|gezahlt|hingelegt|übergeben)",
+    re.IGNORECASE)
+# Mechanik-Zahlen, die nur die Engine kennt (nie erzaehlen):
+MECH_RE = re.compile(r"\b(ticks?|erfahrungspunkte?|\bXP\b|skill[- ]?up|skillpunkte?|"
+                     r"level[- ]?up|steigst?\s+auf\s+stufe|verteidigungswert|\bVW\b)\b", re.IGNORECASE)
 
 
 def validate_narration(text: str, tool_names: list[str], gs: dict) -> list[str]:
     """Regelbasierter Narrator-Validator (ADR-0001): prueft die Erzaehlung
     gegen Gamestate und Tool-Calls, ohne LLM."""
     problems = []
-    if COIN_RE.search(text) and not {"pay", "receive_coins"} & set(tool_names):
-        problems.append("Muenzbetrag erzaehlt, aber kein pay/receive_coins aufgerufen")
+    if COIN_TX_RE.search(text) and not {"pay", "receive_coins"} & set(tool_names):
+        problems.append("Geld wechselt in der Erzaehlung die Hand, aber kein pay/receive_coins aufgerufen")
+    if MECH_RE.search(text):
+        problems.append("Mechanik-Werte (Ticks/XP/Level/VW) erzaehlt — die gehoeren in den Spielstand, nicht in die Prosa")
     for m in HP_RE.finditer(text):
         val = int(m.group(1))
         if val not in (gs["hp"], gs["hp_max"]):
@@ -496,6 +524,34 @@ MODE_PREFIX = {"handeln": "", "sprechen": "[SPRECHEN] ",
                "dm": "[DM-FRAGE] ", "korrektur": "[KORREKTUR] "}
 
 
+_gate_counter = 0
+
+
+async def _gate_stream(pc_slug: str, history: list[dict], gate: dict):
+    """Engine-initiierte Probe (Classifier-Gate): setzt die Probe als
+    synthetischen request_skill_roll-Call in die History, blockiert auf
+    den Spielerwurf. Die Erzaehlung folgt erst nach /api/roll."""
+    global _gate_counter
+    gs = gsm.load_pc(pc_slug)
+    res = tools.request_skill_roll(gs, {"skill": gate["skill"], "schwierigkeit": gate["tier"]})
+    if res != tools.BLOCKING:  # Skill/Tier doch ungueltig -> ohne Gate erzaehlen
+        async for ev in _agent_stream(pc_slug, history, mode="handeln"):
+            yield ev
+        return
+    _gate_counter += 1
+    call_id = f"gate_{_gate_counter}"
+    history.append({"role": "assistant", "content": "",
+                    "tool_calls": [{"id": call_id, "name": "request_skill_roll",
+                                    "args": {"skill": gate["skill"], "schwierigkeit": gate["tier"]}}]})
+    _pending_responses[pc_slug] = {"tool_call_id": call_id, "name": "request_skill_roll"}
+    gsm.save_pc(gs)
+    save_history(pc_slug, history)
+    pending = gs.get("pending_roll") or (gs.get("combat") or {}).get("pending_roll")
+    yield _sse({"type": "gate", "grund": gate.get("grund", ""),
+                "skill": gate["skill"], "tier": gate["tier"]})
+    yield _sse({"type": "awaiting_roll", "pending": pending})
+
+
 @app.post("/api/chat")
 async def chat(body: ChatIn):
     settings = gsm.load_settings()
@@ -508,6 +564,21 @@ async def chat(body: ChatIn):
         raise HTTPException(400, f"Unbekannter Modus '{body.mode}'.")
     history = load_history(pc_slug)
     history.append({"role": "user", "content": MODE_PREFIX[body.mode] + body.message})
+
+    # Proben-Gate: vor der Erzaehlung strukturell entscheiden, ob eine
+    # Probe noetig ist (nur Handeln/Sprechen, ausserhalb Kampf).
+    gs = gsm.load_pc(pc_slug)
+    if (settings.get("use_classifier") and body.mode in ("handeln", "sprechen")
+            and not (gs and gs.get("combat"))):
+        try:
+            gate = await classifier.classify(
+                gs, body.message, settings.get("classifier_model") or settings["model"])
+        except Exception:
+            gate = {"braucht_probe": False}  # Classifier faellt aus -> Erzaehler uebernimmt
+        if gate.get("braucht_probe"):
+            return StreamingResponse(_gate_stream(pc_slug, history, gate),
+                                     media_type="text/event-stream")
+
     return StreamingResponse(_agent_stream(pc_slug, history, mode=body.mode),
                              media_type="text/event-stream")
 
@@ -550,18 +621,18 @@ async def protocol():
     if not recent:
         return {"protokoll": "Keine Historie."}
     raw = "\n\n".join(f"[{m['role']}] {m['content'][:600]}" for m in recent)
+    pc = gsm.load_pc(pc_slug)
+    anker = f"Aktueller Boersen-Stand (Wahrheit): {gsm.format_coins(pc['coins'])}." if pc else ""
     text = None
     if llm_adapter.available_providers():
         try:
-            chunks = []
-            async for ev in llm_adapter.stream_with_tools(
-                    settings["model"],
-                    "Fasse den folgenden RPG-Sessionverlauf als knappes Chronik-Protokoll "
-                    "zusammen (Deutsch, Stichpunkte, max 15 Zeilen). Nur Fakten.",
-                    [{"role": "user", "content": raw}], []):
-                if ev["type"] == "text":
-                    chunks.append(ev["text"])
-            text = "".join(chunks).strip()
+            text = (await llm_adapter.complete(
+                settings["model"],
+                "Fasse den folgenden RPG-Sessionverlauf als knappes Chronik-Protokoll "
+                "zusammen (Deutsch, Stichpunkte, max 15 Zeilen). Nur Fakten aus dem "
+                "Verlauf. Erfinde KEINE Zahlen — keine Ausgaben-Summen, keine XP/Ticks. "
+                "Wenn du den Geldstand nennst, nutze exakt den angegebenen Anker.",
+                f"{anker}\n\nVERLAUF:\n{raw}", max_tokens=600)).strip()
         except Exception:
             text = None
     if not text:

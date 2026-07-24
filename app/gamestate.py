@@ -286,6 +286,8 @@ DEFAULT_SETTINGS = {
     "model": "or/anthropic/claude-sonnet-4.5",
     "active_pc_slug": None,
     "history_window": 30,
+    "use_classifier": True,          # Proben-Gate vor der Erzaehlung (ADR-0001)
+    "classifier_model": "",          # leer = gleiches Modell wie der Erzaehler
 }
 
 

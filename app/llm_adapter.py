@@ -259,3 +259,38 @@ async def stream_with_tools(model_id: str, system: str, messages: list[dict],
               "openrouter": _stream_openrouter}[provider]
     async for ev in stream(model_id, system, messages, tools):
         yield ev
+
+
+async def complete(model_id: str, system: str, user: str,
+                   max_tokens: int = 400) -> str:
+    """Einfacher Text-Completion-Call ohne Tools (fuer Classifier/Protokoll).
+    Nicht-streamend, ueber alle drei Provider."""
+    provider = provider_for(model_id)
+    key = api_key_for(provider)
+    if not key:
+        raise RuntimeError(f"Kein API-Key fuer Provider '{provider}'")
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        if provider == "anthropic":
+            r = await client.post("https://api.anthropic.com/v1/messages",
+                                  headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+                                  json={"model": model_id, "system": system, "max_tokens": max_tokens,
+                                        "messages": [{"role": "user", "content": user}]})
+            r.raise_for_status()
+            return "".join(b.get("text", "") for b in r.json()["content"])
+        if provider == "openrouter":
+            r = await client.post("https://openrouter.ai/api/v1/chat/completions",
+                                  headers={"Authorization": f"Bearer {key}"},
+                                  json={"model": model_id.removeprefix("or/"), "max_tokens": max_tokens,
+                                        "messages": [{"role": "system", "content": system},
+                                                     {"role": "user", "content": user}]})
+            r.raise_for_status()
+            return r.json()["choices"][0]["message"]["content"] or ""
+        # google
+        r = await client.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent",
+            headers={"x-goog-api-key": key},
+            json={"system_instruction": {"parts": [{"text": system}]},
+                  "contents": [{"role": "user", "parts": [{"text": user}]}]})
+        r.raise_for_status()
+        cand = r.json()["candidates"][0]
+        return "".join(p.get("text", "") for p in cand["content"]["parts"])

@@ -4,6 +4,23 @@ Kanonische Regelquelle, geladen in den System-Prompt des Spielleiters.
 Begriffe und Detailregeln: CONTEXT.md (Engine-Glossar) und
 world/CONTEXT.md (Welt-Glossar). Konfigwerte: app/config/rulebook.json.
 
+## Wann eine Probe (WICHTIG)
+
+Eine Probe ist Pflicht, sobald der Ausgang unsicher ist UND Bedeutung hat:
+- Sozial gegen Widerstand: Ueberzeugen, Taeuschen, Einschuechtern,
+  Feilschen, Verfuehren — immer wenn der NPC einen eigenen Willen oder
+  ein Interesse hat. Blosser Smalltalk oder eine Frage braucht keine.
+- Heimlichkeit/Diebstahl: Schleichen, Taschendiebstahl, Schloesser
+  knacken, Fallenkunde.
+- Kampf: Angriff, aktive Parade/Ausweichen.
+- Wahrnehmung nach Verborgenem, Faehrtenlesen, Klettern/Springen unter
+  Druck, Erste Hilfe, Handwerk/Alchemie mit Risiko.
+
+Keine Probe bei: Reden ohne Widerstand, Umsehen ohne Gefahr, Gehen,
+Kaufen zum Listenpreis, trivialen Handlungen. Im Zweifel bei sozialem
+Druck oder Risiko: Probe. Ein vorgeschalteter Classifier kann die Probe
+bereits ansetzen — dann erzaehle nur noch den vom Wurf bestimmten Ausgang.
+
 ## Proben
 
 - Grundprobe: **W20 + Attributsmodifikator + Skill-Bonus gegen SG.**

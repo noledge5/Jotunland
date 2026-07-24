@@ -19,7 +19,11 @@ Entscheidungen: docs/adr/.
 ## Architektur-Invarianten
 
 - **Jede Probe ueber request_skill_roll** (ADR-0001) — das LLM loest
-  nie unsichere Aktionen in Prosa; Validator prueft nach.
+  nie unsichere Aktionen in Prosa; Validator prueft nach. Ein
+  vorgeschalteter Classifier (app/classifier.py, settings.use_classifier)
+  entscheidet strukturell ueber Probenpflicht und setzt die Probe an,
+  bevor erzaehlt wird. Mechanik-Zahlen (Ticks/XP/HP/VW/Boerse) gehoeren
+  nie in die Prosa — nur ins Zustandspanel.
 - **Spielfolgen an Bestehendem nur als world_flags** (ADR-0002) —
   update_wiki_entry ist Authoring, nicht Spielzug. Wiki = World-Scope
   (permanent), Gamestate = Character-Scope (Reset bei neuem PC).

@@ -41,8 +41,23 @@ Der Tool-Loop bleibt. Statt der Classifier-Pipeline gilt:
 ## Konsequenzen
 
 - Rule Bypass ist nicht mehr strukturell unmoeglich, sondern
-  prompt-diszipliniert + validator-ueberwacht. Wenn Playtests zeigen,
-  dass das nicht reicht, ist der Rueckweg: Classifier-Call fuer die
-  Modi Handeln/Sprechen wieder einziehen (Hybrid), ohne den Tool-Loop
-  aufzugeben.
+  prompt-diszipliniert + validator-ueberwacht.
 - Der Validator braucht Pflege, waechst aber regelbasiert (billig).
+
+## Nachtrag (2026-07-24): Classifier-Gate aktiviert
+
+Der erste Live-Playtest (Sonnet 4.5) bestaetigte die vorhergesehene
+Schwaeche: der Erzaehler loeste sozialen Druck teils in Prosa auf, ohne
+`request_skill_roll` — und ohne Probe fiel auch der Tick weg. Der im
+Rueckweg beschriebene Hybrid ist jetzt umgesetzt:
+
+- `app/classifier.py` entscheidet vor der Erzaehlung (nur Handeln/
+  Sprechen, ausserhalb Kampf) `braucht_probe + Skill + Tier`. Bei "ja"
+  setzt die Engine die Probe als synthetischen `request_skill_roll` an
+  und blockiert auf den Spielerwurf, BEVOR erzaehlt wird. Der Tool-Loop
+  bleibt darunter als zweite Verteidigungslinie.
+- Abschaltbar ueber `settings.use_classifier`; eigenes (billigeres)
+  Modell ueber `settings.classifier_model`. Faellt der Call aus, uebernimmt
+  der Erzaehler-Tool-Loop.
+- Der Validator wurde geschaerft: erfundene Mechanik-Zahlen (Ticks/XP/
+  Level/VW) und Geldfluesse ohne pay/receive_coins werden geflaggt.

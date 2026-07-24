@@ -138,6 +138,8 @@
           <span style="width:8px"></span>
           <button id="mode-ansehen" class="laybtn active" title="Nur ansehen und auswaehlen">Ansehen</button>
           <button id="mode-bearbeiten" class="laybtn" title="Verschieben und anlegen">Bearbeiten</button>
+          <span style="width:8px"></span>
+          <button id="filter-charakter" class="laybtn" title="Nur charaktergebundene Eintraege (Review-Inbox)">Nur charaktergebunden</button>
           <input type="text" id="graphsearch" placeholder="Suche...">
           <button id="gnew" title="Neuen Eintrag anlegen">Neu</button>
         </div>
@@ -313,6 +315,9 @@ async function consumeStream(response, dmDiv) {
       } else if (ev.type === 'tool') {
         el('tool', '⚙ ' + ev.name + ' → ' + ev.result);
         dmDiv = null;
+      } else if (ev.type === 'gate') {
+        el('tool', `⚑ Probe noetig: ${ev.skill} (${ev.tier})${ev.grund ? ' — ' + ev.grund : ''}`);
+        dmDiv = null;
       } else if (ev.type === 'awaiting_roll') {
         openRollDialog(ev.pending);
       } else if (ev.type === 'gamestate') {
@@ -401,7 +406,13 @@ const TYPE_COLORS = {
 };
 const M2U = 2500;  // Meter pro viewBox-Einheit (3.000 km -> 1200 Einheiten)
 let G = {nodes: [], edges: [], adj: {}, sel: null, hiddenTypes: new Set(['scene']),
-         layout: 'netz', edit: false, vb: {x: 0, y: 0, w: 1200, h: 900}, anim: null};
+         layout: 'netz', edit: false, onlyChar: false, vb: {x: 0, y: 0, w: 1200, h: 900}, anim: null};
+
+$('filter-charakter').onclick = () => {
+  G.onlyChar = !G.onlyChar;
+  $('filter-charakter').classList.toggle('active', G.onlyChar);
+  renderGraph();
+};
 
 function setEdit(on) {
   G.edit = on;
@@ -443,6 +454,7 @@ function visibleNodes() {
   const q = $('graphsearch').value.trim().toLowerCase();
   return G.nodes.filter(n => !G.hiddenTypes.has(n.type) &&
     (G.layout !== 'karte' || n.koordinaten) &&
+    (!G.onlyChar || n.scope === 'charakter') &&
     (!q || n.slug.includes(q) || n.name.toLowerCase().includes(q)));
 }
 
