@@ -195,7 +195,7 @@
     </div>
     <h2 style="font-size:12px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin:6px 0 3px;">Classifier-Modell (optional)</h2>
     <input type="text" id="set-cmodel" style="width:100%;" placeholder="leer = gleiches Modell wie der Erzaehler">
-    <div style="font-size:12px;color:var(--dim);margin-top:4px;">Tipp: ein schnelles, billiges Modell (z.B. Haiku) reicht fuers Gate.</div>
+    <div style="font-size:12px;color:var(--dim);margin-top:4px;">Volle Modell-ID noetig, nicht nur "haiku". Ein schnelles, billiges Modell reicht fuers Gate, z.B. <code>or/anthropic/claude-3.5-haiku</code>. Im Zweifel leer lassen.</div>
     <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
       <button id="set-cancel">Abbrechen</button>
       <button id="set-save" class="primary">Speichern</button>
@@ -296,8 +296,8 @@ function renderSidebar(pc) {
   const attr = pc.attribute || {};
   html += '<h2>Attribute</h2>' + Object.entries(attr).map(([k,v]) =>
     `<div class="stat"><span>${k}</span><span>${v} (${mod(v)})</span></div>`).join('');
-  const skills = Object.entries(pc.skills || {}).filter(([,s]) => s.wert > 0)
-    .sort((a,b) => b[1].wert - a[1].wert);
+  const skills = Object.entries(pc.skills || {}).filter(([,s]) => s.wert > 0 || s.ticks > 0)
+    .sort((a,b) => (b[1].wert - a[1].wert) || (b[1].ticks - a[1].ticks));
   if (skills.length) html += '<h2>Skills</h2>' + skills.map(([n,s]) =>
     `<div class="stat"><span>${n}</span><span>${s.wert} <span style="color:var(--dim)">(${s.ticks}t)</span></span></div>`).join('');
   if (pc.location) html += `<h2>Ort</h2><div>${pc.location.name}</div>`;
@@ -349,6 +349,8 @@ async function consumeStream(response, dmDiv) {
         el('lint', 'Wiki-Lint: ' + ev.problems.join(' | '));
       } else if (ev.type === 'validator') {
         el('lint', 'Validator: ' + ev.problems.join(' | '));
+      } else if (ev.type === 'hinweis') {
+        el('lint', ev.text);
       } else if (ev.type === 'error') {
         el('error', 'Fehler: ' + ev.error);
       }
@@ -823,8 +825,24 @@ $('set-save').onclick = async () => {
   } catch (e) { $('set-msg').textContent = e.message; $('set-msg').className = 'err'; }
 };
 $('pcsel').onchange = async () => {
-  if ($('pcsel').value) { await api(`/api/pcs/${$('pcsel').value}/activate`, {method: 'POST'}); refreshState(); }
+  if ($('pcsel').value) {
+    await api(`/api/pcs/${$('pcsel').value}/activate`, {method: 'POST'});
+    await refreshState();
+    await loadChat();   // Verlauf des gewechselten Charakters laden
+  }
 };
+
+// Chat-Verlauf server-seitig wiederherstellen (ueberlebt Reload)
+async function loadChat() {
+  try {
+    const r = await (await api('/api/history')).json();
+    $('log').innerHTML = '';
+    for (const m of r.messages) {
+      el(m.role === 'user' ? 'user' : 'dm', m.content);
+    }
+    if (r.messages.length) el('lint', '— Verlauf wiederhergestellt —');
+  } catch (e) { /* kein aktiver PC o.ae. */ }
+}
 // --- Charakter-Wizard (Punktepools aus dem Rulebook) ---
 let RULES = null;
 $('newpc').onclick = async () => {
@@ -869,7 +887,7 @@ $('protbtn').onclick = async () => {
   } catch (e) { el('error', e.message); }
 };
 
-refreshState();
+refreshState().then(loadChat);
 </script>
 </body>
 </html>

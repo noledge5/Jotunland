@@ -55,6 +55,34 @@ def test_rules_endpoint(client):
     assert len(r["skills"]) == 32 and "Krieger" in r["classes"]
 
 
+def test_history_restore_endpoint(client, env):
+    import app.main as main
+    client.post("/api/pcs", json={"name": "Bjorn"})
+    hist = [
+        {"role": "user", "content": "Ich schaue mich um."},
+        {"role": "assistant", "content": "Die Halle ist leer.", "tool_calls": []},
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "x", "name": "advance_time", "args": {}}]},
+        {"role": "tool", "tool_call_id": "x", "name": "advance_time", "content": "{}"},
+    ]
+    main.save_history("bjorn", hist)
+    msgs = client.get("/api/history").json()["messages"]
+    # Nur User + Erzaehler mit Text, keine Tool-/Leer-Turns
+    assert [m["role"] for m in msgs] == ["user", "assistant"]
+    assert msgs[1]["content"] == "Die Halle ist leer."
+
+
+def test_classifier_error_surfaces(client, env, monkeypatch):
+    """Ungueltige Classifier-Modell-ID -> sichtbarer Hinweis, kein stiller
+    Ausfall; Erzaehler uebernimmt (streamt hier mangels Key einen Fehler)."""
+    import app.main as main
+    client.post("/api/pcs", json={"name": "Bjorn"})
+    client.post("/api/settings", json={"classifier_model": "haiku"})
+    for v in ("ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "OPENROUTER_API_KEY"):
+        monkeypatch.delenv(v, raising=False)
+    r = client.post("/api/chat", json={"message": "Ich drohe ihm", "mode": "handeln"})
+    assert '"hinweis"' in r.text and "haiku" in r.text
+
+
 def test_chat_requires_pc(client):
     assert client.post("/api/chat", json={"message": "hi"}).status_code == 400
 

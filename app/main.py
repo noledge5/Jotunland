@@ -376,6 +376,21 @@ def get_graph():
     return {"nodes": nodes, "edges": sorted(edges)}
 
 
+@app.get("/api/history")
+def get_history(limit: int = 24):
+    """Juengste Chat-Turns (User + Erzaehler) fuer die Wiederherstellung
+    des Verlaufs nach einem Reload."""
+    settings = gsm.load_settings()
+    pc_slug = settings["active_pc_slug"]
+    if not pc_slug:
+        return {"messages": []}
+    history = load_history(pc_slug)
+    msgs = [{"role": m["role"], "content": m["content"]}
+            for m in history
+            if m["role"] in ("user", "assistant") and m.get("content", "").strip()]
+    return {"messages": msgs[-limit:]}
+
+
 @app.get("/api/journal")
 def get_journal():
     settings = gsm.load_settings()
@@ -552,6 +567,31 @@ async def _gate_stream(pc_slug: str, history: list[dict], gate: dict):
     yield _sse({"type": "awaiting_roll", "pending": pending})
 
 
+async def _turn_stream(pc_slug: str, history: list[dict], mode: str, user_message: str):
+    """Ein Zug: erst das Proben-Gate (Classifier), dann die Erzaehlung.
+    Classifier-Fehler (z.B. ungueltige Modell-ID) werden sichtbar gemeldet
+    und der Erzaehler-Tool-Loop uebernimmt als Fallback."""
+    settings = gsm.load_settings()
+    gs = gsm.load_pc(pc_slug)
+    if (settings.get("use_classifier") and mode in ("handeln", "sprechen")
+            and gs and not gs.get("combat")):
+        model = settings.get("classifier_model") or settings["model"]
+        gate = None
+        try:
+            gate = await classifier.classify(gs, user_message, model)
+        except Exception as e:
+            yield _sse({"type": "hinweis",
+                        "text": f"Proben-Gate uebersprungen — Classifier-Modell '{model}' "
+                                f"nicht nutzbar ({str(e)[:80]}). Im Zahnrad die volle Modell-ID "
+                                f"eintragen (z.B. or/anthropic/...) oder leer lassen."})
+        if gate and gate.get("braucht_probe"):
+            async for ev in _gate_stream(pc_slug, history, gate):
+                yield ev
+            return
+    async for ev in _agent_stream(pc_slug, history, mode=mode):
+        yield ev
+
+
 @app.post("/api/chat")
 async def chat(body: ChatIn):
     settings = gsm.load_settings()
@@ -564,22 +604,7 @@ async def chat(body: ChatIn):
         raise HTTPException(400, f"Unbekannter Modus '{body.mode}'.")
     history = load_history(pc_slug)
     history.append({"role": "user", "content": MODE_PREFIX[body.mode] + body.message})
-
-    # Proben-Gate: vor der Erzaehlung strukturell entscheiden, ob eine
-    # Probe noetig ist (nur Handeln/Sprechen, ausserhalb Kampf).
-    gs = gsm.load_pc(pc_slug)
-    if (settings.get("use_classifier") and body.mode in ("handeln", "sprechen")
-            and not (gs and gs.get("combat"))):
-        try:
-            gate = await classifier.classify(
-                gs, body.message, settings.get("classifier_model") or settings["model"])
-        except Exception:
-            gate = {"braucht_probe": False}  # Classifier faellt aus -> Erzaehler uebernimmt
-        if gate.get("braucht_probe"):
-            return StreamingResponse(_gate_stream(pc_slug, history, gate),
-                                     media_type="text/event-stream")
-
-    return StreamingResponse(_agent_stream(pc_slug, history, mode=body.mode),
+    return StreamingResponse(_turn_stream(pc_slug, history, body.mode, body.message),
                              media_type="text/event-stream")
 
 
