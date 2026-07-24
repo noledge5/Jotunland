@@ -135,6 +135,9 @@
         <div id="graphtools">
           <button id="layout-netz" class="laybtn active">Netz</button>
           <button id="layout-karte" class="laybtn">Karte</button>
+          <span style="width:8px"></span>
+          <button id="mode-ansehen" class="laybtn active" title="Nur ansehen und auswaehlen">Ansehen</button>
+          <button id="mode-bearbeiten" class="laybtn" title="Verschieben und anlegen">Bearbeiten</button>
           <input type="text" id="graphsearch" placeholder="Suche...">
           <button id="gnew" title="Neuen Eintrag anlegen">Neu</button>
         </div>
@@ -398,7 +401,18 @@ const TYPE_COLORS = {
 };
 const M2U = 2500;  // Meter pro viewBox-Einheit (3.000 km -> 1200 Einheiten)
 let G = {nodes: [], edges: [], adj: {}, sel: null, hiddenTypes: new Set(['scene']),
-         layout: 'netz', vb: {x: 0, y: 0, w: 1200, h: 900}, anim: null};
+         layout: 'netz', edit: false, vb: {x: 0, y: 0, w: 1200, h: 900}, anim: null};
+
+function setEdit(on) {
+  G.edit = on;
+  $('mode-ansehen').classList.toggle('active', !on);
+  $('mode-bearbeiten').classList.toggle('active', on);
+  $('gnew').style.display = on ? '' : 'none';
+  $('graphsvg').style.cursor = on && G.layout === 'karte' ? 'crosshair' : 'grab';
+}
+$('mode-ansehen').onclick = () => setEdit(false);
+$('mode-bearbeiten').onclick = () => setEdit(true);
+setEdit(false);  // Startzustand: nur ansehen
 
 async function openGraph() {
   showView('graph');
@@ -450,6 +464,7 @@ function setLayout(l) {
     G.vb = {x: 0, y: 0, w: 1200, h: 900};
     runSim(60);
   }
+  $('graphsvg').style.cursor = G.edit && l === 'karte' ? 'crosshair' : 'grab';
 }
 $('layout-netz').onclick = () => setLayout('netz');
 $('layout-karte').onclick = () => setLayout('karte');
@@ -524,7 +539,9 @@ function renderGraph() {
     const base = karte ? ({realm: 8, region: 6, city: 5, zone: 3.5, scene: 2.5}[n.type] || 3) * scale * 2
                        : 4 + Math.min(Math.sqrt(n.deg) * 2, 10);
     const r = Math.max(karte ? base : base, 1.5);
-    out += `<circle class="gnode${n.slug === G.sel ? ' sel' : ''}" data-slug="${n.slug}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r.toFixed(1)}" fill="${TYPE_COLORS[n.type] || '#888'}" opacity="${dim ? 0.25 : 1}"><title>${n.name} [${n.type}]</title></circle>`;
+    const dash = n.scope === 'charakter' ? ' stroke-dasharray="2 2" stroke="#c98a3a"' : '';
+    const title = `${n.name} [${n.type}]` + (n.scope === 'charakter' ? ' — charaktergebunden' : '') + (n.gesperrt ? ' — gesperrt' : '');
+    out += `<circle class="gnode${n.slug === G.sel ? ' sel' : ''}" data-slug="${n.slug}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r.toFixed(1)}" fill="${TYPE_COLORS[n.type] || '#888'}"${dash} opacity="${dim ? 0.25 : 1}"><title>${title}</title></circle>`;
     const label = karte ? (zoomed || ['realm', 'region', 'city'].includes(n.type) || n.slug === G.sel)
                         : (zoomed || n.deg >= 6 || n.slug === G.sel);
     if (label)
@@ -562,8 +579,13 @@ function buildTypeFilter() {
   };
   svg.addEventListener('mousedown', ev => {
     const slug = ev.target.dataset && ev.target.dataset.slug;
-    if (slug) { drag = {n: G.bySlug[slug], moved: false}; drag.n.pinned = true; }
-    else { pan = {x: ev.clientX, y: ev.clientY, vx: G.vb.x, vy: G.vb.y, moved: false}; svg.classList.add('panning'); }
+    // Ziehen von Knoten nur im Bearbeiten-Modus und nicht bei gesperrten
+    // Kanon-Orten (auf der Karte). Sonst zaehlt der Klick als Auswahl.
+    const node = slug ? G.bySlug[slug] : null;
+    const draggable = node && G.edit && !(G.layout === 'karte' && node.gesperrt);
+    if (draggable) { drag = {n: node, moved: false}; node.pinned = true; }
+    else { pan = {x: ev.clientX, y: ev.clientY, vx: G.vb.x, vy: G.vb.y,
+                  moved: false, slug}; svg.classList.add('panning'); }
   });
   svg.addEventListener('mousemove', ev => {
     if (drag) {
@@ -596,10 +618,12 @@ function buildTypeFilter() {
     }
     if (pan) {
       const wasClick = !pan.moved;
+      const clickedSlug = pan.slug;
       pan = null; svg.classList.remove('panning');
-      // Klick auf leere Kartenstelle -> neuen Eintrag hier anlegen
-      if (wasClick && G.layout === 'karte' && ev.target.tagName === 'svg') {
-        const p = pt(ev);
+      if (wasClick && clickedSlug) {
+        selectNode(clickedSlug);          // Knoten anklicken = auswaehlen
+      } else if (wasClick && G.edit && G.layout === 'karte' && ev.target.tagName === 'svg') {
+        const p = pt(ev);                 // leere Kartenstelle im Bearbeiten-Modus = anlegen
         openNewDialog([Math.round(p.x * M2U), Math.round((1200 - p.y) * M2U)]);
       }
     }
@@ -622,12 +646,28 @@ async function selectNode(slug) {
   const m = e.meta;
   const backlinks = G.edges.filter(([a, b]) => a === slug || b === slug)
     .map(([a, b]) => a === slug ? b : a);
+  const scope = m.scope || 'welt';
+  const gesperrt = !!m.gesperrt;
+  const scopeLabel = scope === 'charakter'
+    ? `Charaktergebunden${m.pc ? ' (' + m.pc + ')' : ''}`
+    : 'Welt-Kanon';
+  const scopeBtn = scope === 'charakter'
+    ? `<button id="ed-promote" class="primary" style="width:100%">In den Kanon uebernehmen →</button>`
+    : (gesperrt ? '' : `<button id="ed-demote" style="width:100%">An aktiven Charakter binden</button>`);
+  const lockRow = m.koordinaten
+    ? `<label style="display:flex;gap:6px;align-items:center;margin:6px 0;">
+         <input type="checkbox" id="ed-lock" ${gesperrt ? 'checked' : ''} style="width:auto">
+         Position gesperrt (Kanon-Ort, nicht verschiebbar)</label>`
+    : '';
   $('editor').innerHTML = `
     <h2>${m.type} — ${slug}</h2>
+    <div style="margin-bottom:6px;"><span class="tag" style="border-color:${scope === 'charakter' ? '#c98a3a' : 'var(--gold)'}">${scopeLabel}</span>${gesperrt ? '<span class="tag">gesperrt</span>' : ''}</div>
+    ${scopeBtn}
     <input type="text" id="ed-name" value="${(m.name || '').replace(/"/g, '&quot;')}" placeholder="Name">
     <h2>Status</h2><input type="text" id="ed-status" value="${m.status || ''}" placeholder="z.B. aktiv, tot, ruhend">
     <h2>Tags</h2><input type="text" id="ed-tags" value="${(m.tags || []).join(', ')}" placeholder="komma, getrennt">
     <h2>Links (ausgehend)</h2><input type="text" id="ed-links" value="${(m.links || []).join(', ')}">
+    ${lockRow}
     <h2>Text</h2><textarea id="ed-body">${e.body.replace(/</g, '&lt;')}</textarea>
     <button id="ed-save" class="primary">Speichern</button>
     <button id="ed-close">Schliessen</button>
@@ -635,6 +675,15 @@ async function selectNode(slug) {
     <h2>Verbunden mit</h2>
     <div>${backlinks.map(b => `<span class="backlink" data-goto="${b}">${b}</span>`).join('') || '—'}</div>`;
   $('editor').classList.add('open');
+  const setScope = async (target) => {
+    try {
+      await api('/api/wiki/' + slug + '/scope', {method: 'POST', body: JSON.stringify({scope: target})});
+      await openGraphRefresh();
+      selectNode(slug);
+    } catch (err) { $('ed-msg').textContent = err.message; $('ed-msg').className = 'err'; }
+  };
+  if ($('ed-promote')) $('ed-promote').onclick = () => setScope('welt');
+  if ($('ed-demote')) $('ed-demote').onclick = () => setScope('charakter');
   $('ed-save').onclick = async () => {
     const payload = {
       name: $('ed-name').value.trim(),
@@ -644,12 +693,13 @@ async function selectNode(slug) {
       body: $('ed-body').value,
     };
     if (!payload.status) delete payload.status;
+    if ($('ed-lock')) payload.gesperrt = $('ed-lock').checked;
     const msg = $('ed-msg');
     try {
       await api('/api/wiki/' + slug, {method: 'PUT', body: JSON.stringify(payload)});
       msg.textContent = 'Gespeichert.'; msg.className = 'ok';
       const n = G.bySlug[slug];
-      if (n) n.name = payload.name || n.name;
+      if (n) { n.name = payload.name || n.name; if ('gesperrt' in payload) n.gesperrt = payload.gesperrt; }
       openGraphRefresh();
     } catch (err) { msg.textContent = err.message; msg.className = 'err'; }
   };
@@ -666,6 +716,10 @@ async function openGraphRefresh() {
     if (!known.has(n.slug)) {
       const nn = {...n, x: 600 + (Math.random() - .5) * 200, y: 450 + (Math.random() - .5) * 200, vx: 0, vy: 0, deg: 0};
       G.nodes.push(nn); G.bySlug[n.slug] = nn;
+    } else {
+      const ex = G.bySlug[n.slug];  // Scope/Sperre/Koordinaten aktualisieren
+      ex.scope = n.scope; ex.gesperrt = n.gesperrt; ex.pc = n.pc;
+      if (n.koordinaten) ex.koordinaten = n.koordinaten;
     }
   }
   G.edges = data.edges.filter(([a, b]) => G.bySlug[a] && G.bySlug[b]);

@@ -43,6 +43,7 @@ def _scan() -> dict:
                 "parent": meta.get("parent"),
                 "status": meta.get("status"),
                 "scope": meta.get("scope", "welt"),
+                "gesperrt": bool(meta.get("gesperrt", False)),
                 "pc": meta.get("pc"),
                 "tags": meta.get("tags") or [],
                 "koordinaten": meta.get("koordinaten"),

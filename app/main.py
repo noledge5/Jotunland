@@ -254,7 +254,12 @@ class WikiEditIn(BaseModel):
     tags: list[str] | None = None
     links: list[str] | None = None
     koordinaten: list[int] | None = None
+    gesperrt: bool | None = None
     body: str | None = None
+
+
+class ScopeIn(BaseModel):
+    scope: str  # "welt" (in Kanon uebernehmen) | "charakter" (an PC binden)
 
 
 class WikiCreateIn(BaseModel):
@@ -266,6 +271,7 @@ class WikiCreateIn(BaseModel):
     stadt: str | None = None
     parent: str | None = None
     status: str | None = None
+    scope: str | None = None
     koordinaten: list[int] | None = None
 
 
@@ -278,6 +284,10 @@ def put_wiki(slug: str, patch: WikiEditIn):
     meta, body = entry
     data = patch.model_dump(exclude_none=True)
     new_body = data.pop("body", body)
+    # Gesperrte Kanon-Orte: Koordinaten nur aenderbar, wenn im selben
+    # Request entsperrt wird (Schutz gegen versehentliches Verschieben).
+    if "koordinaten" in data and meta.get("gesperrt") and data.get("gesperrt") is not False:
+        raise HTTPException(409, f"'{slug}' ist gesperrt — erst entsperren, dann verschieben.")
     if "links" in data:
         idx = wiki_index.get_index()["entries"]
         dead = [l for l in data["links"] if l not in idx and l != slug]
@@ -289,9 +299,38 @@ def put_wiki(slug: str, patch: WikiEditIn):
     return {"meta": meta, "body": new_body}
 
 
+@app.post("/api/wiki/{slug}/scope")
+def post_scope(slug: str, body: ScopeIn):
+    """Scope-Workflow: charaktergebundene Eintraege in den Kanon
+    uebernehmen (welt) oder Welt-Eintraege an den aktiven PC binden."""
+    from .wiki_io import read_world_entry, update_entry_meta
+    entry = read_world_entry(slug)
+    if entry is None:
+        raise HTTPException(404, f"'{slug}' nicht gefunden")
+    meta = entry[0]
+    if body.scope not in ("welt", "charakter"):
+        raise HTTPException(400, "scope muss 'welt' oder 'charakter' sein.")
+    if body.scope == "welt":
+        update_entry_meta(slug, {"scope": "welt", "pc": None})
+    else:
+        if meta.get("gesperrt"):
+            raise HTTPException(409, f"'{slug}' ist gesperrter Kanon — nicht an einen Charakter bindbar.")
+        active = gsm.load_settings()["active_pc_slug"]
+        if not active:
+            raise HTTPException(400, "Kein aktiver PC zum Binden.")
+        update_entry_meta(slug, {"scope": "charakter", "pc": active})
+    return {"slug": slug, "scope": body.scope}
+
+
 @app.post("/api/wiki")
 def post_wiki(body: WikiCreateIn):
-    result = tools.add_wiki_entry({}, body.model_dump(exclude_none=True))
+    # scope=charakter braucht einen aktiven PC zum Binden (Slug, kein Ort —
+    # manuell angelegte Eintraege werden nicht automatisch verlinkt).
+    ctx = {}
+    active = gsm.load_settings()["active_pc_slug"]
+    if body.scope == "charakter" and active:
+        ctx = {"slug": active}
+    result = tools.add_wiki_entry(ctx, body.model_dump(exclude_none=True))
     if result.startswith(("FEHLER", "WARNUNG")):
         raise HTTPException(400, result)
     return json.loads(result)
@@ -306,6 +345,7 @@ def get_graph():
                if e.get("scope", "welt") == "welt" or e.get("pc") == active}
     nodes = [{"slug": e["slug"], "name": e["name"], "type": e["type"],
               "status": e.get("status"), "scope": e.get("scope", "welt"),
+              "gesperrt": e.get("gesperrt", False), "pc": e.get("pc"),
               "koordinaten": e.get("koordinaten"), "tags": e.get("tags") or []}
              for e in visible.values()]
     edges = set()

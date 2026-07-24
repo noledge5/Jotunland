@@ -97,7 +97,7 @@ def test_wiki_edit_and_graph(client, env):
                    json={"status": "verschollen", "body": "Neuer Text."})
     assert r.status_code == 200
     assert r.json()["meta"]["status"] == "verschollen"
-    r = client.put("/api/wiki/salzhaven", json={"koordinaten": [2381000, 1201000]})
+    r = client.put("/api/wiki/salzhaven", json={"koordinaten": [2381000, 1201000], "gesperrt": False})
     assert r.json()["meta"]["koordinaten"] == [2381000, 1201000]
     assert client.put("/api/wiki/salzhaven",
                       json={"links": ["gibtsnicht"]}).status_code == 400
@@ -118,6 +118,44 @@ def test_wiki_edit_and_graph(client, env):
     slugs = {n["slug"] for n in g["nodes"]}
     assert "salzhaven" in slugs and "salzhaven-goldenes-schiff" in slugs
     assert ["salzhaven", "suedkueste"] in [sorted(e) for e in g["edges"]]
+
+
+def test_canon_locked_against_move(client, env):
+    """Kanon-Orte sind gesperrt: Koordinaten nur nach Entsperren aenderbar."""
+    import scripts.seed_world as sw
+    importlib.reload(sw)
+    sw.seed()
+    node = next(n for n in client.get("/api/graph").json()["nodes"] if n["slug"] == "salzhaven")
+    assert node["gesperrt"] is True
+    # Verschieben abgelehnt
+    r = client.put("/api/wiki/salzhaven", json={"koordinaten": [2400000, 1300000]})
+    assert r.status_code == 409
+    # Entsperren + verschieben in einem Request klappt
+    r = client.put("/api/wiki/salzhaven", json={"koordinaten": [2400000, 1300000], "gesperrt": False})
+    assert r.status_code == 200
+    assert r.json()["meta"]["koordinaten"] == [2400000, 1300000]
+
+
+def test_scope_promote_and_demote(client, env):
+    """Scope-Workflow: charaktergebunden -> Kanon und zurueck."""
+    import scripts.seed_world as sw
+    importlib.reload(sw)
+    sw.seed()
+    client.post("/api/pcs", json={"name": "Bjorn"})  # aktiver PC
+    # Charaktergebundenen Eintrag anlegen (wie im Spiel generiert)
+    client.post("/api/wiki", json={"type": "character", "name": "Dunkler Fremder",
+                                   "body": "Beobachtet.", "scope": "charakter"})
+    assert client.get("/api/wiki/dunkler-fremder").json()["meta"]["scope"] == "charakter"
+    # In den Kanon uebernehmen
+    r = client.post("/api/wiki/dunkler-fremder/scope", json={"scope": "welt"})
+    assert r.status_code == 200
+    assert client.get("/api/wiki/dunkler-fremder").json()["meta"]["scope"] == "welt"
+    # Wieder an Charakter binden
+    r = client.post("/api/wiki/dunkler-fremder/scope", json={"scope": "charakter"})
+    assert r.status_code == 200
+    assert client.get("/api/wiki/dunkler-fremder").json()["meta"]["pc"] == "bjorn"
+    # Gesperrten Kanon kann man nicht an einen Charakter binden
+    assert client.post("/api/wiki/salzhaven/scope", json={"scope": "charakter"}).status_code == 409
 
 
 def test_history_bounded_persistence(env):

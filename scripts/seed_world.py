@@ -38,6 +38,9 @@ class Seeder:
         self.anchors: dict[str, set] = {}
 
     def w(self, slug, meta, body):
+        # Geseedete Welt ist Kanon-Grundgeruest: gegen versehentliches
+        # Verschieben auf der Karte gesperrt (im Editor entsperrbar).
+        meta.setdefault("gesperrt", True)
         if write_world_entry(slug, meta, body, write_if_absent=True):
             self.written += 1
         else:
