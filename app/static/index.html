@@ -81,6 +81,23 @@
     background: var(--panel2); color: var(--text); border: 1px solid var(--border);
     padding: 6px; font: inherit; font-size: 13px; border-radius: 3px;
   }
+  /* Toasts / Banner */
+  #toasts { position: fixed; top: 52px; right: 14px; z-index: 20; display: flex;
+    flex-direction: column; gap: 6px; align-items: flex-end; pointer-events: none; }
+  .toast { background: var(--panel2); border: 1px solid var(--border); border-left-width: 3px;
+    border-radius: 3px; padding: 7px 12px; font-size: 13px; color: var(--text);
+    box-shadow: 0 4px 14px rgba(0,0,0,.5); animation: toastin .18s ease-out;
+    max-width: 260px; }
+  .toast.ok { border-left-color: var(--green); }
+  .toast.bad { border-left-color: var(--red); color: #e0a090; }
+  .toast.coin { border-left-color: var(--gold); }
+  .toast.gold { border-left-color: var(--gold); color: #e6c25a; font-weight: bold; }
+  .toast.dim { border-left-color: var(--dim); color: var(--dim); }
+  @keyframes toastin { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+  @media (max-width: 720px) { #toasts { left: 8px; right: 8px; align-items: stretch; } .toast { max-width: none; } }
+  /* Bild im Editor */
+  #editor img.entryimg { width: 100%; border-radius: 3px; border: 1px solid var(--border); margin-bottom: 6px; }
+  .promptbox { width: 100%; min-height: 120px; font-family: monospace; font-size: 12px; }
   /* Netz / Karte (Wiki-Graph) */
   #graphview { display: none; flex: 1; min-height: 0; }
   #graphview.open { display: flex; }
@@ -116,6 +133,7 @@
 </style>
 </head>
 <body>
+<div id="toasts"></div>
 <header>
   <h1>JOTUNLAND</h1>
   <select id="pcsel" title="Charakter"></select>
@@ -151,6 +169,8 @@
         <button class="modebtn" data-mode="sprechen">Sprechen</button>
         <button class="modebtn" data-mode="dm">DM-Frage</button>
         <button class="modebtn" data-mode="korrektur">Korrektur</button>
+        <div style="flex:1"></div>
+        <button id="scenepromptbtn" title="Bild-Prompt fuer die aktuelle Szene">Bild-Prompt</button>
       </div>
       <div id="inputrow">
         <textarea id="inp" placeholder="Was tust du?"></textarea>
@@ -181,6 +201,26 @@
   </div>
 </div>
 
+<div id="promptdlg" class="modal">
+  <div class="box" style="width:520px; text-align:left;">
+    <h3 id="pd-title">Bild-Prompt</h3>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:6px;">
+      Natural-Language-Prompt fuer ComfyUI/Krea. Kopieren, Bild erzeugen, dann
+      unten importieren (oder im Welt-Editor beim Ort).
+    </div>
+    <textarea id="pd-text" class="promptbox" readonly></textarea>
+    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <button id="pd-copy">Prompt kopieren</button>
+      <button id="pd-import">Bild importieren</button>
+      <input type="file" id="pd-file" accept="image/*" style="display:none">
+      <span id="pd-msg" style="font-size:12px;color:var(--dim)"></span>
+      <div style="flex:1"></div>
+      <button id="pd-close">Schliessen</button>
+    </div>
+    <img id="pd-preview" style="display:none;width:100%;margin-top:10px;border-radius:3px;border:1px solid var(--border)">
+  </div>
+</div>
+
 <div id="setdlg" class="modal">
   <div class="box" style="width:420px; text-align:left;">
     <h3>Einstellungen</h3>
@@ -196,6 +236,13 @@
     <h2 style="font-size:12px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin:6px 0 3px;">Classifier-Modell (optional)</h2>
     <input type="text" id="set-cmodel" style="width:100%;" placeholder="leer = gleiches Modell wie der Erzaehler">
     <div style="font-size:12px;color:var(--dim);margin-top:4px;">Volle Modell-ID noetig, nicht nur "haiku". Ein schnelles, billiges Modell reicht fuers Gate, z.B. <code>or/anthropic/claude-3.5-haiku</code>. Im Zweifel leer lassen.</div>
+    <h2 style="font-size:12px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin:14px 0 3px;">Kartenbild (Hintergrund)</h2>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <input type="text" id="set-mapbg" style="flex:1;" placeholder="/images/... oder leer">
+      <button id="set-mapupload" type="button">Hochladen</button>
+      <input type="file" id="set-mapfile" accept="image/*" style="display:none">
+    </div>
+    <div style="font-size:12px;color:var(--dim);margin-top:4px;">Quadratisches Bild der ganzen Welt (Proportion 3000×3000 km). Fuellt die Kartenflaeche; die Orte liegen massstabsgetreu darauf.</div>
     <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
       <button id="set-cancel">Abbrechen</button>
       <button id="set-save" class="primary">Speichern</button>
@@ -239,6 +286,49 @@
 const $ = id => document.getElementById(id);
 let streaming = false;
 
+// --- Toasts / Banner ---
+function toast(msg, kind) {
+  const d = document.createElement('div');
+  d.className = 'toast' + (kind ? ' ' + kind : '');
+  d.textContent = msg;
+  $('toasts').appendChild(d);
+  setTimeout(() => { d.style.transition = 'opacity .3s'; d.style.opacity = '0';
+    setTimeout(() => d.remove(), 300); }, 4200);
+}
+function coinTotal(c) { c = c || {}; return (c.gm||0)*100 + (c.sm||0)*10 + (c.kp||0); }
+function fmtCopper(kp) {
+  const gm = Math.floor(kp/100), sm = Math.floor((kp%100)/10), r = kp%10;
+  return [gm&&gm+' gm', sm&&sm+' sm', r&&r+' kp'].filter(Boolean).join(' ') || '0 kp';
+}
+let lastPc = null;
+function diffToasts(a, b) {
+  if (!a || !b) return;
+  const dhp = b.hp - a.hp;
+  if (dhp) toast((dhp>0?'+':'')+dhp+' LP', dhp>0?'ok':'bad');
+  const dc = coinTotal(b.coins) - coinTotal(a.coins);
+  if (dc) toast((dc>0?'+':'−') + fmtCopper(Math.abs(dc)) + (dc>0?' erhalten':' bezahlt'), 'coin');
+  const am = {}, bm = {};
+  (a.inventar||[]).forEach(i => am[i.name] = i.menge||1);
+  (b.inventar||[]).forEach(i => bm[i.name] = i.menge||1);
+  for (const n in bm) { if (!(n in am)) toast('Inventar: + ' + n, 'ok');
+    else if (bm[n] > am[n]) toast(`Inventar: +${bm[n]-am[n]}× ${n}`, 'ok'); }
+  for (const n in am) { if (!(n in bm)) toast('Inventar: − ' + n, 'bad');
+    else if (bm[n] < am[n]) toast(`Inventar: −${am[n]-bm[n]}× ${n}`, 'bad'); }
+  const as = a.skills||{}, bs = b.skills||{};
+  for (const n in bs) {
+    const aw = (as[n]||{}).wert||0, at = (as[n]||{}).ticks||0;
+    if (bs[n].wert > aw) toast(`Skill-Up: ${n} → ${bs[n].wert}`, 'gold');
+    else if (bs[n].ticks > at) toast(`Tick: ${n} (${bs[n].ticks})`, 'dim');
+  }
+  if ((b.level||1) > (a.level||1)) toast('Stufenaufstieg! Level ' + b.level, 'gold');
+  const ae = new Set(a.status_effekte||[]), be = new Set(b.status_effekte||[]);
+  for (const e of be) if (!ae.has(e)) toast('Status: ' + e, 'bad');
+  for (const e of ae) if (!be.has(e)) toast('Status weg: ' + e, 'ok');
+  const al = a.location&&a.location.slug, bl = b.location&&b.location.slug;
+  if (bl && bl !== al) toast('Ort: ' + b.location.name, 'coin');
+}
+function applyGamestate(pc) { diffToasts(lastPc, pc); lastPc = pc; renderSidebar(pc); }
+
 function el(cls, text) {
   const d = document.createElement('div');
   d.className = 'msg ' + cls;
@@ -267,6 +357,7 @@ async function refreshState() {
   $('pcsel').innerHTML = pcs.map(p =>
     `<option value="${p.slug}" ${p.slug === s.settings.active_pc_slug ? 'selected' : ''}>${p.name} (Lv ${p.level})</option>`
   ).join('') || '<option value="">— kein PC —</option>';
+  lastPc = s.pc;               // Basis fuer Toast-Diffs, ohne Fehl-Toasts beim Laden
   renderSidebar(s.pc);
   if (s.awaiting_roll) openRollDialog(s.awaiting_roll);
   return s;
@@ -344,7 +435,7 @@ async function consumeStream(response, dmDiv) {
       } else if (ev.type === 'awaiting_roll') {
         openRollDialog(ev.pending);
       } else if (ev.type === 'gamestate') {
-        renderSidebar(ev.pc);
+        applyGamestate(ev.pc);
       } else if (ev.type === 'lint') {
         el('lint', 'Wiki-Lint: ' + ev.problems.join(' | '));
       } else if (ev.type === 'validator') {
@@ -560,7 +651,10 @@ function renderGraph() {
   const selAdj = G.sel ? new Set([G.sel, ...(G.adj[G.sel] || [])]) : null;
   const karte = G.layout === 'karte';
   const scale = G.vb.w / 1200;
-  let out = '';
+  // Kartenbild fuellt die gesamte Weltflaeche (0..1200 Einheiten = 3000x3000 km)
+  let out = (karte && SETTINGS.map_bg)
+    ? `<image href="${SETTINGS.map_bg}" x="0" y="0" width="1200" height="1200" preserveAspectRatio="none" opacity="0.85"/>`
+    : '';
   for (const [a, b] of G.edges) {
     if (!vis.has(a) || !vis.has(b)) continue;
     const pa = nodePos(G.bySlug[a]), pb = nodePos(G.bySlug[b]);
@@ -696,10 +790,19 @@ async function selectNode(slug) {
          <input type="checkbox" id="ed-lock" ${gesperrt ? 'checked' : ''} style="width:auto">
          Position gesperrt (Kanon-Ort, nicht verschiebbar)</label>`
     : '';
+  const imgBlock = m.bild
+    ? `<img class="entryimg" src="${m.bild}" alt="">`
+    : '';
   $('editor').innerHTML = `
     <h2>${m.type} — ${slug}</h2>
     <div style="margin-bottom:6px;"><span class="tag" style="border-color:${scope === 'charakter' ? '#c98a3a' : 'var(--gold)'}">${scopeLabel}</span>${gesperrt ? '<span class="tag">gesperrt</span>' : ''}</div>
     ${scopeBtn}
+    ${imgBlock}
+    <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
+      <button id="ed-prompt">Bild-Prompt</button>
+      <button id="ed-imgimport">Bild importieren</button>
+      <input type="file" id="ed-imgfile" accept="image/*" style="display:none">
+    </div>
     <input type="text" id="ed-name" value="${(m.name || '').replace(/"/g, '&quot;')}" placeholder="Name">
     <h2>Status</h2><input type="text" id="ed-status" value="${m.status || ''}" placeholder="z.B. aktiv, tot, ruhend">
     <h2>Tags</h2><input type="text" id="ed-tags" value="${(m.tags || []).join(', ')}" placeholder="komma, getrennt">
@@ -721,6 +824,19 @@ async function selectNode(slug) {
   };
   if ($('ed-promote')) $('ed-promote').onclick = () => setScope('welt');
   if ($('ed-demote')) $('ed-demote').onclick = () => setScope('charakter');
+  $('ed-prompt').onclick = () => openScenePrompt(slug);
+  $('ed-imgimport').onclick = () => $('ed-imgfile').click();
+  $('ed-imgfile').onchange = async () => {
+    const f = $('ed-imgfile').files[0]; if (!f) return;
+    $('ed-msg').textContent = 'Lade hoch ...'; $('ed-msg').className = '';
+    const dataUrl = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
+    try {
+      const up = await (await api('/api/upload', {method: 'POST', body: JSON.stringify({data_url: dataUrl})})).json();
+      await api('/api/wiki/' + slug, {method: 'PUT', body: JSON.stringify({bild: up.path})});
+      const n = G.bySlug[slug]; if (n) n.bild = up.path;
+      selectNode(slug);
+    } catch (e) { $('ed-msg').textContent = e.message; $('ed-msg').className = 'err'; }
+  };
   $('ed-save').onclick = async () => {
     const payload = {
       name: $('ed-name').value.trim(),
@@ -773,6 +889,45 @@ async function openGraphRefresh() {
 $('graphbtn').onclick = () => view === 'graph' ? showView('chat') : openGraph();
 $('graphsearch').oninput = () => renderGraph();
 
+// --- Bild-Prompt-Dialog + Import ---
+let promptSlug = null;   // Ort, an den ein importiertes Bild gehaengt wird
+async function openScenePrompt(slug) {
+  $('pd-title').textContent = 'Bild-Prompt' + (slug ? ' — ' + slug : ' (aktuelle Szene)');
+  $('pd-text').value = 'Erzeuge Prompt ...';
+  $('pd-preview').style.display = 'none';
+  $('pd-msg').textContent = '';
+  $('promptdlg').classList.add('open');
+  try {
+    const r = await (await api('/api/scene_prompt', {method: 'POST',
+      body: JSON.stringify({slug: slug || null})})).json();
+    promptSlug = r.slug;
+    $('pd-text').value = r.prompt;
+    $('pd-title').textContent = 'Bild-Prompt — ' + r.name;
+  } catch (e) { $('pd-text').value = 'Fehler: ' + e.message; }
+}
+$('scenepromptbtn').onclick = () => openScenePrompt(null);
+$('pd-close').onclick = () => $('promptdlg').classList.remove('open');
+$('pd-copy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('pd-text').value); $('pd-msg').textContent = 'Kopiert.'; }
+  catch { $('pd-text').select(); document.execCommand('copy'); $('pd-msg').textContent = 'Kopiert.'; }
+};
+$('pd-import').onclick = () => $('pd-file').click();
+$('pd-file').onchange = async () => {
+  const f = $('pd-file').files[0];
+  if (!f) return;
+  $('pd-msg').textContent = 'Lade hoch ...';
+  const dataUrl = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
+  try {
+    const up = await (await api('/api/upload', {method: 'POST', body: JSON.stringify({data_url: dataUrl})})).json();
+    $('pd-preview').src = up.path; $('pd-preview').style.display = 'block';
+    if (promptSlug) {
+      await api('/api/wiki/' + promptSlug, {method: 'PUT', body: JSON.stringify({bild: up.path})});
+      const n = G.bySlug && G.bySlug[promptSlug]; if (n) n.bild = up.path;
+      $('pd-msg').textContent = 'Importiert und an "' + promptSlug + '" gehaengt.';
+    } else { $('pd-msg').textContent = 'Importiert: ' + up.path; }
+  } catch (e) { $('pd-msg').textContent = 'Fehler: ' + e.message; }
+};
+
 // --- Neuer Eintrag (Dialog, optional mit Kartenkoordinaten) ---
 let newCoords = null;
 function openNewDialog(coords) {
@@ -807,20 +962,33 @@ $('settingsbtn').onclick = () => {
   $('set-model').value = SETTINGS.model || '';
   $('set-classifier').checked = SETTINGS.use_classifier !== false;
   $('set-cmodel').value = SETTINGS.classifier_model || '';
+  $('set-mapbg').value = SETTINGS.map_bg || '';
   $('set-msg').textContent = '';
   $('setdlg').classList.add('open');
 };
 $('set-cancel').onclick = () => $('setdlg').classList.remove('open');
+$('set-mapupload').onclick = () => $('set-mapfile').click();
+$('set-mapfile').onchange = async () => {
+  const f = $('set-mapfile').files[0]; if (!f) return;
+  $('set-msg').textContent = 'Lade Kartenbild hoch ...';
+  const dataUrl = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
+  try {
+    const up = await (await api('/api/upload', {method: 'POST', body: JSON.stringify({data_url: dataUrl})})).json();
+    $('set-mapbg').value = up.path; $('set-msg').textContent = 'Hochgeladen — noch Speichern.';
+  } catch (e) { $('set-msg').textContent = e.message; }
+};
 $('set-save').onclick = async () => {
   const patch = {
     model: $('set-model').value.trim() || 'or/anthropic/claude-sonnet-4.5',
     use_classifier: $('set-classifier').checked,
     classifier_model: $('set-cmodel').value.trim(),
+    map_bg: $('set-mapbg').value.trim(),
   };
   try {
     await api('/api/settings', {method: 'POST', body: JSON.stringify(patch)});
     SETTINGS = {...SETTINGS, ...patch};
     $('setdlg').classList.remove('open');
+    if (view === 'graph' && G.layout === 'karte') renderGraph();
     el('tool', `Einstellungen gespeichert: ${patch.model}, Gate ${patch.use_classifier ? 'an' : 'aus'}`);
   } catch (e) { $('set-msg').textContent = e.message; $('set-msg').className = 'err'; }
 };

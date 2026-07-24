@@ -288,6 +288,7 @@ DEFAULT_SETTINGS = {
     "history_window": 30,
     "use_classifier": True,          # Proben-Gate vor der Erzaehlung (ADR-0001)
     "classifier_model": "",          # leer = gleiches Modell wie der Erzaehler
+    "map_bg": "",                    # Kartenbild-Pfad (fuellt die Weltflaeche)
 }
 
 

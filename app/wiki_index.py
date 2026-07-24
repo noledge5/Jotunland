@@ -47,6 +47,7 @@ def _scan() -> dict:
                 "pc": meta.get("pc"),
                 "tags": meta.get("tags") or [],
                 "koordinaten": meta.get("koordinaten"),
+                "bild": meta.get("bild"),
                 "bounding_box": meta.get("bounding_box"),
                 "links": links,
                 "path": str(p.relative_to(WORLD_DIR)),

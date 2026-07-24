@@ -159,6 +159,7 @@ class SettingsIn(BaseModel):
     history_window: int | None = None
     use_classifier: bool | None = None
     classifier_model: str | None = None
+    map_bg: str | None = None
 
 
 class PCIn(BaseModel):
@@ -270,6 +271,7 @@ class WikiEditIn(BaseModel):
     links: list[str] | None = None
     koordinaten: list[int] | None = None
     gesperrt: bool | None = None
+    bild: str | None = None
     body: str | None = None
 
 
@@ -351,6 +353,100 @@ def post_wiki(body: WikiCreateIn):
     return json.loads(result)
 
 
+# --- Bilder: Import (base64) + Serving + Prompt-Generator ---------------
+
+IMAGES_DIR = gsm.BASE_DIR / "data" / "images"
+_DATA_URL_RE = re.compile(r"data:image/([\w.+-]+);base64,(.+)", re.DOTALL)
+
+
+class UploadIn(BaseModel):
+    data_url: str
+
+
+@app.post("/api/upload")
+def upload_image(body: UploadIn):
+    """Bild als base64-Data-URL entgegennehmen (kein Multipart, keine
+    Extra-Abhaengigkeit), unter data/images/ ablegen, Pfad zurueckgeben."""
+    import base64
+    import uuid
+    m = _DATA_URL_RE.match(body.data_url.strip())
+    if not m:
+        raise HTTPException(400, "Kein Bild-Data-URL (data:image/...;base64,...)")
+    ext = m.group(1).lower().split("+")[0].replace("jpeg", "jpg")
+    if ext not in ("png", "jpg", "webp", "gif"):
+        raise HTTPException(400, f"Format '{ext}' nicht unterstuetzt")
+    try:
+        data = base64.b64decode(m.group(2))
+    except Exception:
+        raise HTTPException(400, "base64 nicht dekodierbar")
+    if len(data) > 15_000_000:
+        raise HTTPException(400, "Bild zu gross (max 15 MB)")
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    fname = f"{uuid.uuid4().hex}.{ext}"
+    (IMAGES_DIR / fname).write_bytes(data)
+    return {"path": f"/images/{fname}"}
+
+
+@app.get("/images/{fname}")
+def serve_image(fname: str):
+    if "/" in fname or ".." in fname or not re.match(r"^[\w.-]+$", fname):
+        raise HTTPException(400, "Ungueltiger Dateiname")
+    p = IMAGES_DIR / fname
+    if not p.exists():
+        raise HTTPException(404, "Bild nicht gefunden")
+    return FileResponse(p)
+
+
+IMG_PROMPT_SYSTEM = """Du schreibst Bild-Prompts fuer ComfyUI/Krea in natuerlicher
+Sprache (Englisch, weil Bildmodelle darauf besser reagieren). Aus einer
+Ortsbeschreibung machst du EINEN lebendigen First-Person-Prompt: was eine
+Person sieht, die dort steht — Architektur, Materialien, Licht, Wetter,
+Stimmung, wichtige Objekte, Vorder- und Hintergrund. 60-90 Woerter,
+Praesens, konkrete Nomen. Keine erfundenen Fakten, bleib bei der
+Beschreibung. Schliesse mit Stil-Tags:
+grimdark low-fantasy, painterly concept art, muted earthy palette,
+volumetric light, highly detailed, no text.
+Antworte NUR mit dem Prompt, ohne Vorrede."""
+
+
+class PromptIn(BaseModel):
+    slug: str | None = None
+
+
+@app.post("/api/scene_prompt")
+async def scene_prompt(body: PromptIn):
+    """Natural-Language-Bild-Prompt fuer einen Ort (Default: aktuelle
+    PC-Szene). Zum Kopieren in ComfyUI/Krea."""
+    from .wiki_io import read_world_entry
+    settings = gsm.load_settings()
+    slug = body.slug
+    pc = gsm.load_pc(settings["active_pc_slug"]) if settings["active_pc_slug"] else None
+    if not slug and pc and pc.get("location"):
+        slug = pc["location"]["slug"]
+    if not slug:
+        raise HTTPException(400, "Kein Ort angegeben und kein aktueller PC-Ort.")
+    entry = read_world_entry(slug)
+    if entry is None:
+        raise HTTPException(404, f"'{slug}' nicht gefunden")
+    meta, body_text = entry
+    if not llm_adapter.available_providers():
+        raise HTTPException(400, "Kein LLM-Key gesetzt.")
+    canon = read_world_entry("canon")
+    stil = f"Welt-Stil: {canon[1][:400]}" if canon else ""
+    zeit = f"Tageszeit: {pc['kalender']['stunde']} Uhr." if pc and pc.get("kalender") else ""
+    npcs = ""
+    if pc and pc.get("location", {}).get("slug") == slug and pc.get("anwesende_npcs"):
+        npcs = "Anwesend (als Figuren einbauen): " + ", ".join(pc["anwesende_npcs"])
+    user = (f"Ort: {meta.get('name', slug)} ({meta.get('type', '')})\n"
+            f"Beschreibung: {body_text.strip()}\n{zeit}\n{npcs}\n{stil}")
+    try:
+        prompt = (await llm_adapter.complete(settings["model"], IMG_PROMPT_SYSTEM, user,
+                                             max_tokens=350)).strip()
+    except Exception as e:
+        raise HTTPException(502, f"Prompt-Erzeugung fehlgeschlagen: {str(e)[:120]}")
+    return {"slug": slug, "name": meta.get("name", slug), "prompt": prompt}
+
+
 @app.get("/api/graph")
 def get_graph():
     idx = wiki_index.get_index(force=True)["entries"]
@@ -361,7 +457,8 @@ def get_graph():
     nodes = [{"slug": e["slug"], "name": e["name"], "type": e["type"],
               "status": e.get("status"), "scope": e.get("scope", "welt"),
               "gesperrt": e.get("gesperrt", False), "pc": e.get("pc"),
-              "koordinaten": e.get("koordinaten"), "tags": e.get("tags") or []}
+              "koordinaten": e.get("koordinaten"), "bild": e.get("bild"),
+              "tags": e.get("tags") or []}
              for e in visible.values()]
     edges = set()
     for e in visible.values():

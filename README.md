@@ -47,7 +47,15 @@ Klasse als narratives Label mit Startausruestung.
 ## Ansichten & Eingabe-Modi
 
 - **Chat** mit vier Modi: Handeln, Sprechen, DM-Frage (Zeit=0),
-  Korrektur (Zeit=0). Wuerfel-Dialog bei jeder Probe.
+  Korrektur (Zeit=0). Wuerfel-Dialog bei jeder Probe. Toast-Banner bei
+  jeder Aenderung (Muenzen, LP, Inventar, Ticks, Skill-Ups, Ortswechsel);
+  die Sidebar aktualisiert sich live nach jedem Tool.
+- **Bild-Workflow (ComfyUI/Krea)**: Button "Bild-Prompt" erzeugt einen
+  Natural-Language-Prompt (Englisch) fuer die aktuelle Szene oder einen
+  Ort im Editor — zum Kopieren in ComfyUI/Krea. Das erzeugte Bild
+  importierst du ueber "Bild importieren" (Upload) und es haengt am
+  Wiki-Eintrag. Ein optionales Kartenbild (Einstellungen) legt sich als
+  Hintergrund massstabsgetreu unter die Orte (Weltflaeche 3000x3000 km).
 - **Welt** — ein Editor, zwei Layouts:
   - **Netz**: alle Eintraege als Link-Graph (Force-Layout, Filter, Suche).
   - **Karte**: koordinatengebundene Eintraege an ihrer Meter-Position,

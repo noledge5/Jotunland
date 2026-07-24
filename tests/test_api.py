@@ -55,6 +55,36 @@ def test_rules_endpoint(client):
     assert len(r["skills"]) == 32 and "Krieger" in r["classes"]
 
 
+_PNG = ("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAf"
+        "FcSJAAAAC0lEQVR4nGNgAAIAAAUAAen63NgAAAAASUVORK5CYII=")
+
+
+def test_image_upload_serve_and_bild(client, env):
+    import scripts.seed_world as sw
+    importlib.reload(sw)
+    sw.seed()
+    r = client.post("/api/upload", json={"data_url": _PNG})
+    assert r.status_code == 200
+    path = r.json()["path"]
+    assert path.startswith("/images/") and path.endswith(".png")
+    assert client.get(path).status_code == 200
+    assert client.post("/api/upload", json={"data_url": "kein bild"}).status_code == 400
+    assert client.get("/images/../etc").status_code in (400, 404)
+    # Bild an einen Ort haengen (Kanon entsperren fuer den Test)
+    r = client.put("/api/wiki/salzhaven", json={"bild": path})
+    assert r.json()["meta"]["bild"] == path
+    node = next(n for n in client.get("/api/graph").json()["nodes"] if n["slug"] == "salzhaven")
+    assert node["bild"] == path
+
+
+def test_scene_prompt_validation(client, env):
+    import scripts.seed_world as sw
+    importlib.reload(sw)
+    sw.seed()
+    assert client.post("/api/scene_prompt", json={}).status_code == 400          # kein Ort
+    assert client.post("/api/scene_prompt", json={"slug": "gibtsnicht"}).status_code == 404
+
+
 def test_history_restore_endpoint(client, env):
     import app.main as main
     client.post("/api/pcs", json={"name": "Bjorn"})
