@@ -123,8 +123,7 @@
   <button id="graphbtn">Welt</button>
   <button id="protbtn" title="Session-Protokoll ins Journal schreiben">Protokoll</button>
   <div class="spacer"></div>
-  <input type="text" id="model" size="30" title="Modell-ID (or/..., gemini-..., claude-...)">
-  <button id="savemodel">Modell setzen</button>
+  <button id="settingsbtn" title="Einstellungen">⚙ Einstellungen</button>
 </header>
 <main>
   <div id="chatcol">
@@ -179,6 +178,29 @@
       <button id="nd-cancel">Abbrechen</button>
       <button id="nd-save" class="primary">Anlegen</button>
     </div>
+  </div>
+</div>
+
+<div id="setdlg" class="modal">
+  <div class="box" style="width:420px; text-align:left;">
+    <h3>Einstellungen</h3>
+    <h2 style="font-size:12px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin:10px 0 3px;">Erzaehler-Modell</h2>
+    <input type="text" id="set-model" style="width:100%;" placeholder="or/anthropic/claude-sonnet-4.5">
+    <label style="display:flex;gap:8px;align-items:center;margin:14px 0 4px;">
+      <input type="checkbox" id="set-classifier" style="width:auto">
+      <b style="color:var(--gold)">Proben-Gate</b> — entscheidet vor der Erzaehlung, ob gewuerfelt wird
+    </label>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:8px;">
+      Robuster (keine verpassten Proben), kostet aber einen kleinen Zusatz-Call pro Zug.
+    </div>
+    <h2 style="font-size:12px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin:6px 0 3px;">Classifier-Modell (optional)</h2>
+    <input type="text" id="set-cmodel" style="width:100%;" placeholder="leer = gleiches Modell wie der Erzaehler">
+    <div style="font-size:12px;color:var(--dim);margin-top:4px;">Tipp: ein schnelles, billiges Modell (z.B. Haiku) reicht fuers Gate.</div>
+    <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+      <button id="set-cancel">Abbrechen</button>
+      <button id="set-save" class="primary">Speichern</button>
+    </div>
+    <div id="set-msg" style="font-size:12px;margin-top:6px;"></div>
   </div>
 </div>
 
@@ -237,9 +259,10 @@ async function api(path, opts) {
 }
 
 // --- State / Sidebar ---
+let SETTINGS = {};
 async function refreshState() {
   const s = await (await api('/api/state')).json();
-  $('model').value = s.settings.model || '';
+  SETTINGS = s.settings;
   const pcs = await (await api('/api/pcs')).json();
   $('pcsel').innerHTML = pcs.map(p =>
     `<option value="${p.slug}" ${p.slug === s.settings.active_pc_slug ? 'selected' : ''}>${p.name} (Lv ${p.level})</option>`
@@ -778,9 +801,26 @@ $('send').onclick = send;
 $('inp').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
-$('savemodel').onclick = async () => {
-  await api('/api/settings', {method: 'POST', body: JSON.stringify({model: $('model').value.trim()})});
-  el('tool', 'Modell gesetzt: ' + $('model').value.trim());
+$('settingsbtn').onclick = () => {
+  $('set-model').value = SETTINGS.model || '';
+  $('set-classifier').checked = SETTINGS.use_classifier !== false;
+  $('set-cmodel').value = SETTINGS.classifier_model || '';
+  $('set-msg').textContent = '';
+  $('setdlg').classList.add('open');
+};
+$('set-cancel').onclick = () => $('setdlg').classList.remove('open');
+$('set-save').onclick = async () => {
+  const patch = {
+    model: $('set-model').value.trim() || 'or/anthropic/claude-sonnet-4.5',
+    use_classifier: $('set-classifier').checked,
+    classifier_model: $('set-cmodel').value.trim(),
+  };
+  try {
+    await api('/api/settings', {method: 'POST', body: JSON.stringify(patch)});
+    SETTINGS = {...SETTINGS, ...patch};
+    $('setdlg').classList.remove('open');
+    el('tool', `Einstellungen gespeichert: ${patch.model}, Gate ${patch.use_classifier ? 'an' : 'aus'}`);
+  } catch (e) { $('set-msg').textContent = e.message; $('set-msg').className = 'err'; }
 };
 $('pcsel').onchange = async () => {
   if ($('pcsel').value) { await api(`/api/pcs/${$('pcsel').value}/activate`, {method: 'POST'}); refreshState(); }
