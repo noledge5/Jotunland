@@ -73,6 +73,39 @@ def test_classifier_off_skips_gate(client, env, monkeypatch):
     assert called["n"] == 0
 
 
+def test_blocking_tool_not_last_pairs_results(client, env, monkeypatch):
+    """Regression: emittiert das LLM [request_skill_roll, advance_time] in
+    einem Batch, darf advance_time nicht ohne tool_result verwaisen — sonst
+    weist die LLM-API die Fortsetzung nach dem Wurf ab."""
+    import app.main as main
+    client.post("/api/pcs", json={"name": "Bjorn"})
+    client.post("/api/settings", json={"use_classifier": False})
+    cap = {"n": 0, "resume_msgs": None}
+
+    async def fake_stream(model, system, messages, tools_):
+        cap["n"] += 1
+        if cap["n"] == 1:
+            yield {"type": "tool_call", "id": "r", "name": "request_skill_roll",
+                   "args": {"skill": "Schleichen", "schwierigkeit": "Leicht"}}
+            yield {"type": "tool_call", "id": "a", "name": "advance_time", "args": {"minuten": 5}}
+            yield {"type": "stop", "reason": "tool_use"}
+        else:
+            cap["resume_msgs"] = messages
+            yield {"type": "text", "text": "Du schleichst weiter."}
+            yield {"type": "stop", "reason": "end"}
+    monkeypatch.setattr(main.llm_adapter, "stream_with_tools", fake_stream)
+
+    r = client.post("/api/chat", json={"message": "Ich schleiche", "mode": "handeln"})
+    assert '"awaiting_roll"' in r.text
+    hist = main.load_history("bjorn")
+    assert "a" in [m["tool_call_id"] for m in hist if m["role"] == "tool"]  # Skip-Result da
+
+    r2 = client.post("/api/roll", json={"wurf": 12})
+    assert r2.status_code == 200
+    results = {m["tool_call_id"] for m in cap["resume_msgs"] if m.get("role") == "tool"}
+    assert {"r", "a"} <= results  # beide tool_uses gepaart -> keine API-Ablehnung
+
+
 def test_classifier_validates_skill(env, monkeypatch):
     import app.classifier as clf
     importlib.reload(clf)

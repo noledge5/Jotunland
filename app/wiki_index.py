@@ -48,6 +48,7 @@ def _scan() -> dict:
                 "tags": meta.get("tags") or [],
                 "koordinaten": meta.get("koordinaten"),
                 "bild": meta.get("bild"),
+                "zeitplan": meta.get("zeitplan") or [],
                 "bounding_box": meta.get("bounding_box"),
                 "links": links,
                 "path": str(p.relative_to(WORLD_DIR)),

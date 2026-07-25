@@ -57,13 +57,11 @@ def scheduled_npcs(gs: dict) -> list[str]:
     here = set(gs.get("location_stack") or []) | {loc["slug"]}
     hour = gs.get("kalender", {}).get("stunde", 12)
     present = []
+    # Zeitplaene liegen im Index-Cache — kein Datei-Read pro Zug.
     for slug, e in wiki_index.get_index()["entries"].items():
         if e["type"] != "character":
             continue
-        entry = read_world_entry(slug)
-        if entry is None:
-            continue
-        for shift in entry[0].get("zeitplan") or []:
+        for shift in e.get("zeitplan") or []:
             ort = shift.get("ort") or shift.get("scene_id", "")
             von, bis = shift.get("von", 0), shift.get("bis", 24)
             in_shift = von <= hour < bis if von <= bis else (hour >= von or hour < bis)

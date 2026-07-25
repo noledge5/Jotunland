@@ -602,11 +602,21 @@ async def _agent_stream(pc_slug: str, history: list[dict],
                 break
 
             blocked = False
-            for tc in tool_calls:
+            for i, tc in enumerate(tool_calls):
                 result = tools.execute_tool(gs, tc["name"], tc["args"])
                 if result == tools.BLOCKING:
                     _pending_responses[pc_slug] = {
                         "tool_call_id": tc["id"], "name": tc["name"]}
+                    # Jeder tool_use braucht ein tool_result, sonst weist die
+                    # LLM-API die Fortsetzung ab. Verbleibende (nach dem Blocker)
+                    # Tool-Calls dieses Batches werden nicht ausgefuehrt — sie
+                    # bekommen ein Skip-Result, damit die Paarung gueltig bleibt.
+                    for skipped in tool_calls[i + 1:]:
+                        history.append({"role": "tool", "tool_call_id": skipped["id"],
+                                        "name": skipped["name"],
+                                        "content": "FEHLER: nicht ausgefuehrt — zuerst wird "
+                                                   "der Wurf aufgeloest. Nach dem Wurf bei "
+                                                   "Bedarf erneut aufrufen."})
                     gsm.save_pc(gs)
                     save_history(pc_slug, history)
                     pending = ((gs.get("combat") or {}).get("pending_roll")
@@ -631,10 +641,13 @@ async def _agent_stream(pc_slug: str, history: list[dict],
         problems = validate_narration(turn_text, turn_tools, gs)
         if problems:
             yield _sse({"type": "validator", "problems": problems})
-    last_user = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
-    lint = _quick_lint(last_user if isinstance(last_user, str) else "")
-    if lint:
-        yield _sse({"type": "lint", "problems": lint})
+    # Wiki-Lint (voller Rescan) nur, wenn der DM diesen Zug ins Wiki geschrieben
+    # hat — sonst waere es ein O(alle Dateien)-Scan pro Spielzug ohne Nutzen.
+    if {"add_wiki_entry", "update_wiki_entry"} & set(turn_tools):
+        last_user = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
+        lint = _quick_lint(last_user if isinstance(last_user, str) else "")
+        if lint:
+            yield _sse({"type": "lint", "problems": lint})
     yield _sse({"type": "gamestate", "pc": gsm.load_pc(pc_slug)})
     yield _sse({"type": "done"})
 
