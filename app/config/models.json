@@ -1,0 +1,17 @@
+{
+  "_comment": "Kuratierter Modell-Katalog fuers Frontend-Dropdown. Nur Modelle mit Tool-Use (Function-Calling) gehoeren hier rein — die Engine ruft bei jeder unsicheren Aktion request_skill_roll auf (ADR-0001); ein Modell ohne Tools wuerde die Mechanik aushebeln. Alle IDs tragen das or/-Provider-Prefix (OpenRouter). Der 'gratis'-Bestand bei OpenRouter rotiert — der Button 'Freie OpenRouter-Modelle laden' im Frontend zieht die aktuelle Liste live. Freie Modelle sind rate-limited und liefern schwaechere Prosa; fuer echtes Spiel ein bezahltes waehlen.",
+  "default": "or/anthropic/claude-sonnet-4.5",
+  "classifier_hint": "or/anthropic/claude-3.5-haiku",
+  "models": [
+    {"id": "or/anthropic/claude-sonnet-4.5", "label": "Claude Sonnet 4.5", "tag": "premium", "note": "Bester Erzaehler, teuerste Option"},
+    {"id": "or/anthropic/claude-3.7-sonnet", "label": "Claude 3.7 Sonnet", "tag": "premium", "note": "Sehr stark, guenstiger als 4.5"},
+    {"id": "or/google/gemini-2.5-pro", "label": "Gemini 2.5 Pro", "tag": "premium", "note": "Grosser Kontext, gute Tools"},
+    {"id": "or/anthropic/claude-3.5-haiku", "label": "Claude 3.5 Haiku", "tag": "guenstig", "note": "Schnell und billig, ideal fuers Proben-Gate"},
+    {"id": "or/google/gemini-2.0-flash-001", "label": "Gemini 2.0 Flash", "tag": "guenstig", "note": "Schnell, guenstig, Tools zuverlaessig"},
+    {"id": "or/openai/gpt-4o-mini", "label": "GPT-4o mini", "tag": "guenstig", "note": "Billig, solides Function-Calling"},
+    {"id": "or/deepseek/deepseek-chat-v3-0324:free", "label": "DeepSeek V3 (gratis)", "tag": "gratis", "note": "Kostenlos, Tool-Use ok, ordentliche Prosa"},
+    {"id": "or/google/gemini-2.0-flash-exp:free", "label": "Gemini 2.0 Flash Exp (gratis)", "tag": "gratis", "note": "Kostenlos, schnell, Tools"},
+    {"id": "or/meta-llama/llama-3.3-70b-instruct:free", "label": "Llama 3.3 70B (gratis)", "tag": "gratis", "note": "Kostenlos, Tool-Use ok"},
+    {"id": "or/mistralai/mistral-small-3.1-24b-instruct:free", "label": "Mistral Small 3.1 (gratis)", "tag": "gratis", "note": "Kostenlos, Tools"}
+  ]
+}

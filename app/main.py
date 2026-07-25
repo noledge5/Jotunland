@@ -22,7 +22,7 @@ from pydantic import BaseModel
 
 from . import classifier
 from . import gamestate as gsm
-from . import llm_adapter, tools, wiki_context, wiki_index
+from . import llm_adapter, model_catalog, tools, wiki_context, wiki_index
 from .wiki_io import append_pc_journal, read_journal_tail
 
 app = FastAPI(title="NovaTerrum")
@@ -197,6 +197,24 @@ def get_settings():
 @app.post("/api/settings")
 def post_settings(s: SettingsIn):
     return gsm.save_settings({k: v for k, v in s.model_dump().items() if v is not None})
+
+
+@app.get("/api/models")
+def get_models():
+    """Kuratierter Modell-Katalog fuers Dropdown (nur tool-faehige Modelle)."""
+    return model_catalog.load_catalog()
+
+
+@app.get("/api/models/openrouter")
+async def get_models_openrouter(only_tools: bool = True):
+    """Live-Verzeichnis von OpenRouter, gefiltert auf tool-faehige Modelle.
+    Gegen die Rotation des Gratis-Bestands: liefert den aktuellen Stand."""
+    try:
+        models = await model_catalog.fetch_openrouter(only_tools=only_tools)
+    except Exception as e:  # Netz/HTTP — Frontend faellt auf den Katalog zurueck
+        raise HTTPException(status_code=502,
+                            detail=f"OpenRouter-Verzeichnis nicht erreichbar: {e}")
+    return {"models": models}
 
 
 @app.get("/api/pcs")

@@ -137,6 +137,7 @@
 <header>
   <h1>JOTUNLAND</h1>
   <select id="pcsel" title="Charakter"></select>
+  <select id="modelsel" title="Erzaehler-Modell — sofort umschalten"></select>
   <button id="newpc">Neuer PC</button>
   <button id="graphbtn">Welt</button>
   <button id="protbtn" title="Session-Protokoll ins Journal schreiben">Protokoll</button>
@@ -225,7 +226,12 @@
   <div class="box" style="width:420px; text-align:left;">
     <h3>Einstellungen</h3>
     <h2 style="font-size:12px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin:10px 0 3px;">Erzaehler-Modell</h2>
-    <input type="text" id="set-model" style="width:100%;" placeholder="or/anthropic/claude-sonnet-4.5">
+    <select id="set-model-sel" style="width:100%;"></select>
+    <input type="text" id="set-model" style="width:100%;margin-top:6px;display:none;" placeholder="or/provider/modell-id">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px;">
+      <span id="set-model-note" style="font-size:12px;color:var(--dim);"></span>
+      <button id="set-model-refresh" type="button" style="font-size:12px;white-space:nowrap;">Freie OpenRouter-Modelle laden</button>
+    </div>
     <label style="display:flex;gap:8px;align-items:center;margin:14px 0 4px;">
       <input type="checkbox" id="set-classifier" style="width:auto">
       <b style="color:var(--gold)">Proben-Gate</b> — entscheidet vor der Erzaehlung, ob gewuerfelt wird
@@ -234,8 +240,9 @@
       Robuster (keine verpassten Proben), kostet aber einen kleinen Zusatz-Call pro Zug.
     </div>
     <h2 style="font-size:12px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin:6px 0 3px;">Classifier-Modell (optional)</h2>
-    <input type="text" id="set-cmodel" style="width:100%;" placeholder="leer = gleiches Modell wie der Erzaehler">
-    <div style="font-size:12px;color:var(--dim);margin-top:4px;">Volle Modell-ID noetig, nicht nur "haiku". Ein schnelles, billiges Modell reicht fuers Gate, z.B. <code>or/anthropic/claude-3.5-haiku</code>. Im Zweifel leer lassen.</div>
+    <select id="set-cmodel-sel" style="width:100%;"></select>
+    <input type="text" id="set-cmodel" style="width:100%;margin-top:6px;display:none;" placeholder="or/provider/modell-id">
+    <div style="font-size:12px;color:var(--dim);margin-top:4px;">Leer = gleiches Modell wie der Erzaehler. Ein schnelles, billiges Modell reicht fuers Gate, z.B. <code>or/anthropic/claude-3.5-haiku</code>.</div>
     <h2 style="font-size:12px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin:14px 0 3px;">Kartenbild (Hintergrund)</h2>
     <div style="display:flex;gap:6px;align-items:center;">
       <input type="text" id="set-mapbg" style="flex:1;" placeholder="/images/... oder leer">
@@ -350,9 +357,46 @@ async function api(path, opts) {
 
 // --- State / Sidebar ---
 let SETTINGS = {};
+
+// --- Modell-Katalog / Switch ---
+let MODELS = [];                         // [{id, label, tag, note}]
+const CUSTOM_MODEL = '__custom__';
+
+async function loadModelCatalog() {
+  try {
+    const c = await (await api('/api/models')).json();
+    MODELS = c.models || [];
+  } catch (e) { MODELS = []; }
+}
+
+function modelNote(id) {
+  const m = MODELS.find(x => x.id === id);
+  if (m) return m.note || '';
+  return id ? 'Eigenes Modell — volle ID noetig (mit or/-Prefix fuer OpenRouter).' : '';
+}
+
+// Baut die Optionen eines Modell-Selects. `current` bleibt garantiert
+// waehlbar, auch wenn es nicht im Katalog steht. opts.emptyLabel fuegt eine
+// Leer-Option vorn an, opts.custom haengt "Eigenes Modell…" an.
+function fillModelSelect(sel, current, opts = {}) {
+  const known = new Set(MODELS.map(m => m.id));
+  let html = '';
+  if (opts.emptyLabel) html += `<option value="">${opts.emptyLabel}</option>`;
+  html += MODELS.map(m => `<option value="${m.id}">${m.label}${m.tag ? ` — ${m.tag}` : ''}</option>`).join('');
+  if (current && !known.has(current)) html += `<option value="${current}">${current} (eigenes)</option>`;
+  if (opts.custom) html += `<option value="${CUSTOM_MODEL}">Eigenes Modell eingeben…</option>`;
+  sel.innerHTML = html;
+  sel.value = current || '';
+}
+
+function refreshModelToolbar() {
+  fillModelSelect($('modelsel'), SETTINGS.model || '', {});
+}
+
 async function refreshState() {
   const s = await (await api('/api/state')).json();
   SETTINGS = s.settings;
+  refreshModelToolbar();
   const pcs = await (await api('/api/pcs')).json();
   $('pcsel').innerHTML = pcs.map(p =>
     `<option value="${p.slug}" ${p.slug === s.settings.active_pc_slug ? 'selected' : ''}>${p.name} (Lv ${p.level})</option>`
@@ -959,12 +1003,50 @@ $('inp').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
 $('settingsbtn').onclick = () => {
-  $('set-model').value = SETTINGS.model || '';
+  const m = SETTINGS.model || '';
+  fillModelSelect($('set-model-sel'), m, {custom: true});
+  $('set-model').style.display = 'none';
+  $('set-model').value = m;
+  $('set-model-note').textContent = modelNote(m);
+
+  const cm = SETTINGS.classifier_model || '';
+  fillModelSelect($('set-cmodel-sel'), cm, {emptyLabel: 'leer = wie Erzaehler', custom: true});
+  $('set-cmodel').style.display = 'none';
+  $('set-cmodel').value = cm;
+
   $('set-classifier').checked = SETTINGS.use_classifier !== false;
-  $('set-cmodel').value = SETTINGS.classifier_model || '';
   $('set-mapbg').value = SETTINGS.map_bg || '';
-  $('set-msg').textContent = '';
+  $('set-msg').textContent = ''; $('set-msg').className = '';
   $('setdlg').classList.add('open');
+};
+$('set-model-sel').onchange = () => {
+  const v = $('set-model-sel').value, custom = v === CUSTOM_MODEL;
+  $('set-model').style.display = custom ? 'block' : 'none';
+  if (custom) $('set-model').focus();
+  $('set-model-note').textContent = custom
+    ? 'Eigene Modell-ID eingeben (mit or/-Prefix fuer OpenRouter).' : modelNote(v);
+};
+$('set-cmodel-sel').onchange = () => {
+  const custom = $('set-cmodel-sel').value === CUSTOM_MODEL;
+  $('set-cmodel').style.display = custom ? 'block' : 'none';
+  if (custom) $('set-cmodel').focus();
+};
+$('set-model-refresh').onclick = async () => {
+  const btn = $('set-model-refresh'), old = btn.textContent;
+  btn.textContent = 'Lade …'; btn.disabled = true;
+  try {
+    const r = await (await api('/api/models/openrouter?only_tools=true')).json();
+    const known = new Set(MODELS.map(m => m.id));
+    const added = (r.models || []).filter(m => m.free && !known.has(m.id))
+      .map(m => ({id: m.id, label: m.label, tag: 'gratis', note: 'Live von OpenRouter'}));
+    MODELS = [...MODELS, ...added];
+    const curM = $('set-model-sel').value === CUSTOM_MODEL ? $('set-model').value.trim() : $('set-model-sel').value;
+    const curC = $('set-cmodel-sel').value === CUSTOM_MODEL ? $('set-cmodel').value.trim() : $('set-cmodel-sel').value;
+    fillModelSelect($('set-model-sel'), curM, {custom: true});
+    fillModelSelect($('set-cmodel-sel'), curC, {emptyLabel: 'leer = wie Erzaehler', custom: true});
+    $('set-msg').textContent = `${added.length} gratis Tool-Modelle geladen.`; $('set-msg').className = '';
+  } catch (e) { $('set-msg').textContent = e.message; $('set-msg').className = 'err'; }
+  finally { btn.textContent = old; btn.disabled = false; }
 };
 $('set-cancel').onclick = () => $('setdlg').classList.remove('open');
 $('set-mapupload').onclick = () => $('set-mapfile').click();
@@ -978,15 +1060,20 @@ $('set-mapfile').onchange = async () => {
   } catch (e) { $('set-msg').textContent = e.message; }
 };
 $('set-save').onclick = async () => {
+  const narr = $('set-model-sel').value === CUSTOM_MODEL
+    ? $('set-model').value.trim() : $('set-model-sel').value;
+  const clas = $('set-cmodel-sel').value === CUSTOM_MODEL
+    ? $('set-cmodel').value.trim() : $('set-cmodel-sel').value;
   const patch = {
-    model: $('set-model').value.trim() || 'or/anthropic/claude-sonnet-4.5',
+    model: narr || 'or/anthropic/claude-sonnet-4.5',
     use_classifier: $('set-classifier').checked,
-    classifier_model: $('set-cmodel').value.trim(),
+    classifier_model: clas,                 // '' erlaubt = wie Erzaehler
     map_bg: $('set-mapbg').value.trim(),
   };
   try {
     await api('/api/settings', {method: 'POST', body: JSON.stringify(patch)});
     SETTINGS = {...SETTINGS, ...patch};
+    refreshModelToolbar();                   // Toolbar-Switch synchron halten
     $('setdlg').classList.remove('open');
     if (view === 'graph' && G.layout === 'karte') renderGraph();
     el('tool', `Einstellungen gespeichert: ${patch.model}, Gate ${patch.use_classifier ? 'an' : 'aus'}`);
@@ -998,6 +1085,15 @@ $('pcsel').onchange = async () => {
     await refreshState();
     await loadChat();   // Verlauf des gewechselten Charakters laden
   }
+};
+$('modelsel').onchange = async () => {
+  const model = $('modelsel').value;
+  if (!model || model === SETTINGS.model) return;
+  try {
+    await api('/api/settings', {method: 'POST', body: JSON.stringify({model})});
+    SETTINGS = {...SETTINGS, model};
+    el('tool', `Modell gewechselt: ${model}`);
+  } catch (e) { el('error', e.message); refreshModelToolbar(); }
 };
 
 // Chat-Verlauf server-seitig wiederherstellen (ueberlebt Reload)
@@ -1055,7 +1151,7 @@ $('protbtn').onclick = async () => {
   } catch (e) { el('error', e.message); }
 };
 
-refreshState().then(loadChat);
+loadModelCatalog().then(refreshState).then(loadChat);
 </script>
 </body>
 </html>
