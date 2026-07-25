@@ -1,0 +1,15 @@
+services:
+  jotunland:
+    build: .
+    image: jotunland:latest
+    container_name: jotunland
+    restart: unless-stopped
+    ports:
+      - "3111:3111"          # Host-Port : Container-Port (LAN + Tailscale)
+    env_file:
+      - .env                 # OPENROUTER_API_KEY (und/oder ANTHROPIC/GOOGLE)
+    environment:
+      BRANCH: claude/project-review-documentation-0a2bmp
+      UPDATE_INTERVAL: "120" # Sekunden zwischen den Auto-Update-Checks
+    volumes:
+      - ./appdata:/app/src   # Code-Clone + Spielstand (wiki/, data/) persistent

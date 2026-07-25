@@ -1,0 +1,13 @@
+# Das Image braucht nur requirements.txt + deploy/entrypoint.sh (Build-Cache).
+# Der App-Code wird zur Laufzeit geklont — alles andere bleibt draussen.
+.git
+appdata/
+wiki/
+data/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.env
+tests/
