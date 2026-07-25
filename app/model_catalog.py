@@ -27,7 +27,7 @@ def load_catalog() -> dict:
     """Kuratierten Katalog frisch von Disk lesen."""
     with open(CATALOG_PATH, encoding="utf-8") as f:
         cat = json.load(f)
-    cat.setdefault("default", "or/anthropic/claude-sonnet-4.5")
+    cat.setdefault("default", "or/anthropic/claude-sonnet-5")
     cat.setdefault("models", [])
     return cat
 

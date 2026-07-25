@@ -1,17 +1,22 @@
 {
-  "_comment": "Kuratierter Modell-Katalog fuers Frontend-Dropdown. Nur Modelle mit Tool-Use (Function-Calling) gehoeren hier rein — die Engine ruft bei jeder unsicheren Aktion request_skill_roll auf (ADR-0001); ein Modell ohne Tools wuerde die Mechanik aushebeln. Alle IDs tragen das or/-Provider-Prefix (OpenRouter). Der 'gratis'-Bestand bei OpenRouter rotiert — der Button 'Freie OpenRouter-Modelle laden' im Frontend zieht die aktuelle Liste live. Freie Modelle sind rate-limited und liefern schwaechere Prosa; fuer echtes Spiel ein bezahltes waehlen.",
-  "default": "or/anthropic/claude-sonnet-4.5",
-  "classifier_hint": "or/anthropic/claude-3.5-haiku",
+  "_comment": "Kuratierter Modell-Katalog fuers Frontend-Dropdown. Nur Modelle mit Tool-Use (Function-Calling) gehoeren hier rein — die Engine ruft bei jeder unsicheren Aktion request_skill_roll auf (ADR-0001); ein Modell ohne Tools wuerde die Mechanik aushebeln. Alle IDs tragen das or/-Provider-Prefix (OpenRouter). Preise als grobe Orientierung ($/Mtok Prompt, Stand Live-Abgleich). Der 'gratis'-Bestand bei OpenRouter rotiert und ist rate-limited — der Button 'Freie OpenRouter-Modelle laden' im Frontend zieht den aktuellen Stand live. Fuer echtes Spiel ein bezahltes Modell waehlen; gratis liefert schwaechere Prosa.",
+  "default": "or/anthropic/claude-sonnet-5",
+  "classifier_hint": "or/google/gemini-2.5-flash-lite",
   "models": [
-    {"id": "or/anthropic/claude-sonnet-4.5", "label": "Claude Sonnet 4.5", "tag": "premium", "note": "Bester Erzaehler, teuerste Option"},
-    {"id": "or/anthropic/claude-3.7-sonnet", "label": "Claude 3.7 Sonnet", "tag": "premium", "note": "Sehr stark, guenstiger als 4.5"},
-    {"id": "or/google/gemini-2.5-pro", "label": "Gemini 2.5 Pro", "tag": "premium", "note": "Grosser Kontext, gute Tools"},
-    {"id": "or/anthropic/claude-3.5-haiku", "label": "Claude 3.5 Haiku", "tag": "guenstig", "note": "Schnell und billig, ideal fuers Proben-Gate"},
-    {"id": "or/google/gemini-2.0-flash-001", "label": "Gemini 2.0 Flash", "tag": "guenstig", "note": "Schnell, guenstig, Tools zuverlaessig"},
-    {"id": "or/openai/gpt-4o-mini", "label": "GPT-4o mini", "tag": "guenstig", "note": "Billig, solides Function-Calling"},
-    {"id": "or/deepseek/deepseek-chat-v3-0324:free", "label": "DeepSeek V3 (gratis)", "tag": "gratis", "note": "Kostenlos, Tool-Use ok, ordentliche Prosa"},
-    {"id": "or/google/gemini-2.0-flash-exp:free", "label": "Gemini 2.0 Flash Exp (gratis)", "tag": "gratis", "note": "Kostenlos, schnell, Tools"},
-    {"id": "or/meta-llama/llama-3.3-70b-instruct:free", "label": "Llama 3.3 70B (gratis)", "tag": "gratis", "note": "Kostenlos, Tool-Use ok"},
-    {"id": "or/mistralai/mistral-small-3.1-24b-instruct:free", "label": "Mistral Small 3.1 (gratis)", "tag": "gratis", "note": "Kostenlos, Tools"}
+    {"id": "or/anthropic/claude-opus-4.8", "label": "Claude Opus 4.8", "tag": "premium", "note": "Staerkster Erzaehler, teuerste Option (~$5)"},
+    {"id": "or/anthropic/claude-sonnet-5", "label": "Claude Sonnet 5", "tag": "premium", "note": "Bestes Preis/Leistung, empfohlener Default (~$2)"},
+    {"id": "or/anthropic/claude-sonnet-4.5", "label": "Claude Sonnet 4.5", "tag": "premium", "note": "Bewaehrt, etwas teurer als Sonnet 5 (~$3)"},
+    {"id": "or/google/gemini-3.1-pro-preview", "label": "Gemini 3.1 Pro", "tag": "premium", "note": "Grosser Kontext, starke Tools (~$2)"},
+    {"id": "or/openai/gpt-5.1", "label": "GPT-5.1", "tag": "premium", "note": "Solides Function-Calling (~$1.25)"},
+    {"id": "or/anthropic/claude-haiku-4.5", "label": "Claude Haiku 4.5", "tag": "guenstig", "note": "Schnell, zuverlaessig, gut fuers Gate (~$1)"},
+    {"id": "or/google/gemini-2.5-flash", "label": "Gemini 2.5 Flash", "tag": "guenstig", "note": "Schnell und guenstig (~$0.30)"},
+    {"id": "or/google/gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash Lite", "tag": "guenstig", "note": "Sehr billig, ideal fuers Proben-Gate (~$0.10)"},
+    {"id": "or/openai/gpt-5-mini", "label": "GPT-5 Mini", "tag": "guenstig", "note": "Guenstig, gutes Tool-Handling (~$0.25)"},
+    {"id": "or/openai/gpt-5-nano", "label": "GPT-5 Nano", "tag": "guenstig", "note": "Billigst, reicht fuers Gate (~$0.05)"},
+    {"id": "or/nvidia/nemotron-3-ultra-550b-a55b:free", "label": "Nemotron 3 Ultra 550B (gratis)", "tag": "gratis", "note": "Groesstes Gratis-Modell, beste freie Prosa; rate-limited"},
+    {"id": "or/nvidia/nemotron-3-super-120b-a12b:free", "label": "Nemotron 3 Super 120B (gratis)", "tag": "gratis", "note": "Kostenlos, Tool-Use ok; rate-limited"},
+    {"id": "or/openai/gpt-oss-20b:free", "label": "GPT-OSS 20B (gratis)", "tag": "gratis", "note": "Kostenlos, solides Function-Calling; rate-limited"},
+    {"id": "or/google/gemma-4-31b-it:free", "label": "Gemma 4 31B (gratis)", "tag": "gratis", "note": "Kostenlos, Tools; rate-limited"},
+    {"id": "or/inclusionai/ling-3.0-flash:free", "label": "Ling 3.0 Flash (gratis)", "tag": "gratis", "note": "Kostenlos und schnell, brauchbar fuers Gate; rate-limited"}
   ]
 }

@@ -1065,7 +1065,7 @@ $('set-save').onclick = async () => {
   const clas = $('set-cmodel-sel').value === CUSTOM_MODEL
     ? $('set-cmodel').value.trim() : $('set-cmodel-sel').value;
   const patch = {
-    model: narr || 'or/anthropic/claude-sonnet-4.5',
+    model: narr || 'or/anthropic/claude-sonnet-5',
     use_classifier: $('set-classifier').checked,
     classifier_model: clas,                 // '' erlaubt = wie Erzaehler
     map_bg: $('set-mapbg').value.trim(),
