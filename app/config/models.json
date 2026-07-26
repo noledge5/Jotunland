@@ -1,6 +1,6 @@
 {
   "_comment": "Kuratierter Modell-Katalog fuers Frontend-Dropdown. Nur Modelle mit Tool-Use (Function-Calling) gehoeren hier rein — die Engine ruft bei jeder unsicheren Aktion request_skill_roll auf (ADR-0001); ein Modell ohne Tools wuerde die Mechanik aushebeln. Alle IDs tragen das or/-Provider-Prefix (OpenRouter). Preise als grobe Orientierung ($/Mtok Prompt, Stand Live-Abgleich). Der 'gratis'-Bestand bei OpenRouter rotiert und ist rate-limited — der Button 'Freie OpenRouter-Modelle laden' im Frontend zieht den aktuellen Stand live. Fuer echtes Spiel ein bezahltes Modell waehlen; gratis liefert schwaechere Prosa.",
-  "default": "or/anthropic/claude-sonnet-5",
+  "default": "or/google/gemini-2.5-flash",
   "classifier_hint": "or/google/gemini-2.5-flash-lite",
   "models": [
     {"id": "or/anthropic/claude-opus-4.8", "label": "Claude Opus 4.8", "tag": "premium", "note": "Staerkster Erzaehler, teuerste Option (~$5)"},

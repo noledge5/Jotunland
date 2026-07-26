@@ -283,7 +283,7 @@ def adjust_hp(gs: dict, delta: int) -> dict:
 # --- Settings (always-read-from-disk gegen Settings-Race) ---------------
 
 DEFAULT_SETTINGS = {
-    "model": "or/anthropic/claude-sonnet-5",
+    "model": "or/google/gemini-2.5-flash",
     "active_pc_slug": None,
     "history_window": 30,
     "use_classifier": True,          # Proben-Gate vor der Erzaehlung (ADR-0001)
