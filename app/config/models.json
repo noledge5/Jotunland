@@ -13,10 +13,10 @@
     {"id": "or/google/gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash Lite", "tag": "guenstig", "note": "Sehr billig, ideal fuers Proben-Gate (~$0.10)"},
     {"id": "or/openai/gpt-5-mini", "label": "GPT-5 Mini", "tag": "guenstig", "note": "Guenstig, gutes Tool-Handling (~$0.25)"},
     {"id": "or/openai/gpt-5-nano", "label": "GPT-5 Nano", "tag": "guenstig", "note": "Billigst, reicht fuers Gate (~$0.05)"},
-    {"id": "or/nvidia/nemotron-3-ultra-550b-a55b:free", "label": "Nemotron 3 Ultra 550B (gratis)", "tag": "gratis", "note": "Groesstes Gratis-Modell, beste freie Prosa; rate-limited"},
-    {"id": "or/nvidia/nemotron-3-super-120b-a12b:free", "label": "Nemotron 3 Super 120B (gratis)", "tag": "gratis", "note": "Kostenlos, Tool-Use ok; rate-limited"},
-    {"id": "or/openai/gpt-oss-20b:free", "label": "GPT-OSS 20B (gratis)", "tag": "gratis", "note": "Kostenlos, solides Function-Calling; rate-limited"},
-    {"id": "or/google/gemma-4-31b-it:free", "label": "Gemma 4 31B (gratis)", "tag": "gratis", "note": "Kostenlos, Tools; rate-limited"},
-    {"id": "or/inclusionai/ling-3.0-flash:free", "label": "Ling 3.0 Flash (gratis)", "tag": "gratis", "note": "Kostenlos und schnell, brauchbar fuers Gate; rate-limited"}
+    {"id": "or/nvidia/nemotron-3-ultra-550b-a55b:free", "label": "Nemotron 3 Ultra 550B (gratis)", "tag": "gratis", "note": "Bestes Gratis-Modell fuer Prosa. Nur zum Testen: vergisst oefter Tool-Calls (advance_time/Proben), rate-limited"},
+    {"id": "or/nvidia/nemotron-3-super-120b-a12b:free", "label": "Nemotron 3 Super 120B (gratis)", "tag": "gratis", "note": "Gratis, schwaechere Tool-Disziplin — nur zum Testen, rate-limited"},
+    {"id": "or/openai/gpt-oss-20b:free", "label": "GPT-OSS 20B (gratis)", "tag": "gratis", "note": "Gratis, Tool-Disziplin wackelig — nur zum Testen, rate-limited"},
+    {"id": "or/google/gemma-4-31b-it:free", "label": "Gemma 4 31B (gratis)", "tag": "gratis", "note": "Gratis, Tool-Disziplin wackelig — nur zum Testen, rate-limited"},
+    {"id": "or/inclusionai/ling-3.0-flash:free", "label": "Ling 3.0 Flash (gratis)", "tag": "gratis", "note": "Gratis/schnell, aber NICHT als Classifier (liefert oft kein JSON), rate-limited"}
   ]
 }

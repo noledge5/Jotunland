@@ -58,8 +58,17 @@ def _context(gs: dict) -> str:
     return "\n".join(lines)
 
 
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_FENCE_RE = re.compile(r"```(?:json)?", re.IGNORECASE)
+
+
 def _extract_json(text: str) -> dict:
-    m = re.search(r"\{.*\}", text, re.DOTALL)
+    # Reasoning-Modelle stellen ein <think>...</think> mit eigenen Klammern
+    # voran; manche umhuellen die Antwort in ```json-Fences. Beides raus,
+    # bevor der erste {...}-Block gegriffen wird.
+    cleaned = _THINK_RE.sub(" ", text)
+    cleaned = _FENCE_RE.sub(" ", cleaned)
+    m = re.search(r"\{.*\}", cleaned, re.DOTALL)
     if not m:
         raise ValueError("kein JSON")
     return json.loads(m.group(0))
