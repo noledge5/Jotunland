@@ -34,8 +34,34 @@ HISTORY_ACTIVE_LIMIT = 400      # Eintraege in history.json bevor archiviert wir
 HISTORY_ARCHIVE_CHUNK = 200     # so viele wandern dann ins Archiv
 
 # Blocking-Tool-Queue: pro PC eine ausstehende Continuation (Spieler-Wurf).
-# In-Memory reicht fuer Single-Player; bei Neustart verfaellt nur der eine Wurf.
+# In-Memory-Cache fuers schnelle Popping; die Tool-Call-ID wird zusaetzlich
+# in gs["pending_roll"]["tool_call_id"] gesichert (_stash_pending_call), denn
+# der Auto-Deploy startet uvicorn per --reload bei jedem Commit neu — ohne
+# den Disk-Fallback wuerde ein Neustart waehrend eines offenen Wurfs den Zug
+# unaufloesbar machen: die UI zeigt (aus gamestate.json) weiter "wartet auf
+# Wurf", aber /api/roll faende die zugehoerige Tool-Call-ID nirgends mehr.
 _pending_responses: dict[str, dict] = {}
+
+
+def _stash_pending_call(gs: dict, tool_call_id: str) -> None:
+    """Haengt die Tool-Call-ID an den persistierten Pending-Roll, damit
+    _resolve_pending_call sie nach einem Neustart von Disk wiederfindet."""
+    pr = gsm.pending_roll(gs)
+    if pr is not None:
+        pr["tool_call_id"] = tool_call_id
+
+
+def _resolve_pending_call(pc_slug: str, gs: dict | None) -> dict | None:
+    """{tool_call_id, name} eines ausstehenden Wurfs. Bevorzugt den
+    In-Memory-Cache; faellt auf die in gamestate.json gesicherte ID zurueck
+    (Neustart-Fall). None heisst: wirklich kein Wurf offen."""
+    cached = _pending_responses.get(pc_slug)
+    if cached:
+        return cached
+    pr = gsm.pending_roll(gs) if gs else None
+    if pr and pr.get("tool_call_id"):
+        return {"tool_call_id": pr["tool_call_id"], "name": "request_skill_roll"}
+    return None
 
 
 SYSTEM_PROMPT = """Du bist der Spielleiter (DM) eines duesteren Low-Fantasy-Solo-Rollenspiels
@@ -181,10 +207,7 @@ def index():
 def get_state():
     settings = gsm.load_settings()
     pc = gsm.load_pc(settings["active_pc_slug"]) if settings["active_pc_slug"] else None
-    awaiting = None
-    if pc:
-        awaiting = ((pc.get("combat") or {}).get("pending_roll")
-                    or pc.get("pending_roll"))
+    awaiting = gsm.pending_roll(pc) if pc else None
     return {"settings": settings, "pc": pc, "awaiting_roll": awaiting,
             "providers": llm_adapter.available_providers()}
 
@@ -625,6 +648,7 @@ async def _agent_stream(pc_slug: str, history: list[dict],
                 if result == tools.BLOCKING:
                     _pending_responses[pc_slug] = {
                         "tool_call_id": tc["id"], "name": tc["name"]}
+                    _stash_pending_call(gs, tc["id"])
                     # Jeder tool_use braucht ein tool_result, sonst weist die
                     # LLM-API die Fortsetzung ab. Verbleibende (nach dem Blocker)
                     # Tool-Calls dieses Batches werden nicht ausgefuehrt — sie
@@ -637,9 +661,7 @@ async def _agent_stream(pc_slug: str, history: list[dict],
                                                    "Bedarf erneut aufrufen."})
                     gsm.save_pc(gs)
                     save_history(pc_slug, history)
-                    pending = ((gs.get("combat") or {}).get("pending_roll")
-                               or gs.get("pending_roll"))
-                    yield _sse({"type": "awaiting_roll", "pending": pending})
+                    yield _sse({"type": "awaiting_roll", "pending": gsm.pending_roll(gs)})
                     blocked = True
                     break
                 yield _sse({"type": "tool", "name": tc["name"],
@@ -694,12 +716,12 @@ async def _gate_stream(pc_slug: str, history: list[dict], gate: dict):
                     "tool_calls": [{"id": call_id, "name": "request_skill_roll",
                                     "args": {"skill": gate["skill"], "schwierigkeit": gate["tier"]}}]})
     _pending_responses[pc_slug] = {"tool_call_id": call_id, "name": "request_skill_roll"}
+    _stash_pending_call(gs, call_id)
     gsm.save_pc(gs)
     save_history(pc_slug, history)
-    pending = gs.get("pending_roll") or (gs.get("combat") or {}).get("pending_roll")
     yield _sse({"type": "gate", "grund": gate.get("grund", ""),
                 "skill": gate["skill"], "tier": gate["tier"]})
-    yield _sse({"type": "awaiting_roll", "pending": pending})
+    yield _sse({"type": "awaiting_roll", "pending": gsm.pending_roll(gs)})
 
 
 async def _turn_stream(pc_slug: str, history: list[dict], mode: str, user_message: str):
@@ -733,7 +755,7 @@ async def chat(body: ChatIn):
     pc_slug = settings["active_pc_slug"]
     if not pc_slug:
         raise HTTPException(400, "Kein aktiver PC. Erst /api/pcs anlegen.")
-    if pc_slug in _pending_responses:
+    if _resolve_pending_call(pc_slug, gsm.load_pc(pc_slug)):
         raise HTTPException(409, "Es steht noch ein Wuerfelwurf aus (/api/roll).")
     if body.mode not in MODE_PREFIX:
         raise HTTPException(400, f"Unbekannter Modus '{body.mode}'.")
@@ -747,12 +769,15 @@ async def chat(body: ChatIn):
 async def roll(body: RollIn):
     settings = gsm.load_settings()
     pc_slug = settings["active_pc_slug"]
-    if not pc_slug or pc_slug not in _pending_responses:
+    if not pc_slug:
+        raise HTTPException(409, "Kein ausstehender Wurf.")
+    gs = gsm.load_pc(pc_slug)
+    pending = _resolve_pending_call(pc_slug, gs)
+    if not pending:
         raise HTTPException(409, "Kein ausstehender Wurf.")
     if not (1 <= body.wurf <= 20):
         raise HTTPException(400, "Wurf muss 1-20 sein (d20).")
-    pending = _pending_responses.pop(pc_slug)
-    gs = gsm.load_pc(pc_slug)
+    _pending_responses.pop(pc_slug, None)
     try:
         outcome = tools.resolve_player_roll(gs, body.wurf)
     except ValueError as e:

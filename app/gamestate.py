@@ -280,6 +280,12 @@ def adjust_hp(gs: dict, delta: int) -> dict:
             "sterbend": gs["hp"] <= 0}
 
 
+def pending_roll(gs: dict) -> dict | None:
+    """Ausstehender Wurf, ob im Kampf oder ausserhalb — einheitlicher
+    Zugriffspunkt (Referenz auf das echte Dict, kein Kopie)."""
+    return (gs.get("combat") or {}).get("pending_roll") or gs.get("pending_roll")
+
+
 # --- Settings (always-read-from-disk gegen Settings-Race) ---------------
 
 DEFAULT_SETTINGS = {
