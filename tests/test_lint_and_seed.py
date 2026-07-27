@@ -103,6 +103,28 @@ def test_generated_npc_anchored_to_location(env):
     assert "salzhaven-goldenes-schiff" in meta["links"]
 
 
+def test_import_bergrand_bestiary_idempotent_and_lint_clean(env):
+    """Handautorierter Import (Bergrand + Welt-Bestiarium Batch 1) auf dem
+    Seed: idempotent (zweiter Lauf schreibt nichts) und lint-sauber."""
+    import scripts.seed_world as sw
+    import scripts.import_bergrand_bestiary as imp
+    importlib.reload(sw)
+    importlib.reload(imp)
+    sw.seed()
+    r1 = imp.run()
+    assert r1["written"] == 48
+    r2 = imp.run()
+    assert r2["written"] == 0
+    problems = _lint(env)
+    errors = [p for p in problems if p["level"] == "error"]
+    assert errors == [], errors
+    idx = env["widx"].get_index(force=True)["entries"]
+    assert idx["haus-kelbrandt"]["type"] == "noble_house"
+    assert idx["urwyrm"]["type"] == "fauna"
+    fauna_flora = sum(1 for e in idx.values() if e["type"] in ("fauna", "flora"))
+    assert fauna_flora == 36
+
+
 def test_generate_wiki_dry_run(env):
     import scripts.seed_world as sw
     import scripts.generate_wiki as gw
