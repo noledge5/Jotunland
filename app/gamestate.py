@@ -174,6 +174,7 @@ def default_gamestate(name: str, slug: str) -> dict:
         "pinned": [],
         "world_flags": {},               # {entity_slug: {feld: wert}} — Character-Scope
         "combat": None,
+        "turn_count": 0,                 # abgeschlossene Handeln/Sprechen-Zuege (Synopsen-Takt)
         "erstellt": now_iso(),
         "aktualisiert": now_iso(),
     }

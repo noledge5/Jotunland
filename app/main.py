@@ -22,8 +22,8 @@ from pydantic import BaseModel
 
 from . import classifier
 from . import gamestate as gsm
-from . import llm_adapter, model_catalog, tools, wiki_context, wiki_index
-from .wiki_io import append_pc_journal, read_journal_tail
+from . import llm_adapter, model_catalog, rules, tools, wiki_context, wiki_index
+from .wiki_io import append_pc_journal, append_synopsis, read_journal_tail
 
 app = FastAPI(title="NovaTerrum")
 
@@ -32,6 +32,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 MAX_CONTINUATIONS = 12          # Tool-Runden pro User-Nachricht
 HISTORY_ACTIVE_LIMIT = 400      # Eintraege in history.json bevor archiviert wird
 HISTORY_ARCHIVE_CHUNK = 200     # so viele wandern dann ins Archiv
+AUTO_ADVANCE_MINUTES = 10       # Zeit-Fallback, wenn advance_time im Zug fehlt
 
 # Blocking-Tool-Queue: pro PC eine ausstehende Continuation (Spieler-Wurf).
 # In-Memory-Cache fuers schnelle Popping; die Tool-Call-ID wird zusaetzlich
@@ -238,6 +239,22 @@ async def get_models_openrouter(only_tools: bool = True):
         raise HTTPException(status_code=502,
                             detail=f"OpenRouter-Verzeichnis nicht erreichbar: {e}")
     return {"models": models}
+
+
+class ClassifierTestIn(BaseModel):
+    model: str
+
+
+@app.post("/api/models/test-classifier")
+async def test_classifier_model(body: ClassifierTestIn):
+    """Testet ein Classifier-Modell mit einem Dummy-Zug, BEVOR es gespeichert
+    wird — Fehlkonfiguration (z.B. eine tote :free-ID oder ein Modell ohne
+    zuverlaessiges JSON) faellt beim Einstellen auf, nicht mitten in der Szene."""
+    try:
+        result = await classifier.classify({}, "Ich schaue mich um.", body.model)
+        return {"ok": True, "result": result}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300]}
 
 
 @app.get("/api/pcs")
@@ -568,6 +585,27 @@ COIN_TX_RE = re.compile(
 # Mechanik-Zahlen, die nur die Engine kennt (nie erzaehlen):
 MECH_RE = re.compile(r"\b(ticks?|erfahrungspunkte?|\bXP\b|skill[- ]?up|skillpunkte?|"
                      r"level[- ]?up|steigst?\s+auf\s+stufe|verteidigungswert|\bVW\b)\b", re.IGNORECASE)
+# Kampf-Ausgang in der Prosa, obwohl nie start_combat/request_skill_roll lief:
+# starkes Rule-Bypass-Signal (ADR-0001s historischer Hauptbug — der Erzaehler
+# loest eine unsichere Handlung in Prosa auf statt ueber die Engine). Bewusst
+# eng gehalten auf eindeutige Treffer/Verfehlt/Tod-Sprache gegen Fehlalarme —
+# erkennt nicht jeden Bypass (Ueberreden/Schleichen sind zu variantenreich
+# fuer ein zuverlaessiges Regex), aber den offensichtlichsten Fall.
+COMBAT_OUTCOME_RE = re.compile(
+    r"\b(triffst|verfehlst|besiegst|t(?:ö|oe)test|erschl(?:ä|ae)gst|"
+    r"schl(?:ä|ae)gst?\s+\w+\s+nieder|f(?:ä|ae)llt\s+tot|sticht\s+dich|"
+    r"verwundet\s+dich|greift\s+dich\s+an)\b", re.IGNORECASE)
+# Tools, die "Zeit vergeht" bereits ueber ihre eigene Kampf-Rundenlogik
+# abdecken — advance_time waere hier fachlich falsch (Runden sind Sekunden).
+COMBAT_TOOLS = {"start_combat", "npc_action", "end_turn", "end_combat"}
+
+
+def _needs_time_tool(tool_names: list[str], gs: dict) -> bool:
+    """True wenn dieser Zug ausserhalb des Kampfs eine Zeit-Handlung braucht
+    (advance_time/rest/request_skill_roll), aber keine bekam."""
+    if gs.get("combat") or COMBAT_TOOLS & set(tool_names):
+        return False
+    return not ({"advance_time", "rest", "request_skill_roll"} & set(tool_names))
 
 
 def validate_narration(text: str, tool_names: list[str], gs: dict) -> list[str]:
@@ -584,9 +622,46 @@ def validate_narration(text: str, tool_names: list[str], gs: dict) -> list[str]:
             problems.append(f"Erzaehlte HP ({val}) passen nicht zum Spielstand "
                             f"({gs['hp']}/{gs['hp_max']})")
             break
-    if not {"advance_time", "rest", "request_skill_roll"} & set(tool_names):
+    if (COMBAT_OUTCOME_RE.search(text) and not gs.get("combat")
+            and not {"request_skill_roll", "start_combat"} & set(tool_names)):
+        problems.append("Erzaehlung beschreibt einen Kampf-Ausgang, aber kein request_skill_roll/"
+                        "start_combat lief — moeglicher Regelverstoss (Rule Bypass)")
+    if _needs_time_tool(tool_names, gs):
         problems.append("Kein Zeitfortschritt in diesem Zug (advance_time fehlt)")
     return problems
+
+
+SYNOPSIS_SYSTEM = """Du fasst den juengsten Abschnitt einer laufenden Solo-RPG-Session
+in 4-8 knappen Saetzen zusammen (Deutsch, Prosa, wie eine kurze Kapitel-
+Zusammenfassung). Nur Fakten aus dem Verlauf: wichtige Ereignisse,
+Entscheidungen, neue NPCs/Orte, offene Faeden. Keine Mechanik-Zahlen
+(keine Ticks/XP/HP/Gold-Betraege) — die gehoeren in den Spielstand, nicht
+in die Synopse."""
+
+
+async def _maybe_write_synopsis(pc_slug: str, history: list[dict], gs: dict) -> None:
+    """Alle rulebook.synopsis_every_n_turns abgeschlossene Handeln/Sprechen-
+    Zuege: kurze Zusammenfassung generieren und ins Synopsen-Log schreiben
+    (siehe wiki_context.build_context). Best-effort — ein Fehler hier darf
+    den eigentlichen Spielzug nie stoeren (Komfort-Feature, kein Spielzug)."""
+    every = rules.RULEBOOK.get("synopsis_every_n_turns", 0)
+    if not every or gs.get("turn_count", 0) % every != 0:
+        return
+    if not llm_adapter.available_providers():
+        return
+    turns = [m for m in history if m["role"] in ("user", "assistant") and m.get("content")]
+    recent = turns[-every * 3:]  # grosszuegig: mehrere Nachrichten pro Zug
+    if not recent:
+        return
+    raw = "\n\n".join(f"[{m['role']}] {m['content'][:500]}" for m in recent)
+    try:
+        settings = gsm.load_settings()
+        text = (await llm_adapter.complete(settings["model"], SYNOPSIS_SYSTEM, raw,
+                                           max_tokens=300)).strip()
+        if text:
+            append_synopsis(pc_slug, text)
+    except Exception:
+        pass
 
 
 async def _agent_stream(pc_slug: str, history: list[dict],
@@ -675,12 +750,30 @@ async def _agent_stream(pc_slug: str, history: list[dict],
     except Exception as e:
         yield _sse({"type": "error", "error": str(e)})
 
+    auto_advanced_minutes = 0
+    if mode in ("handeln", "sprechen"):
+        # Zeit-Enforcement statt nur Meldung: die Engine kennt den fehlenden
+        # Tool-Call bereits deterministisch, also holt sie ihn selbst nach,
+        # statt nur zu warnen und die Uhr stehen zu lassen (P0-Review-Fund).
+        if turn_text.strip() and _needs_time_tool(turn_tools, gs):
+            tools.advance_time(gs, {"minuten": AUTO_ADVANCE_MINUTES})
+            turn_tools.append("advance_time")
+            auto_advanced_minutes = AUTO_ADVANCE_MINUTES
+        gs["turn_count"] = gs.get("turn_count", 0) + 1
+
     gsm.save_pc(gs)
     save_history(pc_slug, history)
-    if mode in ("handeln", "sprechen") and turn_text.strip():
-        problems = validate_narration(turn_text, turn_tools, gs)
-        if problems:
-            yield _sse({"type": "validator", "problems": problems})
+
+    if mode in ("handeln", "sprechen"):
+        await _maybe_write_synopsis(pc_slug, history, gs)
+        if turn_text.strip():
+            if auto_advanced_minutes:
+                yield _sse({"type": "hinweis",
+                            "text": f"Zeit automatisch um {auto_advanced_minutes} Minuten "
+                                    f"vorgestellt (advance_time fehlte in der Erzaehlung)."})
+            problems = validate_narration(turn_text, turn_tools, gs)
+            if problems:
+                yield _sse({"type": "validator", "problems": problems})
     # Wiki-Lint (voller Rescan) nur, wenn der DM diesen Zug ins Wiki geschrieben
     # hat — sonst waere es ein O(alle Dateien)-Scan pro Spielzug ohne Nutzen.
     if {"add_wiki_entry", "update_wiki_entry"} & set(turn_tools):
@@ -724,6 +817,10 @@ async def _gate_stream(pc_slug: str, history: list[dict], gate: dict):
     yield _sse({"type": "awaiting_roll", "pending": gsm.pending_roll(gs)})
 
 
+_classifier_state = {"fail_streak": 0}
+CLASSIFIER_ESCALATE_AFTER = 3  # so viele Ausfaelle in Folge -> deutlicherer Hinweis
+
+
 async def _turn_stream(pc_slug: str, history: list[dict], mode: str, user_message: str):
     """Ein Zug: erst das Proben-Gate (Classifier), dann die Erzaehlung.
     Classifier-Fehler (z.B. ungueltige Modell-ID) werden sichtbar gemeldet
@@ -736,11 +833,17 @@ async def _turn_stream(pc_slug: str, history: list[dict], mode: str, user_messag
         gate = None
         try:
             gate = await classifier.classify(gs, user_message, model)
+            _classifier_state["fail_streak"] = 0
         except Exception as e:
-            yield _sse({"type": "hinweis",
-                        "text": f"Proben-Gate uebersprungen — Classifier-Modell '{model}' "
-                                f"nicht nutzbar ({str(e)[:80]}). Im Zahnrad die volle Modell-ID "
-                                f"eintragen (z.B. or/anthropic/...) oder leer lassen."})
+            _classifier_state["fail_streak"] += 1
+            streak = _classifier_state["fail_streak"]
+            hint = (f"Proben-Gate uebersprungen — Classifier-Modell '{model}' "
+                    f"nicht nutzbar ({str(e)[:80]}). Im Zahnrad die volle Modell-ID "
+                    f"eintragen (z.B. or/anthropic/...) oder leer lassen.")
+            if streak >= CLASSIFIER_ESCALATE_AFTER:
+                hint += (f" Das ist der {streak}. Ausfall in Folge — im Zahnrad den "
+                        f"'Testen'-Button neben dem Classifier-Modell nutzen.")
+            yield _sse({"type": "hinweis", "text": hint})
         if gate and gate.get("braucht_probe"):
             async for ev in _gate_stream(pc_slug, history, gate):
                 yield ev

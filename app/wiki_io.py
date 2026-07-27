@@ -6,6 +6,7 @@ Pro PC gibt es wiki/pc/<slug>/journal.md und events/.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import tempfile
@@ -147,6 +148,34 @@ def read_journal_tail(pc_slug: str, max_entries: int = 5) -> str:
     sections = re.split(r"(?m)^## ", text)
     tail = sections[-max_entries:] if len(sections) > 1 else []
     return "\n".join("## " + s.strip() for s in tail if s.strip() and not s.startswith("# "))
+
+
+def synopsis_path(pc_slug: str) -> Path:
+    return PC_DIR / pc_slug / "synopses.jsonl"
+
+
+def append_synopsis(pc_slug: str, text: str) -> None:
+    """Automatisch generierte Kapitel-Zusammenfassung anhaengen (siehe
+    main._maybe_write_synopsis). Eigenes JSONL statt Journal-Eintrag, damit
+    wiki_context die letzten N Synopsen gezielt lesen kann (nicht vermischt
+    mit manuellen append_journal-Eintraegen)."""
+    p = synopsis_path(pc_slug)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"ts": now_iso(), "text": text.strip()}, ensure_ascii=False) + "\n")
+
+
+def read_recent_synopses(pc_slug: str, max_n: int = 2) -> list[str]:
+    p = synopsis_path(pc_slug)
+    if not p.exists():
+        return []
+    out = []
+    for line in p.read_text(encoding="utf-8").splitlines()[-max_n:]:
+        try:
+            out.append(json.loads(line)["text"])
+        except (json.JSONDecodeError, KeyError):
+            continue
+    return out
 
 
 def write_pc_event(pc_slug: str, title: str, text: str) -> Path:

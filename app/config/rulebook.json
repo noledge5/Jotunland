@@ -47,7 +47,8 @@
   "max_time_delta_minutes": 4320,
   "synopsis_every_n_turns": 20,
   "max_synopses_in_context": 2,
-  "context_token_targets": {
-    "layer_a": 200, "layer_b": 300, "layer_c": 200, "layer_d": 200, "layer_e": 500
+  "context_char_budgets": {
+    "canon": 10000, "gamestate": 3000, "pinned": 15000, "locations": 15000,
+    "npcs": 10000, "quests_lore": 12000, "events": 6000, "synopses": 3000
   }
 }

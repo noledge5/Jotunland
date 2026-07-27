@@ -242,6 +242,10 @@
     <h2 style="font-size:12px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin:6px 0 3px;">Classifier-Modell (optional)</h2>
     <select id="set-cmodel-sel" style="width:100%;"></select>
     <input type="text" id="set-cmodel" style="width:100%;margin-top:6px;display:none;" placeholder="or/provider/modell-id">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px;">
+      <span id="set-cmodel-test-result" style="font-size:12px;"></span>
+      <button id="set-cmodel-test" type="button" style="font-size:12px;white-space:nowrap;">Testen</button>
+    </div>
     <div style="font-size:12px;color:var(--dim);margin-top:4px;">Leer = gleiches Modell wie der Erzaehler. Fuers Gate ein schnelles, billiges, aber verlaessliches Modell, z.B. <code>or/google/gemini-2.5-flash-lite</code> oder <code>or/anthropic/claude-haiku-4.5</code>. <b>Kein Gratis-Modell</b> — die liefern oft kein sauberes JSON, dann wird das Gate uebersprungen.</div>
     <h2 style="font-size:12px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin:14px 0 3px;">Kartenbild (Hintergrund)</h2>
     <div style="display:flex;gap:6px;align-items:center;">
@@ -1017,6 +1021,7 @@ $('settingsbtn').onclick = () => {
   $('set-classifier').checked = SETTINGS.use_classifier !== false;
   $('set-mapbg').value = SETTINGS.map_bg || '';
   $('set-msg').textContent = ''; $('set-msg').className = '';
+  $('set-cmodel-test-result').textContent = '';
   $('setdlg').classList.add('open');
 };
 $('set-model-sel').onchange = () => {
@@ -1030,6 +1035,21 @@ $('set-cmodel-sel').onchange = () => {
   const custom = $('set-cmodel-sel').value === CUSTOM_MODEL;
   $('set-cmodel').style.display = custom ? 'block' : 'none';
   if (custom) $('set-cmodel').focus();
+  $('set-cmodel-test-result').textContent = '';
+};
+$('set-cmodel-test').onclick = async () => {
+  const cSel = $('set-cmodel-sel').value;
+  const cVal = cSel === CUSTOM_MODEL ? $('set-cmodel').value.trim() : cSel;
+  const nSel = $('set-model-sel').value;
+  const nVal = nSel === CUSTOM_MODEL ? $('set-model').value.trim() : nSel;
+  const model = cVal || nVal;  // leer = wie Erzaehler, spiegelt die echte Laufzeit-Logik
+  const out = $('set-cmodel-test-result');
+  out.textContent = 'Teste …'; out.style.color = 'var(--dim)';
+  try {
+    const r = await (await api('/api/models/test-classifier', {method: 'POST', body: JSON.stringify({model})})).json();
+    if (r.ok) { out.textContent = `OK — Antwort verstanden (${model})`; out.style.color = 'var(--green)'; }
+    else { out.textContent = `Fehlgeschlagen: ${r.error}`; out.style.color = 'var(--red)'; }
+  } catch (e) { out.textContent = e.message; out.style.color = 'var(--red)'; }
 };
 $('set-model-refresh').onclick = async () => {
   const btn = $('set-model-refresh'), old = btn.textContent;

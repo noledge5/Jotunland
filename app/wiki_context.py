@@ -1,28 +1,23 @@
-"""6-Schichten-Context-Builder fuer den DM-Prompt.
+"""7-Schichten-Context-Builder fuer den DM-Prompt.
 
-Schichten (in Prioritaetsreihenfolge, je mit Zeichen-Budget):
+Schichten (in Prioritaetsreihenfolge, je mit Zeichen-Budget aus
+rulebook.json/context_char_budgets — Regel-Konstanten nur von dort,
+keine hartkodierten Zweit-Zahlen im Python):
   1. Canon (Weltgesetze, immer vollstaendig)
   2. Gamestate-Zusammenfassung des aktiven PC
   3. Gepinnte Eintraege (volltext)
   4. Location-Stack (Region -> Subregion -> aktueller Ort)
   5. Anwesende NPCs
   6. Quest-Entities + Status-Lore + letzte Ereignisse (Journal-Tail)
+  7. Bisherige Kapitel (Synopsen, siehe main._maybe_write_synopsis)
 """
 from __future__ import annotations
 
 from . import rules, wiki_index
 from .gamestate import format_coins, format_kalender, hp_status_tag
-from .wiki_io import read_journal_tail, read_world_entry
+from .wiki_io import read_journal_tail, read_recent_synopses, read_world_entry
 
-BUDGETS = {
-    "canon": 4000,
-    "gamestate": 2000,
-    "pinned": 6000,
-    "locations": 6000,
-    "npcs": 4000,
-    "quests_lore": 5000,
-    "events": 3000,
-}
+BUDGETS = rules.RULEBOOK["context_char_budgets"]
 
 
 def _clip(text: str, budget: int) -> str:
@@ -157,6 +152,12 @@ def build_context(gs: dict) -> str:
         per = max(BUDGETS["quests_lore"] // len(combined), 400)
         blocks = [_entry_block(s, per) for s in combined[:10]]
         parts.append("## Quest-Wissen & aktive Lore\n" + "\n\n".join(blocks))
+
+    max_synopses = rules.RULEBOOK.get("max_synopses_in_context", 2)
+    synopses = read_recent_synopses(gs["slug"], max_n=max_synopses)
+    if synopses:
+        blocks = "\n\n".join(f"[{i + 1}] {s}" for i, s in enumerate(synopses))
+        parts.append("## Bisherige Kapitel (Synopsen)\n" + _clip(blocks, BUDGETS["synopses"]))
 
     events = read_journal_tail(gs["slug"], max_entries=4)
     if events:
