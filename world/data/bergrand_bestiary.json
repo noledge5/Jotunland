@@ -1,0 +1,120 @@
+{
+  "region_id": "bergrand",
+  "description": "Bestiar der Bergrand-Region — Gebirgsausläufer nordöstlich des Ostimperiums, Jahr 743 IC.",
+  "creatures": [
+    {
+      "id": "bergrand_wolf",
+      "name": "Bergwolf",
+      "role": "Raubtier",
+      "description": "Große, dunkelgraue Wölfe der Bergrand-Ausläufer. Meist in Rudeln, jagen bei Dämmerung.",
+      "personality": "territorial, geduldig, klug",
+      "faction": "wildnis",
+      "knowledge": "Revier, Beute, Rudelhierarchie",
+      "tier": "creature",
+      "stats": {
+        "hp_max": 8,
+        "combat_skill": 5,
+        "damage_min": 2,
+        "damage_max": 5,
+        "armor": 0,
+        "initiative": 8,
+        "special": "Rudeltaktik: Wenn 2+ Wölfe aktiv, +2 auf Angriff"
+      }
+    },
+    {
+      "id": "bergrand_bär",
+      "name": "Bergrandbär",
+      "role": "Raubtier",
+      "description": "Massiger Braunbär, der die Hochpässe der Bergrand bewohnt. Greift selten zuerst an, ist dann aber gefährlich.",
+      "personality": "träge, territorial, gefährlich wenn gereizt",
+      "faction": "wildnis",
+      "knowledge": "Revier, Winterschlafplätze, Nahrungsquellen",
+      "tier": "creature",
+      "stats": {
+        "hp_max": 22,
+        "combat_skill": 7,
+        "damage_min": 4,
+        "damage_max": 9,
+        "armor": 2,
+        "initiative": 4,
+        "special": "Klammergriff: Bei Treffer SG 12 KON, sonst -2 auf alle Aktionen bis Ende Runde"
+      }
+    },
+    {
+      "id": "bergrand_steinbeißer",
+      "name": "Steinbeißer",
+      "role": "Ungetüm",
+      "description": "Schwerfälliges Reptil mit gepanzerter Haut, das zwischen Felsen schläft. Kaum zu sehen bis es zuschnappt. Wächst bis 2 Meter.",
+      "personality": "stumpf, reaktiv, frisst alles",
+      "faction": "wildnis",
+      "knowledge": "keine — reines Tier",
+      "tier": "creature",
+      "stats": {
+        "hp_max": 16,
+        "combat_skill": 4,
+        "damage_min": 3,
+        "damage_max": 7,
+        "armor": 3,
+        "initiative": 2,
+        "special": "Tarnung: SG 14 WEI um vor Angriff zu bemerken"
+      }
+    },
+    {
+      "id": "bergrand_geistertier",
+      "name": "Nebelläufer",
+      "role": "Übernatürliches Wesen",
+      "description": "Hirschartiges Wesen mit leuchtendem Geweih, das in Bergrand-Nebeln auftaucht. Gildengelehrte streiten ob Omen oder Dämon. Greift selten an — aber wenn, hinterlässt es eisige Wunden.",
+      "personality": "schweigend, nicht-kommunikativ, flüchtig",
+      "faction": "übernatürlich",
+      "knowledge": "Unbekannt",
+      "tier": "creature",
+      "stats": {
+        "hp_max": 14,
+        "combat_skill": 9,
+        "damage_min": 3,
+        "damage_max": 6,
+        "armor": 1,
+        "initiative": 12,
+        "special": "Eiswunde: Schaden ignoriert 2 Punkte Rüstung. Verwundeter erleidet -1 GES bis zur Rast."
+      }
+    },
+    {
+      "id": "bergrand_straßenräuber",
+      "name": "Straßenräuber (Bergrand)",
+      "role": "Bandit",
+      "description": "Deserteur oder Hungerflüchtling, bewaffnet mit Messer oder Knüppel. Meist allein oder in Zweiergruppen auf den Bergpässen.",
+      "personality": "verzweifelt, opportunistisch, feige wenn überzahl fehlt",
+      "faction": "gesetzlos",
+      "knowledge": "Passrouten, Händlerkalender, versteckte Lager",
+      "tier": "creature",
+      "stats": {
+        "hp_max": 10,
+        "combat_skill": 4,
+        "damage_min": 2,
+        "damage_max": 5,
+        "armor": 0,
+        "initiative": 5,
+        "special": "Flucht: Wenn HP unter 30%, SG 10 MOral sonst Flucht"
+      }
+    },
+    {
+      "id": "bergrand_mossriese",
+      "name": "Mossriese",
+      "role": "Ungetüm",
+      "description": "Humanoide Kreatur, 3 Meter groß, mit flechtenbewachsener Haut. Meidet Licht, lebt in Höhlen. Selten gesehen, noch seltener überlebt.",
+      "personality": "langsam denkend, territorial, sammelt Knochen",
+      "faction": "wildnis",
+      "knowledge": "Höhlensysteme, verborgene Quellen — aber kein Austausch möglich",
+      "tier": "creature",
+      "stats": {
+        "hp_max": 35,
+        "combat_skill": 6,
+        "damage_min": 6,
+        "damage_max": 12,
+        "armor": 4,
+        "initiative": 2,
+        "special": "Schleuderwurf: Einmal pro Kampf — wirft Stein, SG 13 GES ausweichen oder 8 Schaden"
+      }
+    }
+  ]
+}
