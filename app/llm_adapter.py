@@ -262,14 +262,16 @@ async def stream_with_tools(model_id: str, system: str, messages: list[dict],
 
 
 async def complete(model_id: str, system: str, user: str,
-                   max_tokens: int = 400) -> str:
+                   max_tokens: int = 400, timeout: float | None = None) -> str:
     """Einfacher Text-Completion-Call ohne Tools (fuer Classifier/Protokoll).
-    Nicht-streamend, ueber alle drei Provider."""
+    Nicht-streamend, ueber alle drei Provider. 'timeout' ueberschreibt den
+    globalen Wert — das Proben-Gate braucht einen kurzen (siehe classifier)."""
     provider = provider_for(model_id)
     key = api_key_for(provider)
     if not key:
         raise RuntimeError(f"Kein API-Key fuer Provider '{provider}'")
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+    tmo = httpx.Timeout(timeout, connect=min(timeout, 10.0)) if timeout else TIMEOUT
+    async with httpx.AsyncClient(timeout=tmo) as client:
         if provider == "anthropic":
             r = await client.post("https://api.anthropic.com/v1/messages",
                                   headers={"x-api-key": key, "anthropic-version": "2023-06-01"},

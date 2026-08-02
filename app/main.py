@@ -92,9 +92,20 @@ MECHANIK (PFLICHT):
   prueft deine Erzaehlung gegen den Spielstand.
 - Nach jeder erzaehlten Aktion advance_time aufrufen (Gespraech 5-15 min,
   Wege je Distanz, Einkauf 10-30 min).
-- Kampf: start_combat -> pc_turn (request_skill_roll mit ziel+schaden) ->
-  end_turn -> npc_turn (npc_action: Engine wuerfelt gegen den VW des PC) ->
-  end_turn -> naechste Runde. Sterbende bluten. end_combat beendet.
+- Kampf: start_combat legt die Gegner MIT Werten an (hp, angriffsbonus,
+  schaden, distanz). Diese Werte gelten den ganzen Kampf — du nennst sie
+  nie wieder. Dann: request_skill_roll mit 'ziel' fuer Angriffe des PC,
+  npc_action fuer jeden Gegner (einmal pro Runde), request_defense_roll
+  wenn der Spieler aktiv verteidigt. Die Runden schaltet die ENGINE
+  selbst weiter — es gibt kein end_turn. Nahkaempfer muessen erst
+  aufschliessen (distanz > 0 = noch nicht da). Im Kampf niemals roll_dice.
+  end_combat beendet.
+- DER SPIELSTAND IST DIE WAHRHEIT, ausnahmslos. Weicht deine Erzaehlung
+  von ihm ab, war DEINE ERZAEHLUNG falsch — nie der Spielstand. Tool-
+  Ergebnisse und das Zustandspanel korrigierst du nicht "zurecht":
+  adjust_hp ist fuer Schaden und Heilung in der Welt, niemals um eine
+  Erzaehlung nachtraeglich passend zu machen. Einen "Fehler im System"
+  gibt es fuer dich nicht.
 - NPC-Wissen: Ein NPC weiss nur, was er wissen kann. Kein NPC kennt den
   Namen des PC vor einer Vorstellung.
 
@@ -118,8 +129,10 @@ EINGABE-MODI (Prefix der Spieler-Nachricht):
 - [DM-FRAGE]: Regie-Frage an dich. Antworte direkt aus dem Spielstand,
   ohne Erzaehltext, ohne Zeitfortschritt, ohne Tools ausser Nachschlagen.
 - [KORREKTUR]: Der Spieler korrigiert einen Fehler deiner letzten
-  Erzaehlung. Uebernimm die Korrektur (noetigenfalls set_world_flag/
-  adjust-Tools), bestaetige kurz, kein Zeitfortschritt.
+  Erzaehlung. Eine Korrektur, die nur den Text aendert, ist WERTLOS —
+  ziehe den Spielstand nach: falscher Ort -> set_location, falsche HP ->
+  adjust_hp, Gegner raus -> set_enemy_status, Kampf beenden ->
+  end_combat. Bestaetige kurz, kein Zeitfortschritt.
 - Ohne Prefix: normales Handeln."""
 
 
@@ -251,7 +264,12 @@ async def test_classifier_model(body: ClassifierTestIn):
     wird — Fehlkonfiguration (z.B. eine tote :free-ID oder ein Modell ohne
     zuverlaessiges JSON) faellt beim Einstellen auf, nicht mitten in der Szene."""
     try:
-        result = await classifier.classify({}, "Ich schaue mich um.", body.model)
+        # Bewusst eine echte Probe-Situation: eine Floskel wie "Ich schaue
+        # mich um" faengt der Trivial-Skip ab, dann wuerde gar kein Modell
+        # geprueft und der Test waere wertlos.
+        result = await classifier.classify(
+            {}, "Ich versuche den Waechter zu ueberreden, mich durchzulassen.",
+            body.model)
         return {"ok": True, "result": result}
     except Exception as e:
         return {"ok": False, "error": str(e)[:300]}
@@ -592,12 +610,26 @@ MECH_RE = re.compile(r"\b(ticks?|erfahrungspunkte?|\bXP\b|skill[- ]?up|skillpunk
 # erkennt nicht jeden Bypass (Ueberreden/Schleichen sind zu variantenreich
 # fuer ein zuverlaessiges Regex), aber den offensichtlichsten Fall.
 COMBAT_OUTCOME_RE = re.compile(
-    r"\b(triffst|verfehlst|besiegst|t(?:ö|oe)test|erschl(?:ä|ae)gst|"
-    r"schl(?:ä|ae)gst?\s+\w+\s+nieder|f(?:ä|ae)llt\s+tot|sticht\s+dich|"
-    r"verwundet\s+dich|greift\s+dich\s+an)\b", re.IGNORECASE)
+    r"\b(triffst|trifft|verfehlst|verfehlt|besiegst|besiegt|"
+    r"t(?:ö|oe)test|t(?:ö|oe)tet|erschl(?:ä|ae)gst|erschl(?:ä|ae)gt|"
+    r"schl(?:ä|ae)gst?\s+\w+\s+nieder|f(?:ä|ae)llt\s+tot|f(?:ä|ae)llt\s+zu\s+Boden|"
+    r"sticht\s+(?:dich|zu)|verwundet\s+(?:dich|ihn|sie)|greift\s+dich\s+an|"
+    r"bohrt\s+sich|geht\s+zu\s+Boden|st(?:ü|ue)rzt\s+(?:zu\s+Boden|nieder))\b",
+    re.IGNORECASE)
 # Tools, die "Zeit vergeht" bereits ueber ihre eigene Kampf-Rundenlogik
 # abdecken — advance_time waere hier fachlich falsch (Runden sind Sekunden).
-COMBAT_TOOLS = {"start_combat", "npc_action", "end_turn", "end_combat"}
+COMBAT_TOOLS = {"start_combat", "npc_action", "set_enemy_status", "end_combat",
+                "request_defense_roll"}
+# Tools, die den Spielstand tatsaechlich veraendern. Eine [KORREKTUR], die
+# keines davon aufruft, hat nur den Text geaendert und den Zustand nicht —
+# genau die Kette, die im Playtest den Spielstand hat auseinanderlaufen lassen.
+STATE_CHANGING_TOOLS = {
+    "pay", "receive_coins", "adjust_hp", "advance_time", "rest", "set_world_flag",
+    "manage_inventory", "set_injury", "status_effect", "set_location",
+    "npc_present", "manage_quest", "pin_entry", "add_wiki_entry",
+    "update_wiki_entry", "promote_entry", "start_combat", "npc_action",
+    "set_enemy_status", "end_combat", "request_skill_roll", "request_defense_roll",
+}
 
 
 def _needs_time_tool(tool_names: list[str], gs: dict) -> bool:
@@ -608,10 +640,22 @@ def _needs_time_tool(tool_names: list[str], gs: dict) -> bool:
     return not ({"advance_time", "rest", "request_skill_roll"} & set(tool_names))
 
 
-def validate_narration(text: str, tool_names: list[str], gs: dict) -> list[str]:
+def validate_narration(text: str, tool_names: list[str], gs: dict,
+                       mode: str = "handeln", gate: dict | None = None) -> list[str]:
     """Regelbasierter Narrator-Validator (ADR-0001): prueft die Erzaehlung
     gegen Gamestate und Tool-Calls, ohne LLM."""
     problems = []
+    if mode == "korrektur":
+        if not STATE_CHANGING_TOOLS & set(tool_names):
+            problems.append("Korrektur hat nur den Text geaendert, nicht den Spielstand — "
+                            "zieh ihn nach (set_location/adjust_hp/set_enemy_status/end_combat)")
+        return problems
+    if gate and gate.get("ortswechsel") and "set_location" not in tool_names:
+        problems.append("Der Spieler wechselt den Ort, aber set_location fehlt — "
+                        "der Kontext bleibt sonst auf der alten Szene stehen")
+    if gs.get("combat") and "roll_dice" in tool_names:
+        problems.append("roll_dice im Kampf benutzt — Kampfwuerfe gehoeren in "
+                        "request_skill_roll/npc_action/request_defense_roll")
     if COIN_TX_RE.search(text) and not {"pay", "receive_coins"} & set(tool_names):
         problems.append("Geld wechselt in der Erzaehlung die Hand, aber kein pay/receive_coins aufgerufen")
     if MECH_RE.search(text):
@@ -664,12 +708,65 @@ async def _maybe_write_synopsis(pc_slug: str, history: list[dict], gs: dict) -> 
         pass
 
 
+# --- Undo (Ringpuffer pro PC) -------------------------------------------
+
+UNDO_DEPTH = 10
+
+
+def undo_dir(pc_slug: str) -> Path:
+    return gsm.PC_DIR / pc_slug / "undo"
+
+
+def snapshot_turn(pc_slug: str, label: str) -> None:
+    """Schnappschuss von Gamestate + History vor einem Zug. Wiki-Eintraege
+    bleiben bewusst aussen vor: sie sind World-Scope und ueberdauern den
+    Charakter (ADR-0002)."""
+    gs = gsm.load_pc(pc_slug)
+    if gs is None:
+        return
+    d = undo_dir(pc_slug)
+    d.mkdir(parents=True, exist_ok=True)
+    snap = {"ts": gsm.now_iso(), "label": label[:120],
+            "gamestate": gs, "history": load_history(pc_slug)}
+    gsm.atomic_write_json(d / f"{gsm.now_iso().replace(':', '-')}-{os.urandom(3).hex()}.json", snap)
+    alte = sorted(d.glob("*.json"))
+    for p in alte[:-UNDO_DEPTH]:
+        p.unlink(missing_ok=True)
+
+
+def list_snapshots(pc_slug: str) -> list[Path]:
+    d = undo_dir(pc_slug)
+    return sorted(d.glob("*.json")) if d.exists() else []
+
+
+def restore_last_snapshot(pc_slug: str) -> dict | None:
+    """Letzten Schnappschuss zurueckspielen und verbrauchen."""
+    snaps = list_snapshots(pc_slug)
+    if not snaps:
+        return None
+    snap = gsm.read_json(snaps[-1])
+    if not snap:
+        snaps[-1].unlink(missing_ok=True)
+        return None
+    gsm.atomic_write_json(gsm.pc_path(pc_slug), snap["gamestate"])
+    gsm.atomic_write_json(history_path(pc_slug), snap["history"])
+    snaps[-1].unlink(missing_ok=True)
+    _pending_responses.pop(pc_slug, None)
+    return {"label": snap.get("label", ""), "ts": snap.get("ts", ""),
+            "verbleibend": len(snaps) - 1}
+
+
 async def _agent_stream(pc_slug: str, history: list[dict],
                         resume_tool_result: dict | None = None,
-                        mode: str = "handeln"):
+                        mode: str = "handeln", gate: dict | None = None,
+                        buffered: bool = False, _retry: bool = False):
     """Der eigentliche Agent-Loop. Streamt SSE-Events, fuehrt Tools aus,
     macht Continuations bis das LLM fertig ist oder ein Blocking-Tool
-    auf den Spieler wartet."""
+    auf den Spieler wartet.
+
+    buffered=True haelt den Erzaehltext zurueck, bis der Validator ihn
+    freigibt (ADR-0003) — damit ein regelwidriger Zug einmal wiederholt
+    werden kann, bevor der Spieler ihn zu sehen bekommt."""
     settings = gsm.load_settings()
     gs = gsm.load_pc(pc_slug)
     if gs is None:
@@ -702,7 +799,8 @@ async def _agent_stream(pc_slug: str, history: list[dict],
                     settings["model"], system, window, tools.TOOLS):
                 if ev["type"] == "text":
                     assistant_text += ev["text"]
-                    yield _sse({"type": "text", "text": ev["text"]})
+                    if not buffered:
+                        yield _sse({"type": "text", "text": ev["text"]})
                 elif ev["type"] == "tool_call":
                     tool_calls.append(ev)
                 elif ev["type"] == "stop":
@@ -750,6 +848,32 @@ async def _agent_stream(pc_slug: str, history: list[dict],
     except Exception as e:
         yield _sse({"type": "error", "error": str(e)})
 
+    # --- Retry: regelwidrigen Zug einmal wiederholen, BEVOR er sichtbar wird
+    if buffered and not _retry and turn_text.strip():
+        probleme = validate_narration(turn_text, turn_tools, gs, mode, gate)
+        if probleme:
+            hinweis = ("REGELVERSTOSS in deiner letzten Antwort — sie wurde "
+                       "verworfen und wird NICHT angezeigt. Erzaehle den Zug neu "
+                       "und rufe diesmal die fehlenden Tools auf:\n- "
+                       + "\n- ".join(probleme))
+            history.append({"role": "user", "content": f"[SYSTEM] {hinweis}"})
+            async for ev in _agent_stream(pc_slug, history, mode=mode, gate=gate,
+                                          buffered=True, _retry=True):
+                yield ev
+            return
+
+    if buffered and turn_text.strip():
+        yield _sse({"type": "text", "text": turn_text})
+
+    # Eine Spieler-Nachricht = eine Kampfhandlung. Hat der PC in diesem Zug
+    # nicht gewuerfelt (Trank, Rueckzug, Reden), gilt seine Runde trotzdem als
+    # verbraucht — sonst blieben die Runden stehen (ADR-0003).
+    if gs.get("combat") and not gs["combat"].get("pending_roll"):
+        if not gs["combat"].get("pc_gehandelt"):
+            gs["combat"]["pc_gehandelt"] = True
+            tools._maybe_next_round(gs, gs["combat"])
+        tools._set_phase(gs, gs["combat"])
+
     auto_advanced_minutes = 0
     if mode in ("handeln", "sprechen"):
         # Zeit-Enforcement statt nur Meldung: die Engine kennt den fehlenden
@@ -766,14 +890,14 @@ async def _agent_stream(pc_slug: str, history: list[dict],
 
     if mode in ("handeln", "sprechen"):
         await _maybe_write_synopsis(pc_slug, history, gs)
-        if turn_text.strip():
-            if auto_advanced_minutes:
-                yield _sse({"type": "hinweis",
-                            "text": f"Zeit automatisch um {auto_advanced_minutes} Minuten "
-                                    f"vorgestellt (advance_time fehlte in der Erzaehlung)."})
-            problems = validate_narration(turn_text, turn_tools, gs)
-            if problems:
-                yield _sse({"type": "validator", "problems": problems})
+    if turn_text.strip():
+        if auto_advanced_minutes:
+            yield _sse({"type": "hinweis",
+                        "text": f"Zeit automatisch um {auto_advanced_minutes} Minuten "
+                                f"vorgestellt (advance_time fehlte in der Erzaehlung)."})
+        problems = validate_narration(turn_text, turn_tools, gs, mode, gate)
+        if problems:
+            yield _sse({"type": "validator", "problems": problems})
     # Wiki-Lint (voller Rescan) nur, wenn der DM diesen Zug ins Wiki geschrieben
     # hat — sonst waere es ein O(alle Dateien)-Scan pro Spielzug ohne Nutzen.
     if {"add_wiki_entry", "update_wiki_entry"} & set(turn_tools):
@@ -827,10 +951,10 @@ async def _turn_stream(pc_slug: str, history: list[dict], mode: str, user_messag
     und der Erzaehler-Tool-Loop uebernimmt als Fallback."""
     settings = gsm.load_settings()
     gs = gsm.load_pc(pc_slug)
+    gate = None
     if (settings.get("use_classifier") and mode in ("handeln", "sprechen")
             and gs and not gs.get("combat")):
         model = settings.get("classifier_model") or settings["model"]
-        gate = None
         try:
             gate = await classifier.classify(gs, user_message, model)
             _classifier_state["fail_streak"] = 0
@@ -848,7 +972,13 @@ async def _turn_stream(pc_slug: str, history: list[dict], mode: str, user_messag
             async for ev in _gate_stream(pc_slug, history, gate):
                 yield ev
             return
-    async for ev in _agent_stream(pc_slug, history, mode=mode):
+    # Gepuffert (mit Retry-Chance) nur dort, wo Zahlen zaehlen: im Kampf und
+    # bei Angriffs-Aktionen. Sonst bleibt der Text live, damit sich Erkundung
+    # und Gespraech weiter fluessig anfuehlen (ADR-0003).
+    buffered = bool((gs and gs.get("combat")) or mode == "korrektur"
+                    or (gate and gate.get("angriff")))
+    async for ev in _agent_stream(pc_slug, history, mode=mode, gate=gate,
+                                  buffered=buffered):
         yield ev
 
 
@@ -862,6 +992,7 @@ async def chat(body: ChatIn):
         raise HTTPException(409, "Es steht noch ein Wuerfelwurf aus (/api/roll).")
     if body.mode not in MODE_PREFIX:
         raise HTTPException(400, f"Unbekannter Modus '{body.mode}'.")
+    snapshot_turn(pc_slug, body.message)   # Undo-Punkt VOR dem Zug
     history = load_history(pc_slug)
     history.append({"role": "user", "content": MODE_PREFIX[body.mode] + body.message})
     return StreamingResponse(_turn_stream(pc_slug, history, body.mode, body.message),
@@ -889,8 +1020,38 @@ async def roll(body: RollIn):
     history = load_history(pc_slug)
     resume = {"tool_call_id": pending["tool_call_id"], "name": pending["name"],
               "content": json.dumps(outcome, ensure_ascii=False)}
-    return StreamingResponse(_agent_stream(pc_slug, history, resume_tool_result=resume),
+    # Die Auflösung gehoert zum Kampfzug — also gilt hier dieselbe Pufferung.
+    return StreamingResponse(_agent_stream(pc_slug, history, resume_tool_result=resume,
+                                           buffered=bool(gs.get("combat"))),
                              media_type="text/event-stream")
+
+
+@app.get("/api/undo")
+def get_undo():
+    """Wieviele Zuege lassen sich zuruecknehmen (fuer den Button-Zustand)."""
+    pc_slug = gsm.load_settings()["active_pc_slug"]
+    if not pc_slug:
+        return {"verfuegbar": 0, "letzter": ""}
+    snaps = list_snapshots(pc_slug)
+    letzter = ""
+    if snaps:
+        snap = gsm.read_json(snaps[-1]) or {}
+        letzter = snap.get("label", "")
+    return {"verfuegbar": len(snaps), "letzter": letzter}
+
+
+@app.post("/api/undo")
+def post_undo():
+    """Letzten Zug zuruecknehmen: Gamestate und History werden auf den Stand
+    VOR dem Zug zurueckgesetzt. Wiki-Eintraege bleiben bestehen (World-Scope,
+    ADR-0002); Journal und Synopsen sind Append-Logs und bleiben ebenfalls."""
+    pc_slug = gsm.load_settings()["active_pc_slug"]
+    if not pc_slug:
+        raise HTTPException(400, "Kein aktiver PC.")
+    result = restore_last_snapshot(pc_slug)
+    if result is None:
+        raise HTTPException(409, "Kein Zug zum Zuruecknehmen vorhanden.")
+    return {**result, "pc": gsm.load_pc(pc_slug)}
 
 
 # --- Session-Protokoll --------------------------------------------------

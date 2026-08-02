@@ -15,6 +15,11 @@ import re
 
 from . import llm_adapter, rules
 
+# Eigener, kurzer Timeout: das Gate entscheidet eine Ja/Nein-Frage und laeuft
+# VOR jeder Erzaehlung. Haengt der Provider, blockiert es sonst den ganzen Zug
+# mit dem globalen 120s-Timeout. Bei Ablauf greift der vorhandene Fallback.
+GATE_TIMEOUT = 15.0
+
 SYSTEM = """Du bist der Regel-Schiedsrichter eines Pen-and-Paper-RPG. Du erzaehlst
 NICHT. Du entscheidest nur, ob die beschriebene Spieler-Aktion eine
 Wuerfelprobe braucht, und wenn ja: welchen Skill und welche Schwierigkeit.
@@ -39,8 +44,22 @@ Waehle den Tier nach Widerstand/Gefahr: Durchschnitt als Standard,
 Schwer wenn der NPC misstrauisch/im Vorteil ist, Leicht wenn die Lage
 guenstig ist.
 
+Zusaetzlich meldest du zwei strukturelle Merkmale der Aktion:
+- "ortswechsel": true, wenn der Spieler den aktuellen Ort verlaesst oder
+  sich woanders hin bewegt (folgen, gehen nach, betreten, verlassen,
+  zurueckkehren). Reine Bewegung INNERHALB der Szene ist false.
+- "angriff": true, wenn der Spieler jemanden angreift, verwundet oder
+  toetet — auch aus dem Hinterhalt und auch mit Fernwaffen.
+
 Antworte NUR mit JSON, nichts sonst:
-{{"braucht_probe": true|false, "skill": "<Skill oder null>", "tier": "<Tier oder null>", "grund": "<max 12 Woerter>"}}"""
+{{"braucht_probe": true|false, "skill": "<Skill oder null>", "tier": "<Tier oder null>", "ortswechsel": true|false, "angriff": true|false, "grund": "<max 12 Woerter>"}}"""
+
+# Offensichtliche Nicht-Proben ohne LLM-Call durchlassen (Latenz pro Zug).
+# Bewusst sehr eng: nur wenn die GESAMTE Eingabe eine dieser Floskeln ist.
+_TRIVIAL_RE = re.compile(
+    r"^(?:ich\s+)?(?:schaue?\s+mich\s+um|sehe?\s+mich\s+um|umsehen|warte[n]?|"
+    r"weiter|weitergehen|nichts|ok|okay|ja|nein|danke)\b[\s.!?]*$",
+    re.IGNORECASE)
 
 
 def _context(gs: dict) -> str:
@@ -75,20 +94,26 @@ def _extract_json(text: str) -> dict:
 
 
 async def classify(gs: dict, user_message: str, model_id: str) -> dict:
-    """Entscheidet ueber Probenpflicht. Wirft bei Provider-/Parse-Fehlern."""
+    """Entscheidet ueber Probenpflicht und meldet Ortswechsel/Angriff.
+    Wirft bei Provider-/Parse-Fehlern (der Aufrufer faengt das ab)."""
+    if _TRIVIAL_RE.match(user_message.strip()):
+        return {"braucht_probe": False, "skill": None, "tier": None,
+                "ortswechsel": False, "angriff": False, "grund": "trivial"}
     system = SYSTEM.format(skills=", ".join(sorted(rules.SKILLS)),
                            tiers=", ".join(rules.TIERS))
     user = f"{_context(gs)}\n\nSpieler-Aktion: {user_message.strip()}"
-    raw = await llm_adapter.complete(model_id, system, user, max_tokens=200)
+    raw = await llm_adapter.complete(model_id, system, user, max_tokens=200,
+                                     timeout=GATE_TIMEOUT)
     data = _extract_json(raw)
+    out = {"ortswechsel": bool(data.get("ortswechsel")),
+           "angriff": bool(data.get("angriff")),
+           "grund": data.get("grund", "")}
     # Validieren: nur bekannte Skills/Tiers zaehlen als echte Probe
     if data.get("braucht_probe"):
         skill = data.get("skill")
         tier = data.get("tier")
         if skill not in rules.SKILLS or rules.sg_for_tier(tier) is None:
-            return {"braucht_probe": False, "skill": None, "tier": None,
+            return {**out, "braucht_probe": False, "skill": None, "tier": None,
                     "grund": "Skill/Tier ungueltig"}
-        return {"braucht_probe": True, "skill": skill, "tier": tier,
-                "grund": data.get("grund", "")}
-    return {"braucht_probe": False, "skill": None, "tier": None,
-            "grund": data.get("grund", "")}
+        return {**out, "braucht_probe": True, "skill": skill, "tier": tier}
+    return {**out, "braucht_probe": False, "skill": None, "tier": None}

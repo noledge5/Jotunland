@@ -44,6 +44,32 @@
   },
   "starting_gold": 500,
   "combat_status_values": ["active", "incapacitated", "fled", "surrendered", "dead"],
+  "waffen_schaden": {
+    "Klingenwaffen": "1d6",
+    "Wuchtwaffen": "1d8",
+    "Stangenwaffen": "1d8",
+    "Waffenloser Kampf": "1d3",
+    "Bogen": "1d6",
+    "Armbrust": "1d8",
+    "Wurfwaffen": "1d4"
+  },
+  "waffen_schaden_default": "1d4",
+  "fernkampf_skills": ["Bogen", "Armbrust", "Wurfwaffen"],
+  "ruestung": {
+    "keine": {"vw_bonus": 0, "handicap": 0},
+    "gepolstert": {"vw_bonus": 1, "handicap": 0},
+    "leder": {"vw_bonus": 2, "handicap": -1},
+    "kettenhemd": {"vw_bonus": 3, "handicap": -2},
+    "platte": {"vw_bonus": 4, "handicap": -3},
+    "schild": {"vw_bonus": 2, "handicap": 0}
+  },
+  "verletzungsstufen": {"leicht": -1, "schwer": -2, "kritisch": -3},
+  "verteidigung_arten": {
+    "ausweichen": {"skill": "Akrobatik", "nutzt_ruestung": false},
+    "parade": {"skill": "Parade", "nutzt_ruestung": true}
+  },
+  "kampf_distanz_max": 3,
+  "kampf_zone_pro_runde": 1,
   "max_time_delta_minutes": 4320,
   "synopsis_every_n_turns": 20,
   "max_synopses_in_context": 2,

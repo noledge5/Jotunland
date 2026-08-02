@@ -56,17 +56,31 @@ Determines the persistence scope of a location. LLM-generated locations (a new a
 The times and locations where an NPC can be found. Stored in the DB as part of the NPC entry. The Context Builder uses the schedule to determine whether an NPC is present at the current location and time before loading them into context. An NPC not on shift is not in the scene — regardless of their home location.
 
 ## Combat State
-A flag (`in_combat=true`) set in the DB when combat begins. Initiative is determined by context (Classifier wertet Situation aus — Hinterhalt, Überraschung, wer angreift), kein separater Würfelwurf. Alle aktiven Gegner greifen den Spieler jede Runde an. Der Spieler greift standardmäßig einen Gegner pro Runde an. Mit einer expliziten Flächenaktion ("Ich schlage in den Schwarm") kann der Spieler mehrere Gegner gleichzeitig angreifen — mit Malus auf jeden Einzeltreffer, den der Classifier festlegt. Combat ends when all combatants are no longer `active`.
+The `combat` object inside the character's Game State, present only while a fight is running. It holds the round number, the enemy list, a pending roll, whether the PC has already acted this round, and any Active Defense. Combat begins when the Narrator calls `start_combat` and ends with `end_combat`. Initiative is situational (ambush, who strikes first) — there is no initiative roll. The Narrator receives a `=== KAMPFZUSTAND ===` context block each turn listing every enemy with current HP, distance, status, and whether they have acted this round.
 
-Combat is initiated by the Narrator via the `enter_combat` field in Narrator Output. The Narrator provides all combatant entries (id, name, hp_max, stats). The Engine creates the `combat_combatants` records and sets `in_combat=1`. From the second round onward, all HP tracking is fully engine-driven — the Narrator never sets HP values or decides outcomes. The Narrator receives a `=== KAMPFZUSTAND ===` context block each round showing all combatants with current HP and status.
+## Enemy Stat Block
+An enemy's fixed mechanical identity, declared once when `start_combat` is called: HP, attack bonus, damage die, starting distance, and whether it fights at range. These values are binding for the whole fight — the Narrator names them at the start and can never restate or alter them afterwards. `npc_action` names only the attacker; the Engine reads everything else from the block. See ADR-0003.
 
-## Combat Turn Flow
-Two distinct paths based on `in_combat` flag:
-- **Out of combat:** Classify → [Roll?] → Narrate → apply_narrator_output. Narrator may include `enter_combat` to start combat.
-- **In combat:** Classify (forces roll) → Roll requested → Player submits → resolve_player_roll → resolve_combat_after_roll (applies damage, enemy counter-attacks, updates DB) → build_context with KAMPFZUSTAND → Narrate → apply_narrator_output.
+## Combat Round
+One full cycle in which the PC and every able enemy acts exactly once. The Engine advances the round by itself — there is no turn-ending tool. When the PC and all able enemies have acted, the Engine starts the next round: melee enemies advance one Distance Zone, a dying PC bleeds, and any Active Defense expires. An enemy still closing the distance counts as occupied for that round.
+
+## Active Defense
+The PC's declared alternative to attacking: dodging (Akrobatik) or parrying (Parade). It replaces the PC's attack for that round. A single roll produces a value that substitutes for the passive Verteidigungswert against *every* enemy attack that round — including when it turns out worse than the passive value, which is the risk that makes the choice meaningful. Parade adds the armor bonus; dodging suffers the armor handicap. Natural 20 means nothing lands that round, natural 1 means everything does.
+
+## Distance Zone
+An enemy's range from the PC, an integer from 0 (melee) to 3. Ranged skills (Bogen, Armbrust, Wurfwaffen) only reach enemies at zone 1 or higher; melee skills only reach zone 0. Melee enemies close one zone per round and cannot attack while closing. This gives a ranged character a predictable number of shots before the fight becomes melee, instead of leaving the approach to narration.
+
+## Armor
+A mechanical property attached to an inventory item via an armor type from the Rules Config (gepolstert, leder, kettenhemd, platte, schild). Each type carries a Verteidigungswert bonus and a movement handicap. The handicap applies to Akrobatik and Schleichen rolls, in and out of combat; the skill `Rüstungsgewöhnung` offsets it, never past zero. The Narrator names the type, never the numbers.
+
+## Injury
+A lasting wound with a severity level (leicht, schwer, kritisch) rather than a free-form number. Injuries impose roll penalties on physical skills and on the Verteidigungswert, independently of HP, and heal separately. The Narrator names the wound and its severity; the Engine owns the modifier — the same division of labor as Difficulty Tiers.
+
+## Turn Undo
+A snapshot of Game State and conversation history taken before each player turn, kept in a ring buffer of the last ten turns. Restoring one reverts every number — HP, coins, ticks, inventory, location, combat, clock — to the state before that turn. Wiki entries created during the undone turn remain: they are World Scope and outlive the character (ADR-0002). Journal entries and Session Synopses are append-only logs and also remain.
 
 ## Verteidigungswert (VW)
-Passiver Schutzwert: `10 + GES-MOD + Schild-Bonus`. NPC-Angriffswürfe (intern vom Engine berechnet) müssen diesen Wert übertreffen um zu treffen. Der Spieler würfelt standardmäßig nicht für Verteidigung. Ausnahme: Erklärt der Spieler explizit "Ich weiche aus" oder "Ich blocke", wird eine aktive Verteidigungsprobe ausgeführt — Ausweichen (`W20 + GES-MOD + Akrobatik-Bonus`) oder Parade (`W20 + STR-MOD + Parade/Schild-Bonus`) gegen den NPC-Angriffswurf. Aktive Verteidigung ersetzt den eigenen Angriff in dieser Runde.
+Passiver Schutzwert: `10 + GES-MOD + Rüstung + Verletzungs-Mali`. NPC-Angriffswürfe (intern vom Engine berechnet) müssen diesen Wert übertreffen um zu treffen. Der Spieler würfelt standardmäßig nicht für Verteidigung — er tut es nur, wenn er eine Active Defense ansagt, die dann für die ganze Runde an die Stelle des VW tritt.
 
 ## Called Shot
 When a player specifies a target zone in their action description (e.g. "Ich schlage auf den Kopf"), the Action Classifier raises the SG contextually — no fixed modifier. The Classifier weighs the target zone, the opponent's state, and the situation to pick the appropriate Difficulty Tier. A successful hit to the described zone is narrated accordingly by the Narrator. A critical hit (Nat 20) to a vital zone (head, throat) can trigger a Condition (Betäubung, Blutung) in addition to damage. Hit location is narrative flavor — there is no separate hit location table. The damage die result represents how clean and effective the hit was within the described zone.

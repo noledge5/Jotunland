@@ -53,8 +53,10 @@ def auto_coords(slug: str, parent: str | None) -> list[int]:
 
 
 # --- Kampf-State-Machine ------------------------------------------------
-# Phasen: pc_turn -> (awaiting_roll) -> npc_turn -> pc_turn ... bis end_combat.
-# Alle Kampf-Tools validieren die Phase und geben sonst einen Fehler-String.
+# Die Engine schaltet die Runden selbst (ADR-0003): Es gibt kein end_turn-Tool
+# mehr. Statt einer Phasensperre traegt jeder Handelnde ein Flag, dass er in
+# dieser Runde dran war; sind PC und alle kampffaehigen Gegner durch, beginnt
+# automatisch die naechste Runde. 'phase' bleibt als reine Anzeige erhalten.
 
 def _combat_required(gs: dict) -> dict | str:
     c = gs.get("combat")
@@ -63,26 +65,115 @@ def _combat_required(gs: dict) -> dict | str:
     return c
 
 
+def _aktive_gegner(c: dict) -> list[dict]:
+    return [e for e in c["enemies"] if e["hp"] > 0 and e.get("status", "active") == "active"]
+
+
+def _set_phase(gs: dict, c: dict) -> None:
+    """Anzeige-Phase aus dem tatsaechlichen Zustand ableiten."""
+    if c.get("pending_roll"):
+        c["phase"] = "awaiting_roll"
+    elif c.get("pc_gehandelt"):
+        c["phase"] = "npc_turn"
+    else:
+        c["phase"] = "pc_turn"
+
+
+def _kann_handeln(e: dict) -> bool:
+    """Ein Nahkaempfer auf Distanz verbringt seine Runde mit Aufschliessen —
+    er zaehlt als beschaeftigt, sonst blockiert er den Rundenwechsel und der
+    Spieler kaeme nie zu einem zweiten Fernkampfschuss."""
+    return e.get("distanz", 0) == 0 or e.get("fernkampf", False)
+
+
+def _maybe_next_round(gs: dict, c: dict) -> bool:
+    """Neue Runde, sobald der PC und alle handlungsfaehigen Gegner dran waren.
+    Schliesst dabei Nahkaempfer auf, laesst Sterbende bluten und loescht die
+    aktive Verteidigung (sie gilt immer nur fuer eine Runde)."""
+    aktive = _aktive_gegner(c)
+    if not c.get("pc_gehandelt"):
+        return False
+    if any(e.get("gehandelt_runde") != c["round"]
+           for e in aktive if _kann_handeln(e)):
+        return False
+    c["round"] += 1
+    c["pc_gehandelt"] = False
+    c["aktive_verteidigung"] = None
+    schritt = rules.RULEBOOK["kampf_zone_pro_runde"]
+    for e in aktive:
+        if not e.get("fernkampf") and e.get("distanz", 0) > 0:
+            e["distanz"] = max(e["distanz"] - schritt, 0)
+    if rules.is_dying(gs):
+        rules.bleed(gs)
+        c["log"].append(f"PC blutet: {gs['hp']} HP")
+    return True
+
+
 def start_combat(gs: dict, args: dict) -> str:
     if gs.get("combat"):
         return "FEHLER: Kampf laeuft bereits. end_combat zuerst."
+    max_dist = rules.RULEBOOK["kampf_distanz_max"]
     enemies = []
     for e in args.get("gegner", []):
         slug = gsm.slugify(e["name"])
         hp = int(e.get("hp", 6))
-        enemies.append({"slug": slug, "name": e["name"], "hp": hp, "hp_max": hp,
-                        "notiz": e.get("notiz", "")})
+        dist = max(0, min(int(e.get("distanz", 0)), max_dist))
+        enemies.append({
+            "slug": slug, "name": e["name"], "hp": hp, "hp_max": hp,
+            # Kampfwerte werden EINMAL hier festgelegt und sind danach
+            # gebunden — npc_action liest nur noch von hier (ADR-0003).
+            "angriffsbonus": int(e.get("angriffsbonus", 0)),
+            "schaden": e.get("schaden", "1d6"),
+            "status": "active",
+            "distanz": dist,
+            "fernkampf": bool(e.get("fernkampf", False)),
+            "gehandelt_runde": 0,
+            "notiz": e.get("notiz", ""),
+        })
     if not enemies:
         return "FEHLER: start_combat braucht mindestens einen Gegner."
+    for e in enemies:
+        try:
+            roll_expr(e["schaden"])
+        except ValueError:
+            return (f"FEHLER: Ungueltiger Schadenswuerfel '{e['schaden']}' fuer "
+                    f"'{e['name']}'. Format z.B. 1d6, 2d4+1.")
     gs["combat"] = {
         "round": 1,
         "phase": "pc_turn",
         "enemies": enemies,
         "pending_roll": None,
+        "pc_gehandelt": False,
+        "aktive_verteidigung": None,
         "log": [f"Kampf beginnt: {', '.join(e['name'] for e in enemies)}"],
     }
-    return json.dumps({"status": "kampf_gestartet", "runde": 1, "phase": "pc_turn",
-                       "gegner": enemies}, ensure_ascii=False)
+    return json.dumps({"status": "kampf_gestartet", "runde": 1,
+                       "gegner": [{"name": e["name"], "hp": e["hp"],
+                                   "distanz": e["distanz"]} for e in enemies]},
+                      ensure_ascii=False)
+
+
+def set_enemy_status(gs: dict, args: dict) -> str:
+    """Flucht, Aufgabe oder Kampfunfaehigkeit eines Gegners. Nur so verlaesst
+    ein Gegner den Kampf, ohne dass seine HP auf 0 fallen muessen."""
+    c = _combat_required(gs)
+    if isinstance(c, str):
+        return c
+    slug = gsm.slugify(args.get("gegner", ""))
+    status = args.get("status", "")
+    erlaubt = rules.RULEBOOK["combat_status_values"]
+    if status not in erlaubt:
+        return f"FEHLER: Status muss einer von {', '.join(erlaubt)} sein."
+    for e in c["enemies"]:
+        if e["slug"] == slug:
+            e["status"] = status
+            c["log"].append(f"{e['name']}: {status}")
+            _maybe_next_round(gs, c)
+            _set_phase(gs, c)
+            return json.dumps({"gegner": e["name"], "status": status,
+                               "kampffaehig": [x["name"] for x in _aktive_gegner(c)]},
+                              ensure_ascii=False)
+    return f"FEHLER: '{slug}' ist kein Gegner in diesem Kampf."
 
 
 def request_skill_roll(gs: dict, args: dict) -> str:
@@ -96,6 +187,7 @@ def request_skill_roll(gs: dict, args: dict) -> str:
     if rules.sg_for_tier(tier) is None:
         return f"FEHLER: Unbekannter Tier '{tier}'. Gueltig: {', '.join(rules.TIERS)}"
     pending = {
+        "typ": "probe",
         "skill": skill,
         "tier": tier,
         "sg": rules.sg_for_tier(tier),
@@ -108,19 +200,51 @@ def request_skill_roll(gs: dict, args: dict) -> str:
     if target:
         if not c:
             return "FEHLER: 'ziel' nur im Kampf. Erst start_combat."
-        if c["phase"] != "pc_turn":
-            return f"FEHLER: Angriff nur in Phase pc_turn (aktuell: {c['phase']})."
-        if not any(e["slug"] == target and e["hp"] > 0 for e in c["enemies"]):
+        if c.get("pc_gehandelt"):
+            return "FEHLER: Der PC hat in dieser Runde bereits gehandelt."
+        gegner = next((e for e in _aktive_gegner(c) if e["slug"] == target), None)
+        if gegner is None:
             return f"FEHLER: '{target}' ist kein kampffaehiger Gegner."
+        # Zonenmodell: Reichweite muss zur Entfernung passen (ADR-0003)
+        dist = gegner.get("distanz", 0)
+        if rules.ist_fernkampf(skill) and dist == 0:
+            return (f"FEHLER: {skill} geht nicht im Nahkampf — '{gegner['name']}' "
+                    f"steht direkt bei dir. Nahkampfwaffe waehlen.")
+        if not rules.ist_fernkampf(skill) and dist > 0:
+            return (f"FEHLER: '{gegner['name']}' ist {dist} Zone(n) entfernt — "
+                    f"mit {skill} nicht erreichbar. Fernkampf nutzen oder warten.")
+        pending["typ"] = "angriff"
         pending["ziel"] = target
-        pending["schaden"] = args.get("schaden", "1d6")
+        # Schaden kommt aus der Skill-Tabelle, nie vom LLM (ADR-0003)
+        pending["schaden"] = rules.schaden_fuer_skill(skill)
     if c:
-        if c["phase"] == "awaiting_roll":
+        if c.get("pending_roll"):
             return "FEHLER: Es steht bereits ein Wurf aus."
-        c["phase"] = "awaiting_roll"
         c["pending_roll"] = pending
+        _set_phase(gs, c)
     else:
         gs["pending_roll"] = pending
+    return BLOCKING
+
+
+def request_defense_roll(gs: dict, args: dict) -> str:
+    """Aktive Verteidigung: ersetzt den Angriff des PC in dieser Runde. Ein
+    Wurf gilt gegen ALLE Angriffe der folgenden Gegnerrunde (ADR-0003)."""
+    c = _combat_required(gs)
+    if isinstance(c, str):
+        return c
+    art = str(args.get("art", "")).lower()
+    if art not in rules.RULEBOOK["verteidigung_arten"]:
+        arten = ", ".join(rules.RULEBOOK["verteidigung_arten"])
+        return f"FEHLER: art muss eine von {arten} sein."
+    if c.get("pending_roll"):
+        return "FEHLER: Es steht bereits ein Wurf aus."
+    if c.get("pc_gehandelt"):
+        return "FEHLER: Der PC hat in dieser Runde bereits gehandelt."
+    c["pending_roll"] = {"typ": "verteidigung", "art": art,
+                         "skill": rules.RULEBOOK["verteidigung_arten"][art]["skill"],
+                         "beschreibung": args.get("beschreibung", "")}
+    _set_phase(gs, c)
     return BLOCKING
 
 
@@ -134,6 +258,19 @@ def resolve_player_roll(gs: dict, roll: int) -> dict:
         pr = gs["pending_roll"]
     else:
         raise ValueError("Kein ausstehender Wurf")
+
+    # --- Aktive Verteidigung: ersetzt Angriff und passiven VW dieser Runde
+    if pr.get("typ") == "verteidigung" and c:
+        result = rules.resolve_defense(gs, pr["art"], roll)
+        result["beschreibung"] = pr.get("beschreibung", "")
+        c["aktive_verteidigung"] = {"wert": result["gesamt"], "runde": c["round"],
+                                    "art": pr["art"], "kritisch": result["kritisch"]}
+        c["pc_gehandelt"] = True
+        c["pending_roll"] = None
+        c["log"].append(f"PC verteidigt aktiv ({pr['art']}): {result['gesamt']}")
+        _maybe_next_round(gs, c)
+        _set_phase(gs, c)
+        return result
 
     result = rules.resolve_probe(gs, pr["skill"], pr["tier"], roll)
     result["beschreibung"] = pr.get("beschreibung", "")
@@ -149,65 +286,82 @@ def resolve_player_roll(gs: dict, roll: int) -> dict:
                     result["ziel"] = e["name"]
                     result["ziel_hp"] = f"{e['hp']}/{e['hp_max']}"
                     if e["hp"] == 0:
+                        e["status"] = "incapacitated"
                         result["ziel_kampfunfaehig"] = True
             c["log"].append(f"PC-Angriff auf {pr['ziel']}: {result['gesamt']} vs SG {result['sg']}, {total_dmg} Schaden")
         else:
             c["log"].append(f"PC verfehlt {pr['ziel']} ({result['gesamt']} vs SG {result['sg']})")
+        c["pc_gehandelt"] = True
+
     if c:
         c["pending_roll"] = None
-        c["phase"] = "pc_turn"
+        if _maybe_next_round(gs, c):
+            result["neue_runde"] = c["round"]
+        _set_phase(gs, c)
+        result["kampf"] = {"runde": c["round"],
+                           "gegner": [{"name": e["name"], "hp": f"{e['hp']}/{e['hp_max']}",
+                                       "distanz": e.get("distanz", 0)}
+                                      for e in _aktive_gegner(c)]}
     else:
         gs["pending_roll"] = None
     return result
 
 
 def npc_action(gs: dict, args: dict) -> str:
-    """NPC-Angriff gegen den Verteidigungswert des PC (Engine wuerfelt)."""
+    """NPC-Angriff. Angriffsbonus und Schaden kommen aus dem bei start_combat
+    festgelegten Stat-Block, nie aus den Argumenten (ADR-0003). Die Engine
+    wuerfelt gegen den passiven VW — oder gegen die aktive Verteidigung."""
     c = _combat_required(gs)
     if isinstance(c, str):
         return c
-    if c["phase"] != "npc_turn":
-        return f"FEHLER: npc_action nur in Phase npc_turn (aktuell: {c['phase']}). Erst end_turn."
     attacker = gsm.slugify(args.get("angreifer", ""))
-    living = [e for e in c["enemies"] if e["hp"] > 0]
-    if not any(e["slug"] == attacker for e in living):
+    gegner = next((e for e in _aktive_gegner(c) if e["slug"] == attacker), None)
+    if gegner is None:
         return f"FEHLER: '{attacker}' ist kein kampffaehiger Gegner."
-    vw = rules.verteidigungswert(gs)
+    if gegner.get("gehandelt_runde") == c["round"]:
+        return (f"FEHLER: {gegner['name']} hat in Runde {c['round']} bereits "
+                f"gehandelt.")
+    if gegner.get("distanz", 0) > 0 and not gegner.get("fernkampf"):
+        return (f"FEHLER: {gegner['name']} ist noch {gegner['distanz']} Zone(n) "
+                f"entfernt und kann nicht angreifen.")
+
     atk = roll_expr("1d20")
-    atk_total = atk["total"] + int(args.get("angriffsbonus", 0))
-    result: dict = {"angreifer": attacker, "wurf": atk_total, "vw": vw}
-    if atk_total >= vw:
-        dmg = roll_expr(args.get("schaden", "1d6"))
+    atk_total = atk["total"] + gegner["angriffsbonus"]
+    av = c.get("aktive_verteidigung")
+    if av and av.get("runde") == c["round"]:
+        ziel_wert, quelle = av["wert"], f"aktive Verteidigung ({av['art']})"
+        if av.get("kritisch") == "erfolg":
+            treffer = False
+        elif av.get("kritisch") == "fehlschlag":
+            treffer = True
+        else:
+            treffer = atk_total >= ziel_wert
+    else:
+        ziel_wert, quelle = rules.verteidigungswert(gs), "VW"
+        treffer = atk_total >= ziel_wert
+
+    gegner["gehandelt_runde"] = c["round"]
+    result: dict = {"angreifer": gegner["name"], "wurf": atk_total,
+                    "ziel_wert": ziel_wert, "gegen": quelle}
+    if treffer:
+        dmg = roll_expr(gegner["schaden"])
         hp_info = gsm.adjust_hp(gs, -dmg["total"])
         result.update({"treffer": True, "schaden": dmg["total"], **hp_info})
-        c["log"].append(f"{attacker} trifft PC: {dmg['total']} Schaden -> {hp_info['hp']} HP")
+        c["log"].append(f"{gegner['name']} trifft PC: {dmg['total']} Schaden -> {hp_info['hp']} HP")
     else:
         result["treffer"] = False
-        c["log"].append(f"{attacker} verfehlt den PC (VW {vw})")
-    return json.dumps(result, ensure_ascii=False)
+        c["log"].append(f"{gegner['name']} verfehlt den PC ({atk_total} vs {ziel_wert})")
 
-
-def end_turn(gs: dict, args: dict) -> str:
-    c = _combat_required(gs)
-    if isinstance(c, str):
-        return c
-    if c["phase"] == "awaiting_roll":
-        return "FEHLER: Es steht noch ein Spieler-Wurf aus."
-    if c["phase"] == "pc_turn":
-        c["phase"] = "npc_turn"
-    else:
-        c["phase"] = "pc_turn"
-        c["round"] += 1
-        if rules.is_dying(gs):
-            rules.bleed(gs)  # Blutung pro Runde bis Stabilisierung
-            c["log"].append(f"PC blutet: {gs['hp']} HP")
-    payload = {"runde": c["round"], "phase": c["phase"],
-               "gegner_kampffaehig": [e["name"] for e in c["enemies"] if e["hp"] > 0]}
+    if _maybe_next_round(gs, c):
+        result["neue_runde"] = c["round"]
+        result["gegner_stand"] = [{"name": e["name"], "distanz": e.get("distanz", 0)}
+                                  for e in _aktive_gegner(c)]
     if rules.is_dead(gs):
-        payload["pc_tot"] = True
+        result["pc_tot"] = True
     elif rules.is_dying(gs):
-        payload["pc_sterbend"] = True
-    return json.dumps(payload, ensure_ascii=False)
+        result["pc_sterbend"] = True
+    _set_phase(gs, c)
+    return json.dumps(result, ensure_ascii=False)
 
 
 def end_combat(gs: dict, args: dict) -> str:
@@ -353,9 +507,21 @@ def set_location(gs: dict, args: dict) -> str:
     slug = args.get("slug") or gsm.slugify(args.get("name", ""))
     name = args.get("name", slug)
     meta = wiki_index.get_entry_meta(slug)
+    if meta is None and args.get("body"):
+        # Unbekannter Ort mit Beschreibung: Eintrag miterzeugen statt zwei
+        # Aufrufe zu verlangen (ADR-0003). Im Playtest wurde der Ortswechsel
+        # genau deshalb uebersprungen — und der Kontext blieb auf der alten
+        # Szene stehen, samt der dort anwesenden NPCs.
+        parent = args.get("parent") or (gs.get("location") or {}).get("slug")
+        neu = add_wiki_entry(gs, {"type": args.get("type", "location"), "name": name,
+                                  "slug": slug, "body": args["body"],
+                                  "parent": parent})
+        if neu.startswith(("FEHLER", "WARNUNG")):
+            return neu
+        meta = wiki_index.get_entry_meta(slug)
     if meta is None:
-        return (f"FEHLER: Ort '{slug}' hat keinen Wiki-Eintrag. "
-                f"Erst add_wiki_entry mit type=location/zone/scene.")
+        return (f"FEHLER: Ort '{slug}' hat keinen Wiki-Eintrag. Entweder 'body' "
+                f"mitgeben (dann wird er angelegt) oder erst add_wiki_entry.")
     gs["location"] = {"slug": slug, "name": meta.get("name", name)}
     # Stack ueber die parent-Kette: Szene -> Zone -> Stadt -> Region -> Realm
     stack, cur, seen = [slug], meta, {slug}
@@ -460,12 +626,55 @@ def manage_inventory(gs: dict, args: dict) -> str:
         if existing["menge"] <= 0:
             inv.remove(existing)
         return json.dumps({"entfernt": name, "menge": menge}, ensure_ascii=False)
+    ruestung = args.get("ruestung")
+    if ruestung is not None:
+        ruestung = str(ruestung).lower()
+        if ruestung not in rules.RULEBOOK["ruestung"]:
+            typen = ", ".join(rules.RULEBOOK["ruestung"])
+            return f"FEHLER: Unbekannter Ruestungstyp '{ruestung}'. Gueltig: {typen}"
     if existing:
         existing["menge"] = existing.get("menge", 1) + menge
+        if ruestung is not None:
+            existing["ruestung"] = ruestung
+        if args.get("equipped") is not None:
+            existing["equipped"] = bool(args["equipped"])
     else:
-        inv.append({"name": name, "menge": menge, "notiz": args.get("notiz", "")})
-    return json.dumps({"inventar": [f"{i['name']} x{i.get('menge', 1)}" for i in inv]},
-                      ensure_ascii=False)
+        item = {"name": name, "menge": menge, "notiz": args.get("notiz", "")}
+        if ruestung is not None:
+            item["ruestung"] = ruestung
+        if args.get("equipped") is not None:
+            item["equipped"] = bool(args["equipped"])
+        inv.append(item)
+    return json.dumps({"inventar": [f"{i['name']} x{i.get('menge', 1)}" for i in inv],
+                       "vw": rules.verteidigungswert(gs)}, ensure_ascii=False)
+
+
+def set_injury(gs: dict, args: dict) -> str:
+    """Verletzung setzen oder heilen. Der DM benennt die Schwere, die Zahl
+    kommt aus dem Rulebook (ADR-0003) — wie bei den Difficulty Tiers."""
+    name = args.get("name", "").strip()
+    if not name:
+        return "FEHLER: name fehlt."
+    verletzungen = gs.setdefault("verletzungen", [])
+    if args.get("geheilt"):
+        vorher = len(verletzungen)
+        gs["verletzungen"] = [v for v in verletzungen if v["name"].lower() != name.lower()]
+        if len(gs["verletzungen"]) == vorher:
+            return f"FEHLER: Verletzung '{name}' nicht gefunden."
+        return json.dumps({"geheilt": name, "vw": rules.verteidigungswert(gs)},
+                          ensure_ascii=False)
+    stufe = str(args.get("stufe", "")).lower()
+    if stufe not in rules.RULEBOOK["verletzungsstufen"]:
+        stufen = ", ".join(rules.RULEBOOK["verletzungsstufen"])
+        return f"FEHLER: stufe muss eine von {stufen} sein."
+    for v in verletzungen:
+        if v["name"].lower() == name.lower():
+            v["stufe"] = stufe
+            break
+    else:
+        verletzungen.append({"name": name, "stufe": stufe})
+    return json.dumps({"verletzung": name, "stufe": stufe,
+                       "vw": rules.verteidigungswert(gs)}, ensure_ascii=False)
 
 
 def status_effect(gs: dict, args: dict) -> str:
@@ -488,6 +697,13 @@ def journal_tool(gs: dict, args: dict) -> str:
 
 
 def roll_dice_tool(gs: dict, args: dict) -> str:
+    # Im Kampf gesperrt (ADR-0003): freie Wuerfe waren der Weg, auf dem im
+    # Playtest die gesamte Kampfmechanik umgangen wurde — Angriffe und Schaden
+    # wurden gewuerfelt und in Prosa verrechnet, ohne je im Spielstand zu landen.
+    if gs.get("combat"):
+        return ("FEHLER: Im Kampf keine freien Wuerfe. Angriffe des PC ueber "
+                "request_skill_roll (mit 'ziel'), Angriffe der Gegner ueber "
+                "npc_action, aktive Verteidigung ueber request_defense_roll.")
     try:
         return json.dumps(roll_expr(args.get("ausdruck", "1d20")), ensure_ascii=False)
     except ValueError as e:
@@ -505,7 +721,7 @@ B = {"type": "boolean"}
 ARR_S = {"type": "array", "items": {"type": "string"}}
 
 TOOLS: list[dict] = [
-    {"name": "roll_dice", "description": "Serverseitiger Wuerfelwurf fuer NPCs und Weltereignisse (z.B. '2d6+1'). Spieler-Angriffe laufen ueber request_attack_roll.",
+    {"name": "roll_dice", "description": "Serverseitiger Wuerfelwurf fuer Weltereignisse ausserhalb des Kampfes (z.B. '2d6+1'). IM KAMPF GESPERRT — dort laufen PC-Angriffe ueber request_skill_roll (mit 'ziel'), Gegner-Angriffe ueber npc_action, Verteidigung ueber request_defense_roll.",
      "input_schema": _schema({"ausdruck": S}, ["ausdruck"])},
     {"name": "pay", "description": "PC bezahlt einen Betrag in Kupfer (kp). Backend macht das Wechselgeld ueber den Boersen-Gesamtwert. 1 gm = 10 sm = 100 kp.",
      "input_schema": _schema({"betrag_kp": I, "empfaenger": S}, ["betrag_kp"])},
@@ -521,8 +737,11 @@ TOOLS: list[dict] = [
      "input_schema": _schema({"slug": S, "feld": S, "wert": {}}, ["slug", "feld"])},
     {"name": "promote_entry", "description": "Charakter-gebundenen Eintrag dauerhaft zum Weltkanon befoerdern.",
      "input_schema": _schema({"slug": S}, ["slug"])},
-    {"name": "manage_inventory", "description": "Item ins Inventar legen oder entfernen (entfernen=true).",
-     "input_schema": _schema({"name": S, "menge": I, "notiz": S, "entfernen": B}, ["name"])},
+    {"name": "manage_inventory", "description": "Item ins Inventar legen oder entfernen (entfernen=true). Bei Ruestung/Schild 'ruestung' auf einen Typ setzen (keine/gepolstert/leder/kettenhemd/platte/schild) und 'equipped' — die Engine rechnet VW und Handicap daraus.",
+     "input_schema": _schema({"name": S, "menge": I, "notiz": S, "entfernen": B,
+                              "ruestung": S, "equipped": B}, ["name"])},
+    {"name": "set_injury", "description": "Verletzung setzen (name + stufe: leicht/schwer/kritisch) oder heilen (geheilt=true). Gibt Wurf-Mali auf koerperliche Proben und den VW — die Zahl kennt die Engine, nenne nur die Stufe.",
+     "input_schema": _schema({"name": S, "stufe": S, "geheilt": B}, ["name"])},
     {"name": "status_effect", "description": "Status-Effekt setzen oder entfernen (z.B. 'vergiftet', 'erschoepft').",
      "input_schema": _schema({"effekt": S, "entfernen": B}, ["effekt"])},
     {"name": "add_wiki_entry", "description": "Neuen Eintrag anlegen. Neue Orte sind sofort Weltkanon; situative Klein-NPCs mit scope=charakter anlegen. Bei Stadt-Institutionen 'stadt' angeben (kanonischer Slug). 'parent' = uebergeordneter Ort (Koordinaten werden daneben gesetzt).",
@@ -534,8 +753,8 @@ TOOLS: list[dict] = [
                               "body": S}, ["type", "name", "body"])},
     {"name": "update_wiki_entry", "description": "Bestehenden Welt-Eintrag erweitern (body_anhang) oder Status/Tags aendern.",
      "input_schema": _schema({"slug": S, "body_anhang": S, "status": S, "tags": ARR_S}, ["slug"])},
-    {"name": "set_location", "description": "PC bewegt sich an einen Ort (muss als Wiki-Eintrag existieren). Setzt den Location-Stack und leert die NPC-Anwesenheit.",
-     "input_schema": _schema({"slug": S, "name": S}, ["name"])},
+    {"name": "set_location", "description": "PC bewegt sich an einen Ort. PFLICHT bei jedem Ortswechsel, sonst bleibt der Kontext auf der alten Szene stehen (samt der dort anwesenden NPCs). Existiert der Ort noch nicht, 'body' mitgeben — dann wird er angelegt und sofort betreten.",
+     "input_schema": _schema({"slug": S, "name": S, "body": S, "type": S, "parent": S}, ["name"])},
     {"name": "npc_present", "description": "NPC betritt (oder verlaesst, entfernen=true) die Szene.",
      "input_schema": _schema({"slug": S, "name": S, "entfernen": B})},
     {"name": "manage_quest", "description": "Quest anlegen (aktion=neu, titel) oder aktualisieren (aktion=update, id, status: offen/aktiv/abgeschlossen/gescheitert, entities: verknuepfte Wiki-Slugs).",
@@ -545,17 +764,19 @@ TOOLS: list[dict] = [
      "input_schema": _schema({"slug": S, "entfernen": B}, ["slug"])},
     {"name": "append_journal", "description": "Wichtiges Ereignis ins PC-Journal schreiben (Persistenz ueber Sessions).",
      "input_schema": _schema({"text": S}, ["text"])},
-    {"name": "request_skill_roll", "description": "PFLICHT fuer jede Aktion mit unsicherem Ausgang: Skill + Tier (Sehr Leicht/Leicht/Durchschnitt/Schwer/Sehr Schwer/Heroisch/Extrem) benennen. BLOCKIERT bis der Spieler seinen W20 eingibt; Engine rechnet Ergebnis, Crits und Ticks. Im Kampf mit 'ziel' (+'schaden' z.B. 1d8) ist es ein Angriff.",
+    {"name": "request_skill_roll", "description": "PFLICHT fuer jede Aktion mit unsicherem Ausgang: Skill + Tier (Sehr Leicht/Leicht/Durchschnitt/Schwer/Sehr Schwer/Heroisch/Extrem) benennen. BLOCKIERT bis der Spieler seinen W20 eingibt; Engine rechnet Ergebnis, Crits und Ticks. Im Kampf mit 'ziel' ist es ein Angriff — den Schadenswuerfel kennt die Engine aus dem Kampf-Skill, nenne ihn nicht.",
      "input_schema": _schema({"skill": S, "schwierigkeit": S, "beschreibung": S,
-                              "ziel": S, "schaden": S}, ["skill", "schwierigkeit"])},
-    {"name": "start_combat", "description": "Kampf starten. gegner: Liste mit name, hp, notiz.",
+                              "ziel": S}, ["skill", "schwierigkeit"])},
+    {"name": "request_defense_roll", "description": "Aktive Verteidigung des PC, wenn er sie ansagt: art=ausweichen (Akrobatik) oder parade (Parade, nutzt Ruestung). ERSETZT seinen Angriff in dieser Runde; der Wurf gilt gegen ALLE Gegnerangriffe der Runde statt des passiven VW. BLOCKIERT bis zum W20.",
+     "input_schema": _schema({"art": S, "beschreibung": S}, ["art"])},
+    {"name": "start_combat", "description": "Kampf starten. Pro Gegner: name, hp, angriffsbonus, schaden (Wuerfel, z.B. 1d6), distanz (0=Nahkampf, bis 3=weit weg), fernkampf (true bei Bogenschuetzen), notiz. Angriffswerte gelten fuer den ganzen Kampf und sind danach nicht mehr aenderbar.",
      "input_schema": _schema({"gegner": {"type": "array", "items": _schema(
-         {"name": S, "hp": I, "notiz": S}, ["name"])}}, ["gegner"])},
-    {"name": "npc_action", "description": "NPC-Angriff im Kampf (nur Phase npc_turn). Engine wuerfelt 1d20+angriffsbonus gegen den Verteidigungswert des PC.",
-     "input_schema": _schema({"angreifer": S, "angriffsbonus": I,
-                              "schaden": S, "beschreibung": S}, ["angreifer"])},
-    {"name": "end_turn", "description": "Zug beenden: pc_turn -> npc_turn -> naechste Runde. Sterbende bluten pro Runde.",
-     "input_schema": _schema({})},
+         {"name": S, "hp": I, "angriffsbonus": I, "schaden": S, "distanz": I,
+          "fernkampf": B, "notiz": S}, ["name"])}}, ["gegner"])},
+    {"name": "npc_action", "description": "Angriff eines Gegners. Engine wuerfelt 1d20 plus seinen festgelegten Angriffsbonus gegen VW bzw. aktive Verteidigung und wendet seinen festgelegten Schaden an. Jeder Gegner einmal pro Runde; Nahkaempfer muessen erst aufschliessen (distanz 0). Die Runde schaltet die Engine selbst weiter.",
+     "input_schema": _schema({"angreifer": S, "beschreibung": S}, ["angreifer"])},
+    {"name": "set_enemy_status", "description": "Gegner verlaesst den Kampf oder aendert seinen Zustand: active/incapacitated/fled/surrendered/dead. Fuer Flucht und Aufgabe — nicht fuer Schaden (der laeuft ueber Angriffe).",
+     "input_schema": _schema({"gegner": S, "status": S}, ["gegner", "status"])},
     {"name": "end_combat", "description": "Kampf beenden. ausgang: sieg/niederlage/flucht/uebergabe/verhandlung.",
      "input_schema": _schema({"ausgang": S}, ["ausgang"])},
 ]
@@ -570,6 +791,7 @@ HANDLERS = {
     "set_world_flag": set_world_flag,
     "promote_entry": promote_entry,
     "manage_inventory": manage_inventory,
+    "set_injury": set_injury,
     "status_effect": status_effect,
     "add_wiki_entry": add_wiki_entry,
     "update_wiki_entry": update_wiki_entry,
@@ -579,9 +801,10 @@ HANDLERS = {
     "pin_entry": pin_entry,
     "append_journal": journal_tool,
     "request_skill_roll": request_skill_roll,
+    "request_defense_roll": request_defense_roll,
     "start_combat": start_combat,
     "npc_action": npc_action,
-    "end_turn": end_turn,
+    "set_enemy_status": set_enemy_status,
     "end_combat": end_combat,
 }
 

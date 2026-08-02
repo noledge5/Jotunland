@@ -141,6 +141,7 @@
   <button id="newpc">Neuer PC</button>
   <button id="graphbtn">Welt</button>
   <button id="protbtn" title="Session-Protokoll ins Journal schreiben">Protokoll</button>
+  <button id="undobtn" title="Letzten Zug zuruecknehmen" disabled>↶ Zug zurueck</button>
   <div class="spacer"></div>
   <button id="settingsbtn" title="Einstellungen">⚙ Einstellungen</button>
 </header>
@@ -441,9 +442,9 @@ function renderSidebar(pc) {
     `<div class="stat"><span>${n}</span><span>${s.wert} <span style="color:var(--dim)">(${s.ticks}t)</span></span></div>`).join('');
   if (pc.location) html += `<h2>Ort</h2><div>${pc.location.name}</div>`;
   const verl = pc.verletzungen || [];
-  if (verl.length) html += '<h2>Verletzungen</h2>' + verl.map(v => `<span class="tag">${v.name} (${v.modifikator})</span>`).join('');
+  if (verl.length) html += '<h2>Verletzungen</h2>' + verl.map(v => `<span class="tag">${v.name} (${v.stufe || v.modifikator})</span>`).join('');
   const inv = pc.inventar || [];
-  if (inv.length) html += '<h2>Inventar</h2>' + inv.map(i => `<span class="tag">${i.name} x${i.menge || 1}${i.equipped ? ' ✦' : ''}</span>`).join('');
+  if (inv.length) html += '<h2>Inventar</h2>' + inv.map(i => `<span class="tag">${i.name} x${i.menge || 1}${i.ruestung ? ' ⛊' : ''}${i.equipped ? ' ✦' : ''}</span>`).join('');
   const fx = pc.status_effekte || [];
   if (fx.length) html += '<h2>Status</h2>' + fx.map(e => `<span class="tag">${e}</span>`).join('');
   const quests = (pc.quests || []).filter(q => q.status !== 'abgeschlossen');
@@ -492,6 +493,8 @@ async function consumeStream(response, dmDiv) {
         el('lint', ev.text);
       } else if (ev.type === 'error') {
         el('error', 'Fehler: ' + ev.error);
+      } else if (ev.type === 'done') {
+        refreshUndo();          // nach jedem Zug gibt es einen Rueckgaengig-Punkt
       }
     }
   }
@@ -1104,6 +1107,7 @@ $('pcsel').onchange = async () => {
     await api(`/api/pcs/${$('pcsel').value}/activate`, {method: 'POST'});
     await refreshState();
     await loadChat();   // Verlauf des gewechselten Charakters laden
+    await refreshUndo();  // Undo-Punkte sind pro Charakter
   }
 };
 $('modelsel').onchange = async () => {
@@ -1163,6 +1167,31 @@ $('wz-save').onclick = async () => {
     refreshState();
   } catch (e) { $('wz-err').textContent = e.message; }
 };
+// --- Undo: letzten Zug zuruecknehmen (Gamestate + Verlauf) ---
+async function refreshUndo() {
+  try {
+    const u = await (await api('/api/undo')).json();
+    const btn = $('undobtn');
+    btn.disabled = !u.verfuegbar;
+    btn.title = u.verfuegbar
+      ? `Letzten Zug zuruecknehmen (${u.verfuegbar} verfuegbar)` + (u.letzter ? `: "${u.letzter}"` : '')
+      : 'Kein Zug zum Zuruecknehmen';
+  } catch { $('undobtn').disabled = true; }
+}
+$('undobtn').onclick = async () => {
+  const u = await (await api('/api/undo')).json();
+  if (!u.verfuegbar) return;
+  const was = u.letzter ? `\n\nZuletzt: "${u.letzter}"` : '';
+  if (!confirm('Letzten Zug zuruecknehmen? Spielstand und Verlauf gehen auf den '
+             + 'Stand davor zurueck. Wiki-Eintraege bleiben bestehen.' + was)) return;
+  try {
+    const r = await (await api('/api/undo', {method: 'POST'})).json();
+    el('tool', `Zug zurueckgenommen${r.label ? `: "${r.label}"` : ''}`);
+    await refreshState();
+    await loadChat();
+    await refreshUndo();
+  } catch (e) { el('error', e.message); }
+};
 $('protbtn').onclick = async () => {
   el('tool', 'Erzeuge Session-Protokoll ...');
   try {
@@ -1171,7 +1200,7 @@ $('protbtn').onclick = async () => {
   } catch (e) { el('error', e.message); }
 };
 
-loadModelCatalog().then(refreshState).then(loadChat);
+loadModelCatalog().then(refreshState).then(loadChat).then(refreshUndo);
 </script>
 </body>
 </html>

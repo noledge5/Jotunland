@@ -111,7 +111,7 @@ def test_classifier_validates_skill(env, monkeypatch):
     importlib.reload(clf)
     gs = env["gsm"].create_pc("Bjorn")
 
-    async def fake_complete(model, system, user, max_tokens=200):
+    async def fake_complete(model, system, user, max_tokens=200, timeout=None):
         return '{"braucht_probe": true, "skill": "Zaubern", "tier": "Leicht", "grund": "x"}'
     monkeypatch.setattr(clf.llm_adapter, "complete", fake_complete)
     import asyncio
@@ -243,13 +243,13 @@ def test_test_classifier_endpoint(client, monkeypatch):
     auffallen, nicht erst mitten in der Szene (P1-Review-Fund)."""
     import app.main as main
 
-    async def fake_ok(model, system, user, max_tokens=200):
+    async def fake_ok(model, system, user, max_tokens=200, timeout=None):
         return '{"braucht_probe": false, "skill": null, "tier": null, "grund": "x"}'
     monkeypatch.setattr(main.classifier.llm_adapter, "complete", fake_ok)
     r = client.post("/api/models/test-classifier", json={"model": "or/x/y"})
     assert r.status_code == 200 and r.json()["ok"] is True
 
-    async def fake_bad(model, system, user, max_tokens=200):
+    async def fake_bad(model, system, user, max_tokens=200, timeout=None):
         return "Ich denke, keine Probe noetig."  # kein JSON
     monkeypatch.setattr(main.classifier.llm_adapter, "complete", fake_bad)
     r = client.post("/api/models/test-classifier", json={"model": "or/broken/model"})
@@ -291,3 +291,114 @@ def test_context_budgets_from_rulebook(env):
     importlib.reload(wctx)
     assert wctx.BUDGETS is rules.RULEBOOK["context_char_budgets"]
     assert "synopses" in wctx.BUDGETS
+
+
+# --- ADR-0003: Retry, Undo, Korrektur-Enforcement -----------------------
+
+def test_korrektur_ohne_zustandsaenderung_wird_geflaggt(env):
+    """Playtest-Fund: drei [KORREKTUR]-Zuege aenderten nur den Text, nie den
+    Spielstand — danach liefen Prosa und Zahlen dauerhaft auseinander."""
+    import app.main as main
+    importlib.reload(main)
+    gs = env["gsm"].create_pc("Bjorn")
+    p = main.validate_narration("Du hast recht, entschuldige.", [],
+                                gs, mode="korrektur")
+    assert any("Spielstand" in x for x in p)
+    p = main.validate_narration("Korrigiert.", ["set_location"], gs, mode="korrektur")
+    assert p == []
+
+
+def test_validator_flaggt_fehlenden_ortswechsel(env):
+    import app.main as main
+    importlib.reload(main)
+    gs = env["gsm"].create_pc("Bjorn")
+    gate = {"ortswechsel": True}
+    p = main.validate_narration("Du folgst ihnen zum Leuchtturm.",
+                                ["advance_time"], gs, gate=gate)
+    assert any("set_location" in x for x in p)
+    p = main.validate_narration("Du folgst ihnen zum Leuchtturm.",
+                                ["advance_time", "set_location"], gs, gate=gate)
+    assert not any("set_location" in x for x in p)
+
+
+def test_validator_flaggt_roll_dice_im_kampf(env):
+    import app.main as main
+    importlib.reload(main)
+    gs = env["gsm"].create_pc("Bjorn")
+    gs["combat"] = {"round": 1, "enemies": [], "pending_roll": None, "log": []}
+    p = main.validate_narration("Der Hammer saust herab.", ["roll_dice"], gs)
+    assert any("roll_dice" in x for x in p)
+
+
+def test_retry_bei_regelverstoss_im_kampf(client, env, monkeypatch):
+    """Gepufferter Kampfzug: ein regelwidriger erster Versuch wird verworfen
+    und nicht angezeigt; der zweite Versuch geht durch."""
+    import app.main as main
+    client.post("/api/pcs", json={"name": "Bjorn"})
+    client.post("/api/settings", json={"use_classifier": False})
+    gs = env["gsm"].load_pc("bjorn")
+    gs["combat"] = {"round": 1, "enemies": [], "pending_roll": None,
+                    "pc_gehandelt": False, "aktive_verteidigung": None, "log": []}
+    env["gsm"].save_pc(gs)
+    cap = {"n": 0}
+
+    async def fake_stream(model, system, messages, tools_):
+        cap["n"] += 1
+        if cap["n"] == 1:
+            # Genau der Playtest-Fehler: erzaehlte HP, die nicht zum
+            # Spielstand passen (dort 1/10, waehrend die Engine 0 fuehrte).
+            yield {"type": "text", "text": "Du hast nur noch 3 LP."}
+        else:
+            yield {"type": "text", "text": "Zweiter, sauberer Versuch."}
+        yield {"type": "stop", "reason": "end"}
+    monkeypatch.setattr(main.llm_adapter, "stream_with_tools", fake_stream)
+
+    r = client.post("/api/chat", json={"message": "Ich schlage zu", "mode": "handeln"})
+    assert cap["n"] == 2                      # es gab genau einen Retry
+    assert "nur noch 3 LP" not in r.text      # verworfener Text bleibt unsichtbar
+    assert "Zweiter, sauberer Versuch" in r.text
+
+
+def test_undo_stellt_zustand_wieder_her(client, env, monkeypatch):
+    import app.main as main
+    client.post("/api/pcs", json={"name": "Bjorn"})
+    client.post("/api/settings", json={"use_classifier": False})
+
+    runs = {"n": 0}
+
+    async def fake_stream(model, system, messages, tools_):
+        runs["n"] += 1
+        if runs["n"] == 1:
+            yield {"type": "tool_call", "id": "h", "name": "adjust_hp",
+                   "args": {"delta": -5, "grund": "Falle"}}
+            yield {"type": "stop", "reason": "tool_use"}
+        else:
+            yield {"type": "text", "text": "Die Falle schnappt zu."}
+            yield {"type": "stop", "reason": "end"}
+    monkeypatch.setattr(main.llm_adapter, "stream_with_tools", fake_stream)
+
+    hp_vorher = env["gsm"].load_pc("bjorn")["hp"]
+    client.post("/api/chat", json={"message": "Ich gehe weiter", "mode": "handeln"})
+    assert env["gsm"].load_pc("bjorn")["hp"] == hp_vorher - 5
+    assert client.get("/api/undo").json()["verfuegbar"] == 1
+
+    r = client.post("/api/undo")
+    assert r.status_code == 200
+    assert env["gsm"].load_pc("bjorn")["hp"] == hp_vorher
+    assert client.get("/api/undo").json()["verfuegbar"] == 0
+    assert client.post("/api/undo").status_code == 409
+
+
+def test_trivial_skip_spart_den_gate_call(env, monkeypatch):
+    import app.classifier as clf
+    importlib.reload(clf)
+    called = {"n": 0}
+
+    async def fake_complete(model, system, user, max_tokens=200, timeout=None):
+        called["n"] += 1
+        return '{"braucht_probe": false}'
+    monkeypatch.setattr(clf.llm_adapter, "complete", fake_complete)
+    import asyncio
+    out = asyncio.get_event_loop().run_until_complete(
+        clf.classify({}, "Ich schaue mich um", "or/x/y"))
+    assert out["braucht_probe"] is False and called["n"] == 0

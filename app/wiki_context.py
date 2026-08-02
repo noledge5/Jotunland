@@ -86,7 +86,8 @@ def gamestate_summary(gs: dict) -> str:
             f"{n} {w}" for n, w in sorted(skills.items(), key=lambda x: -x[1])[:15]))
     if gs.get("verletzungen"):
         lines.append("Verletzungen: " + ", ".join(
-            f"{v['name']} ({v.get('modifikator', 0):+d})" for v in gs["verletzungen"]))
+            f"{v['name']} ({v.get('stufe', 'leicht')})" for v in gs["verletzungen"])
+            + f" — Wurf-Malus gesamt {rules.verletzungs_mod(gs):+d}")
     if gs.get("status_effekte"):
         lines.append("Status-Effekte: " + ", ".join(gs["status_effekte"]))
     inv = gs.get("inventar") or []
@@ -101,8 +102,24 @@ def gamestate_summary(gs: dict) -> str:
         lines.append(f"Quest [{q.get('status', 'offen')}]: {q['titel']}")
     if gs.get("combat"):
         c = gs["combat"]
-        enemies = ", ".join(f"{e['name']} ({e['hp']}/{e['hp_max']} HP)" for e in c["enemies"])
-        lines.append(f"=== KAMPFZUSTAND === Runde {c['round']}, Phase {c['phase']}, Gegner: {enemies}")
+        teile = []
+        for e in c.get("enemies", []):
+            zustand = f"{e['name']} ({e['hp']}/{e['hp_max']} HP"
+            if e.get("distanz"):
+                zustand += f", {e['distanz']} Zone(n) entfernt"
+            if e.get("status", "active") != "active":
+                zustand += f", {e['status']}"
+            elif e.get("gehandelt_runde") == c.get("round"):
+                zustand += ", hat gehandelt"
+            teile.append(zustand + ")")
+        lines.append(f"=== KAMPFZUSTAND === Runde {c.get('round', 1)}, "
+                     f"Phase {c.get('phase', 'pc_turn')}, Gegner: {', '.join(teile)}")
+        if c.get("pc_gehandelt"):
+            lines.append("Der PC hat in dieser Runde bereits gehandelt.")
+        av = c.get("aktive_verteidigung")
+        if av and av.get("runde") == c.get("round"):
+            lines.append(f"PC verteidigt aktiv ({av['art']}) — Angriffe muessen "
+                         f"{av['wert']} ueberbieten statt des VW.")
     return "\n".join(lines)
 
 

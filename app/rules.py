@@ -52,6 +52,82 @@ def sg_for_tier(tier: str) -> int | None:
     return TIERS.get(tier)
 
 
+# --- Waffen & Reichweite (Schaden haengt am Kampf-Skill, nie am LLM) -----
+
+def schaden_fuer_skill(skill_name: str) -> str:
+    """Wuerfelausdruck fuer einen Kampf-Skill. Die Waffentaxonomie steckt
+    bereits in skills.json (Klingenwaffen/Bogen/...), also ist der Skill die
+    Waffenklasse — kein Item-Metadatum noetig und nicht vom LLM setzbar."""
+    return RULEBOOK["waffen_schaden"].get(skill_name,
+                                          RULEBOOK["waffen_schaden_default"])
+
+
+def ist_fernkampf(skill_name: str) -> bool:
+    return skill_name in RULEBOOK["fernkampf_skills"]
+
+
+# --- Ruestung & Verletzungen --------------------------------------------
+
+def _ruestung_werte(typ: str) -> dict:
+    return RULEBOOK["ruestung"].get(str(typ).lower(), {"vw_bonus": 0, "handicap": 0})
+
+
+def _item_ruestung(item: dict) -> str | None:
+    """Ruestungstyp eines Items. Bestandsschutz: aeltere Spielstaende haben
+    kein 'ruestung'-Feld — ein Item mit 'schild' im Namen zaehlt weiter als
+    Schild, damit niemand still seinen Bonus verliert."""
+    if item.get("ruestung"):
+        return str(item["ruestung"]).lower()
+    if "schild" in item.get("name", "").lower():
+        return "schild"
+    return None
+
+
+def ruestung_bonus(gs: dict) -> int:
+    """Summe der VW-Boni aller angelegten Ruestungsteile (inkl. Schild)."""
+    total = 0
+    for item in gs.get("inventar", []):
+        typ = _item_ruestung(item) if item.get("equipped") else None
+        if typ:
+            total += _ruestung_werte(typ)["vw_bonus"]
+    return total
+
+
+def ruestung_handicap(gs: dict) -> int:
+    """Bewegungs-Handicap der angelegten Ruestung, durch Ruestungsgewoehnung
+    gemildert (maximal bis 0 — der Skill hebt es auf, kehrt es nie um)."""
+    roh = 0
+    for item in gs.get("inventar", []):
+        typ = _item_ruestung(item) if item.get("equipped") else None
+        if typ:
+            roh += _ruestung_werte(typ)["handicap"]
+    if roh >= 0:
+        return 0
+    gewoehnung = skill_bonus((gs.get("skills", {}).get("Rüstungsgewöhnung") or {}).get("wert", 0))
+    return min(roh + gewoehnung, 0)
+
+
+def verletzungs_mod(gs: dict) -> int:
+    """Summe der Verletzungs-Mali (immer <= 0). Gilt fuer koerperliche Wuerfe
+    und den passiven VW — DM.md: 'Wurf-Mali unabhaengig von HP'."""
+    total = 0
+    for verl in gs.get("verletzungen", []):
+        stufe = verl.get("stufe")
+        if stufe in RULEBOOK["verletzungsstufen"]:
+            total += RULEBOOK["verletzungsstufen"][stufe]
+        else:  # Altbestand mit direktem Modifikator
+            total += min(verl.get("modifikator", 0), 0)
+    return total
+
+
+KOERPER_ATTRS = ("STR", "GES", "KON")
+
+
+def _ist_koerperlich(skill_name: str) -> bool:
+    sdef = SKILLS.get(skill_name)
+    return bool(sdef) and any(a in KOERPER_ATTRS for a in sdef["attrs"])
+
+
 def get_skill(gs: dict, skill_name: str) -> dict:
     return gs["skills"].setdefault(skill_name, {"wert": 0, "ticks": 0})
 
@@ -87,7 +163,13 @@ def resolve_probe(gs: dict, skill_name: str, tier: str, roll: int) -> dict:
     sk = get_skill(gs, skill_name)
     mod = leit_mod(gs, skill_name)
     bonus = skill_bonus(sk["wert"])
-    total = roll + mod + bonus
+    # Verletzungen und Ruestungs-Handicap wirken auf koerperliche Proben
+    malus = 0
+    if _ist_koerperlich(skill_name):
+        malus += verletzungs_mod(gs)
+        if skill_name in ("Akrobatik", "Schleichen"):
+            malus += ruestung_handicap(gs)
+    total = roll + mod + bonus + malus
     if roll >= RULEBOOK["critical_success_roll"]:
         success, crit = True, "erfolg"
     elif roll <= RULEBOOK["critical_failure_roll"]:
@@ -96,19 +178,41 @@ def resolve_probe(gs: dict, skill_name: str, tier: str, roll: int) -> dict:
         success, crit = total >= sg, None
     tick = award_tick(gs, skill_name)
     return {"skill": skill_name, "tier": tier, "sg": sg, "wurf": roll,
-            "attribut_mod": mod, "skill_bonus": bonus, "gesamt": total,
-            "erfolg": success, "kritisch": crit, "tick": tick}
+            "attribut_mod": mod, "skill_bonus": bonus, "malus": malus,
+            "gesamt": total, "erfolg": success, "kritisch": crit, "tick": tick}
+
+
+def resolve_defense(gs: dict, art: str, roll: int) -> dict:
+    """Aktive Verteidigung: der gewuerfelte Wert ersetzt fuer diese Runde den
+    passiven VW — auch wenn er schlechter ist (das ist das Risiko). Parade
+    nutzt den Ruestungsbonus, Ausweichen leidet unter dem Handicap."""
+    cfg = RULEBOOK["verteidigung_arten"].get(art)
+    if cfg is None:
+        raise ValueError(f"Unbekannte Verteidigungsart: {art}")
+    skill_name = cfg["skill"]
+    sk = get_skill(gs, skill_name)
+    mod = leit_mod(gs, skill_name)
+    bonus = skill_bonus(sk["wert"])
+    extra = ruestung_bonus(gs) if cfg["nutzt_ruestung"] else ruestung_handicap(gs)
+    malus = verletzungs_mod(gs)
+    total = roll + mod + bonus + extra + malus
+    if roll >= RULEBOOK["critical_success_roll"]:
+        crit = "erfolg"
+    elif roll <= RULEBOOK["critical_failure_roll"]:
+        crit = "fehlschlag"
+    else:
+        crit = None
+    tick = award_tick(gs, skill_name)
+    return {"art": art, "skill": skill_name, "wurf": roll, "attribut_mod": mod,
+            "skill_bonus": bonus, "ruestung": extra, "malus": malus,
+            "gesamt": total, "kritisch": crit, "tick": tick}
 
 
 def verteidigungswert(gs: dict) -> int:
-    """VW = 10 + GES-Mod + Schild-Bonus (equipped Schild-Item)."""
-    vw = RULEBOOK["vw_base"] + attr_mod(gs["attribute"].get("GES", 10))
-    for item in gs.get("inventar", []):
-        if item.get("equipped") and "schild" in item["name"].lower():
-            vw += 2
-    for verl in gs.get("verletzungen", []):
-        vw += min(verl.get("modifikator", 0), 0)
-    return vw
+    """Passiver VW = 10 + GES-Mod + Ruestung + Verletzungs-Mali.
+    Gilt, solange der PC nicht aktiv verteidigt (dann ersetzt ihn der Wurf)."""
+    return (RULEBOOK["vw_base"] + attr_mod(gs["attribute"].get("GES", 10))
+            + ruestung_bonus(gs) + verletzungs_mod(gs))
 
 
 def max_hp_for(attribute: dict, level: int) -> int:

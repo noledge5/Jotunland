@@ -30,6 +30,10 @@ Entscheidungen: docs/adr/.
 - **Settings immer frisch von Disk lesen** (`gamestate.load_settings`).
 - **Muenzen nur ueber Gesamt-Kupferwert** (`pay_copper`/`add_coins`).
 - **Gemini-Tool-Results als Objekt** (`build_google_payload` parst JSON).
+- **Kampf fuehrt die Engine** (ADR-0003) — Runden schalten automatisch
+  (kein end_turn), Gegnerwerte werden bei start_combat gebunden,
+  Waffenschaden haengt am Skill, roll_dice ist im Kampf gesperrt. Das
+  LLM benennt Typen und Stufen, nie Zahlen.
 - **Slugs kanonisch** ueber `canonical_slug()` mit Stadt-Parameter.
 - **history.json ist gedeckelt** (Archiv-Rotation), Rolling Window
   schneidet nie ein Tool-Result von seinem Call ab.

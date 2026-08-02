@@ -47,15 +47,30 @@ bereits ansetzen — dann erzaehle nur noch den vom Wurf bestimmten Ausgang.
 
 ## Kampf
 
-- Phasenfolge pro Runde: `pc_turn -> npc_turn -> naechste Runde`.
-- PC-Angriff: Probe mit Waffenskill gegen situativen Tier; Schaden je
-  Waffe (1d4 improvisiert, 1d6 Standard, 1d8 schwer, 2d6 brutal).
-  Kritischer Treffer = doppelter Schaden.
-- NPC-Angriff: Engine wuerfelt W20 + Angriffsbonus gegen den
-  **Verteidigungswert** des PC (VW = 10 + GES-Mod + Schild-Bonus).
-  Der Spieler wuerfelt nicht fuer Verteidigung — ausser er erklaert
-  aktiv "Ich weiche aus" (GES/Akrobatik) oder "Ich blocke"
-  (STR/Parade); aktive Verteidigung ersetzt seinen Angriff.
+- **Die Engine fuehrt die Runden.** Es gibt kein `end_turn`. Sobald der
+  PC und alle handlungsfaehigen Gegner dran waren, beginnt automatisch
+  die naechste Runde: Nahkaempfer ruecken auf, Sterbende bluten, eine
+  aktive Verteidigung verfaellt. Jeder handelt einmal pro Runde.
+- **Gegnerwerte werden bei `start_combat` einmal festgelegt** (hp,
+  angriffsbonus, schaden, distanz, fernkampf) und gelten den ganzen
+  Kampf. `npc_action` nennt nur noch den Angreifer — Bonus und Schaden
+  liest die Engine aus dem Stat-Block.
+- **PC-Angriff**: `request_skill_roll` mit `ziel`. Der Schadenswuerfel
+  haengt am Kampf-Skill (Klingenwaffen 1d6, Wuchtwaffen/Stangenwaffen/
+  Armbrust 1d8, Bogen 1d6, Wurfwaffen 1d4, Waffenlos 1d3) und wird nicht
+  angesagt. Kritischer Treffer = doppelter Schaden.
+- **NPC-Angriff**: Engine wuerfelt W20 + Angriffsbonus gegen den
+  **Verteidigungswert** (VW = 10 + GES-Mod + Ruestung + Verletzungs-Mali).
+- **Aktive Verteidigung**: Sagt der Spieler sie an, ersetzt sie seinen
+  Angriff in dieser Runde. Ein Wurf (`request_defense_roll`) gilt gegen
+  ALLE Angriffe der folgenden Gegnerrunde und ersetzt den VW — auch wenn
+  er schlechter ausfaellt. `ausweichen` nutzt Akrobatik und leidet unter
+  dem Ruestungs-Handicap, `parade` nutzt Parade und den Ruestungsbonus.
+  Nat 20 = in dieser Runde trifft nichts, Nat 1 = alles trifft.
+- **Reichweite (Zonen 0-3)**: Fernkampf-Skills nur gegen Gegner auf
+  Distanz >= 1, Nahkampf nur auf Distanz 0. Nahkaempfer ruecken pro
+  Runde eine Zone vor; solange sie unterwegs sind, koennen sie nicht
+  angreifen.
 - **Called Shot**: Zielzone erhoeht den Tier kontextuell (kein fester
   Malus). Nat 20 auf vitale Zone kann zusaetzlich einen Zustand
   ausloesen (Betaeubung, Blutung).
@@ -63,7 +78,20 @@ bereits ansetzen — dann erzaehle nur noch den vom Wurf bestimmten Ausgang.
   Malus pro Einzeltreffer nach Ermessen (hoeherer Tier).
 - Initiative ergibt sich aus der Situation (Hinterhalt, wer angreift) —
   kein eigener Wurf.
-- Kampfstatus: active, incapacitated, fled, surrendered, dead.
+- Kampfstatus ueber `set_enemy_status`: active, incapacitated, fled,
+  surrendered, dead. Flucht und Aufgabe laufen nur darueber.
+- **Im Kampf keine freien Wuerfe.** `roll_dice` ist gesperrt.
+
+## Ruestung & Verletzungen
+
+- Ruestung wird ueber `manage_inventory` mit `ruestung`-Typ angelegt
+  (keine/gepolstert/leder/kettenhemd/platte/schild). Sie gibt einen
+  VW-Bonus und ein Handicap auf Akrobatik und Schleichen — auch
+  ausserhalb des Kampfes. `Ruestungsgewoehnung` rechnet das Handicap
+  gegen, hoechstens bis auf 0.
+- Verletzungen ueber `set_injury` mit einer Stufe (leicht/schwer/
+  kritisch). Die Zahl kennt nur die Engine; benannt wird die Stufe.
+  Mali gelten auf koerperliche Proben und den VW, unabhaengig von HP.
 
 ## Sterben & Heilung
 
