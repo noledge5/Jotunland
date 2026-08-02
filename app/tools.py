@@ -58,11 +58,29 @@ def auto_coords(slug: str, parent: str | None) -> list[int]:
 # dieser Runde dran war; sind PC und alle kampffaehigen Gegner durch, beginnt
 # automatisch die naechste Runde. 'phase' bleibt als reine Anzeige erhalten.
 
+def _ensure_combat_shape(c: dict) -> dict:
+    """Bestandsschutz: Kaempfe, die vor ADR-0003 gestartet wurden, kennen die
+    neuen Felder nicht. Ohne diese Ergaenzung wuerde npc_action auf einem
+    laufenden Spielstand mit KeyError abbrechen und der Kampf haenge fest."""
+    c.setdefault("pc_gehandelt", False)
+    c.setdefault("aktive_verteidigung", None)
+    c.setdefault("round", 1)
+    c.setdefault("log", [])
+    for e in c.get("enemies", []):
+        e.setdefault("angriffsbonus", 0)
+        e.setdefault("schaden", "1d6")
+        e.setdefault("status", "active")
+        e.setdefault("distanz", 0)
+        e.setdefault("fernkampf", False)
+        e.setdefault("gehandelt_runde", 0)
+    return c
+
+
 def _combat_required(gs: dict) -> dict | str:
     c = gs.get("combat")
     if not c:
         return "FEHLER: Kein Kampf aktiv. Erst start_combat aufrufen."
-    return c
+    return _ensure_combat_shape(c)
 
 
 def _aktive_gegner(c: dict) -> list[dict]:
@@ -196,6 +214,8 @@ def request_skill_roll(gs: dict, args: dict) -> str:
         "schaden": None,
     }
     c = gs.get("combat")
+    if c:
+        _ensure_combat_shape(c)
     target = gsm.slugify(args.get("ziel", "")) if args.get("ziel") else None
     if target:
         if not c:
@@ -252,6 +272,8 @@ def resolve_player_roll(gs: dict, roll: int) -> dict:
     """Spieler hat physisch gewuerfelt: Engine rechnet Probe, Ticks,
     Level-Ups und (bei Angriff) Schaden. Liefert das Tool-Result."""
     c = gs.get("combat")
+    if c:
+        _ensure_combat_shape(c)
     if c and c.get("pending_roll"):
         pr = c["pending_roll"]
     elif gs.get("pending_roll"):

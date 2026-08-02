@@ -195,3 +195,26 @@ def test_roll_expr_bounds(env):
     import pytest
     with pytest.raises(ValueError):
         t.roll_expr("kaese")
+
+
+def test_alter_kampf_aus_dem_spielstand_laeuft_weiter(env):
+    """Bestandsschutz: ein Kampf, der vor ADR-0003 begonnen wurde, kennt die
+    neuen Felder nicht. Ohne Migration bricht npc_action mit KeyError ab und
+    der laufende Spielstand haengt fest."""
+    t = env["tools"]
+    gs = _gs(env)
+    gs["combat"] = {
+        "round": 3, "phase": "npc_turn", "pending_roll": None,
+        "enemies": [{"slug": "kontakt-hammer", "name": "Kontakt Hammer",
+                     "hp": 8, "hp_max": 8, "notiz": ""}],
+        "log": [],
+    }
+    r = t.execute_tool(gs, "npc_action", {"angreifer": "Kontakt Hammer"})
+    assert "FEHLER" not in r, r
+    assert json.loads(r)["angreifer"] == "Kontakt Hammer"
+    # Angriff des PC funktioniert ebenfalls
+    assert t.execute_tool(gs, "request_skill_roll",
+                          {"skill": "Klingenwaffen", "schwierigkeit": "Leicht",
+                           "ziel": "Kontakt Hammer"}) == t.BLOCKING
+    out = t.resolve_player_roll(gs, 15)
+    assert "schaden" in out or out["erfolg"] is False
