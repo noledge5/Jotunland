@@ -46,6 +46,13 @@ Entscheidungen: docs/adr/.
   Claude Code (`scripts/dm_cli.py`, Skill in `.claude/skills/dm/`) teilen
   sich `app/session.py`: Prompt, History, Undo, Validator, Zugabschluss.
   Eine Regel, die nur in einem der beiden Wege gilt, ist ein Bug.
+- **Validator prueft Deltas, nicht Prosa** (ADR-0006) — Behauptungen
+  (Geld, Treffer, Zeit, Ortswechsel) gegen `state_fingerprint` vor/nach dem
+  Zug; nur Verbote (Mechanik-Zahlen im Text) bleiben Textpruefungen. Neue
+  Zustandsklassen gehoeren in den Fingerprint, sonst wird er still zu lasch.
+- **Kampfgegner haben Instanz-Identitaeten** — gleichnamige werden
+  durchnummeriert ("Wache 2"), `kanon_slug` haelt den Wiki-Bezug. Ein
+  Wiki-Slug ist eindeutig, eine Kampfinstanz nicht.
 - **Slugs kanonisch** ueber `canonical_slug()` mit Stadt-Parameter.
 - **history.json ist gedeckelt** (Archiv-Rotation), Rolling Window
   schneidet nie ein Tool-Result von seinem Call ab.

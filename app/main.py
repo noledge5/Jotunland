@@ -4,6 +4,7 @@ Start lokal:  python3 app/main.py   (Port 3111, oder PORT aus Env)
 """
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -510,7 +511,8 @@ async def _maybe_write_synopsis(pc_slug: str, history: list[dict], gs: dict) -> 
 async def _agent_stream(pc_slug: str, history: list[dict],
                         resume_tool_result: dict | None = None,
                         mode: str = "handeln", gate: dict | None = None,
-                        buffered: bool = False, _retry: bool = False):
+                        buffered: bool = False, _retry: bool = False,
+                        vorher: dict | None = None):
     """Der eigentliche Agent-Loop. Streamt SSE-Events, fuehrt Tools aus,
     macht Continuations bis das LLM fertig ist oder ein Blocking-Tool
     auf den Spieler wartet.
@@ -538,6 +540,20 @@ async def _agent_stream(pc_slug: str, history: list[dict],
 
     turn_text = ""
     turn_tools: list[str] = []
+    # Rueckfallpunkt fuer den Retry. Ein gepufferter Zug kann verworfen werden,
+    # nachdem seine Tools bereits gelaufen und gespeichert sind — ohne diesen
+    # Punkt setzte der zweite Versuch auf den Wirkungen des ersten auf und zog
+    # z.B. Schaden doppelt ab. Bewusst im Speicher statt ueber snapshot_turn:
+    # der Undo-Ringpuffer gehoert dem Spieler, nicht der Fehlerbehandlung.
+    rueckfall = ({"gs": copy.deepcopy(gs), "hist_len": len(history)}
+                 if buffered and not _retry else None)
+    # Zustand VOR dem Zug — der Validator prueft Behauptungen gegen den Delta,
+    # nicht gegen Tool-Namen (ein gescheitertes Tool deckt keine Behauptung).
+    # Beim Resume nach einem Wurf liefert die Route den Stand von VOR dem
+    # Wurf mit: der Treffer ist da schon verrechnet, und ohne ihn saehe der
+    # Validator einen Zug ohne jede Bewegung.
+    if vorher is None:
+        vorher = session.state_fingerprint(gs)
     try:
         for _round in range(MAX_CONTINUATIONS):
             system = build_system_prompt() + "\n\n" + wiki_context.build_context(gs)
@@ -558,7 +574,6 @@ async def _agent_stream(pc_slug: str, history: list[dict],
                     stop_reason = ev["reason"]
 
             turn_text += assistant_text
-            turn_tools += [t["name"] for t in tool_calls]
             history.append({"role": "assistant", "content": assistant_text,
                             "tool_calls": [{"id": t["id"], "name": t["name"],
                                             "args": t["args"]} for t in tool_calls]})
@@ -569,6 +584,13 @@ async def _agent_stream(pc_slug: str, history: list[dict],
             blocked = False
             for i, tc in enumerate(tool_calls):
                 result = tools.execute_tool(gs, tc["name"], tc["args"])
+                # Erst nach der Ausfuehrung protokollieren, und nur bei Erfolg:
+                # ein an "Nicht genug Muenzen" gescheitertes pay hat nichts
+                # veraendert und darf keine Behauptung im Text decken. Die CLI
+                # macht es seit jeher so — zwei Strengegrade waeren ein
+                # ADR-0005-Verstoss.
+                if not result.startswith("FEHLER"):
+                    turn_tools.append(tc["name"])
                 if result == tools.BLOCKING:
                     _pending_responses[pc_slug] = {
                         "tool_call_id": tc["id"], "name": tc["name"]}
@@ -601,15 +623,25 @@ async def _agent_stream(pc_slug: str, history: list[dict],
 
     # --- Retry: regelwidrigen Zug einmal wiederholen, BEVOR er sichtbar wird
     if buffered and not _retry and turn_text.strip():
-        probleme = validate_narration(turn_text, turn_tools, gs, mode, gate)
-        if probleme:
+        probleme = validate_narration(turn_text, turn_tools, gs, mode, gate, vorher)
+        if probleme and rueckfall:
+            # Verworfen heisst verworfen: Zustand zuruecksetzen und die
+            # Erzaehlung samt ihrer Tool-Results aus der History schneiden.
+            # Blieben sie stehen, saehe der Spieler nach einem Reload Text, der
+            # nie gelten sollte, und das Modell hielte ihn fuer Gesagtes.
+            gs = rueckfall["gs"]
+            gsm.save_pc(gs)
+            del history[rueckfall["hist_len"]:]
             hinweis = ("REGELVERSTOSS in deiner letzten Antwort — sie wurde "
-                       "verworfen und wird NICHT angezeigt. Erzaehle den Zug neu "
-                       "und rufe diesmal die fehlenden Tools auf:\n- "
+                       "verworfen und wird NICHT angezeigt. Der Spielstand ist "
+                       "auf den Stand vor deinem Zug zurueckgesetzt, deine "
+                       "Tool-Aufrufe von eben gelten NICHT mehr. Erzaehle den "
+                       "Zug neu und ruf die Tools erneut auf:\n- "
                        + "\n- ".join(probleme))
             history.append({"role": "user", "content": f"[SYSTEM] {hinweis}"})
+            save_history(pc_slug, history)
             async for ev in _agent_stream(pc_slug, history, mode=mode, gate=gate,
-                                          buffered=True, _retry=True):
+                                          buffered=True, _retry=True, vorher=vorher):
                 yield ev
             return
 
@@ -628,7 +660,7 @@ async def _agent_stream(pc_slug: str, history: list[dict],
             yield _sse({"type": "hinweis",
                         "text": f"Zeit automatisch um {auto_advanced_minutes} Minuten "
                                 f"vorgestellt (advance_time fehlte in der Erzaehlung)."})
-        problems = validate_narration(turn_text, turn_tools, gs, mode, gate)
+        problems = validate_narration(turn_text, turn_tools, gs, mode, gate, vorher)
         if problems:
             yield _sse({"type": "validator", "problems": problems})
     # Wiki-Lint (voller Rescan) nur, wenn der DM diesen Zug ins Wiki geschrieben
@@ -745,6 +777,7 @@ async def roll(body: RollIn):
     if not (1 <= body.wurf <= 20):
         raise HTTPException(400, "Wurf muss 1-20 sein (d20).")
     _pending_responses.pop(pc_slug, None)
+    vorher = session.state_fingerprint(gs)   # vor der Aufloesung des Wurfs
     try:
         outcome = tools.resolve_player_roll(gs, body.wurf)
     except ValueError as e:
@@ -755,7 +788,8 @@ async def roll(body: RollIn):
               "content": json.dumps(outcome, ensure_ascii=False)}
     # Die Auflösung gehoert zum Kampfzug — also gilt hier dieselbe Pufferung.
     return StreamingResponse(_agent_stream(pc_slug, history, resume_tool_result=resume,
-                                           buffered=bool(gs.get("combat"))),
+                                           buffered=bool(gs.get("combat")),
+                                           vorher=vorher),
                              media_type="text/event-stream")
 
 

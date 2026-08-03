@@ -67,6 +67,7 @@ def _ensure_combat_shape(c: dict) -> dict:
     c.setdefault("round", 1)
     c.setdefault("log", [])
     for e in c.get("enemies", []):
+        e.setdefault("kanon_slug", e.get("slug", ""))
         e.setdefault("angriffsbonus", 0)
         e.setdefault("schaden", "1d6")
         e.setdefault("status", "active")
@@ -170,6 +171,20 @@ def close_combat_round(gs: dict) -> dict | None:
     return None
 
 
+def _eindeutiger_name(name: str, vergeben: set[str]) -> str:
+    """'Wache', 'Wache 2', 'Wache 3' — drei gleichnamige Gegner brauchen drei
+    Identitaeten. Der Slug ist im Wiki eindeutig, eine Kampfinstanz ist es
+    nicht: teilten sich drei Wachen den Slug 'wache', schaedigte EIN Treffer
+    alle drei, und npc_action erwischte immer nur die erste."""
+    basis = (name or "Gegner").strip() or "Gegner"
+    if gsm.slugify(basis) not in vergeben:
+        return basis
+    n = 2
+    while gsm.slugify(f"{basis} {n}") in vergeben:
+        n += 1
+    return f"{basis} {n}"
+
+
 def start_combat(gs: dict, args: dict) -> str:
     """Startet einen Kampf — oder haengt Verstaerkung an einen laufenden an.
     Ein laufender Kampf hat nach _maybe_end_combat immer noch kampffaehige
@@ -177,14 +192,20 @@ def start_combat(gs: dict, args: dict) -> str:
     laufend = gs.get("combat")
     if laufend:
         _ensure_combat_shape(laufend)
+    vergeben = {e["slug"] for e in laufend["enemies"]} if laufend else set()
     max_dist = rules.RULEBOOK["kampf_distanz_max"]
     enemies = []
     for e in args.get("gegner", []):
-        slug = gsm.slugify(e["name"])
+        name = _eindeutiger_name(e.get("name", ""), vergeben)
+        slug = gsm.slugify(name)
+        vergeben.add(slug)
         hp = int(e.get("hp", 6))
         dist = max(0, min(int(e.get("distanz", 0)), max_dist))
         enemies.append({
-            "slug": slug, "name": e["name"], "hp": hp, "hp_max": hp,
+            "slug": slug, "name": name, "hp": hp, "hp_max": hp,
+            # Verweis auf den Wiki-Eintrag, falls der Gegner kanonisch ist —
+            # getrennt vom Instanz-Slug, weil 'Wache 2' keinen Eintrag hat.
+            "kanon_slug": gsm.slugify(e.get("name", "")),
             # Kampfwerte werden EINMAL hier festgelegt und sind danach
             # gebunden — npc_action liest nur noch von hier (ADR-0003).
             "angriffsbonus": int(e.get("angriffsbonus", 0)),
@@ -204,13 +225,12 @@ def start_combat(gs: dict, args: dict) -> str:
             return (f"FEHLER: Ungueltiger Schadenswuerfel '{e['schaden']}' fuer "
                     f"'{e['name']}'. Format z.B. 1d6, 2d4+1.")
     if laufend:
-        vorhanden = {e["slug"] for e in laufend["enemies"]}
-        neu = [e for e in enemies if e["slug"] not in vorhanden]
-        if not neu:
-            return ("FEHLER: Diese Gegner sind bereits im laufenden Kampf. "
-                    "Der Kampfzustand steht im Spielstand — lies ihn dort ab.")
-        laufend["enemies"].extend(neu)
-        laufend["log"].append("Verstaerkung: " + ", ".join(e["name"] for e in neu))
+        # Kein Duplikat-Fehler mehr: die Namensvergabe oben macht jeden
+        # Zugang eindeutig. Ein zweites 'Wache' ist damit eine zweite Wache,
+        # kein abgewiesener Aufruf — Sperren ohne Ausweg sind in diesem
+        # Projekt die teuerste Fehlerklasse (ADR-0003).
+        laufend["enemies"].extend(enemies)
+        laufend["log"].append("Verstaerkung: " + ", ".join(e["name"] for e in enemies))
         _set_phase(gs, laufend)
         return json.dumps({"status": "verstaerkung_hinzugefuegt",
                            "runde": laufend["round"],

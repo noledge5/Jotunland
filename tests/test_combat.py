@@ -285,11 +285,44 @@ def test_verstaerkung_im_laufenden_kampf(env):
     gs = _gs(env)
     t.execute_tool(gs, "start_combat", {"gegner": [{"name": "Wolf", "hp": 10}]})
     r = json.loads(t.execute_tool(gs, "start_combat", {
-        "gegner": [{"name": "Wolf", "hp": 99},          # Dublette wird ignoriert
+        "gegner": [{"name": "Wolf", "hp": 4},        # zweiter Wolf, eigene Identitaet
                    {"name": "Zweiter Wolf", "hp": 6, "distanz": 2}]}))
     assert r["status"] == "verstaerkung_hinzugefuegt"
     assert gs["combat"]["round"] == 1               # Runde laeuft weiter
-    assert [e["name"] for e in gs["combat"]["enemies"]] == ["Wolf", "Zweiter Wolf"]
-    assert gs["combat"]["enemies"][0]["hp"] == 10    # Dublette hat nichts ueberschrieben
-    assert "FEHLER" in t.execute_tool(gs, "start_combat",
-                                      {"gegner": [{"name": "Wolf", "hp": 1}]})
+    assert [e["name"] for e in gs["combat"]["enemies"]] == [
+        "Wolf", "Wolf 2", "Zweiter Wolf"]
+    assert gs["combat"]["enemies"][0]["hp"] == 10    # der erste bleibt unangetastet
+    assert gs["combat"]["enemies"][1]["hp"] == 4
+
+
+def test_gleichnamige_gegner_haben_eigene_identitaeten(env):
+    """Drei 'Wache' teilten sich den Slug 'wache': EIN Treffer schaedigte alle
+    drei, npc_action erwischte immer nur die erste, und alle fielen gemeinsam
+    auf 0. Der Kanon-Slug bleibt fuer den Wiki-Bezug erhalten."""
+    t = env["tools"]
+    gs = _gs(env)
+    gs["attribute"]["STR"] = 18
+    r = json.loads(t.execute_tool(gs, "start_combat", {"gegner": [
+        {"name": "Wache", "hp": 30}, {"name": "Wache", "hp": 30},
+        {"name": "Wache", "hp": 30}]}))
+    e = gs["combat"]["enemies"]
+    assert [x["slug"] for x in e] == ["wache", "wache-2", "wache-3"]
+    assert [x["name"] for x in e] == ["Wache", "Wache 2", "Wache 3"]
+    assert all(x["kanon_slug"] == "wache" for x in e)
+    assert [g["name"] for g in r["gegner"]] == ["Wache", "Wache 2", "Wache 3"]
+
+    # Ein Treffer trifft genau eine Wache
+    t.execute_tool(gs, "request_skill_roll", {"skill": "Klingenwaffen",
+                                              "schwierigkeit": "Leicht",
+                                              "ziel": "Wache 2"})
+    out = t.resolve_player_roll(gs, 20)
+    assert out["ziel"] == "Wache 2"
+    assert e[0]["hp"] == 30 and e[2]["hp"] == 30    # die anderen unberuehrt
+    assert e[1]["hp"] == 30 - out["schaden"]
+
+    # Und jede Wache handelt einzeln
+    for name in ("Wache", "Wache 2", "Wache 3"):
+        res = t.execute_tool(gs, "npc_action", {"angreifer": name})
+        assert "FEHLER" not in res, res
+        assert json.loads(res)["angreifer"] == name
+    assert gs["combat"]["round"] == 2          # Runde schaltet erst danach

@@ -229,3 +229,52 @@ def test_history_bounded_persistence(env):
     # Fenster schneidet keine tool-Results am Anfang ab
     hist2 = [{"role": "tool", "content": "x"}, {"role": "user", "content": "y"}]
     assert main.llm_window(hist2, 2)[0]["role"] == "user"
+
+
+def _fake_llm(script):
+    """Ersetzt llm_adapter.stream_with_tools durch ein Skript von Zuegen.
+    Jeder Eintrag: (text, [(tool_name, args), ...])."""
+    zuege = list(script)
+
+    async def stream_with_tools(model, system, messages, tool_defs):
+        text, calls = zuege.pop(0) if zuege else ("", [])
+        yield {"type": "text", "text": text}
+        for i, (name, args) in enumerate(calls):
+            yield {"type": "tool_call", "id": f"tc{i}", "name": name, "args": args}
+        yield {"type": "stop", "reason": "tool_use" if calls else "end"}
+
+    return stream_with_tools
+
+
+def test_verworfener_zug_wird_zurueckgerollt(client, env, monkeypatch):
+    """Ein gepufferter Zug, den der Validator verwirft, darf weder seine
+    Zustandsaenderungen noch seine Erzaehlung hinterlassen. Vorher lief der
+    zweite Versuch auf den Wirkungen des ersten weiter — Schaden doppelt."""
+    import app.main as main
+    client.post("/api/pcs", json={"name": "Marek"})
+    gs = env["gsm"].load_pc("marek")
+    main.tools.execute_tool(gs, "start_combat",
+                            {"gegner": [{"name": "Wolf", "hp": 9}]})
+    env["gsm"].save_pc(gs)                       # Kampf -> Zug ist gepuffert
+    hp_vorher = gs["hp"]
+
+    # Je zwei Skript-Eintraege sind ein Zug: erst der Tool-Call (stop=tool_use),
+    # dann eine Runde ohne Calls (stop=end). Zug 1 verletzt eine Regel und
+    # zieht HP ab, Zug 2 ist sauber und zieht dieselben HP noch einmal ab.
+    monkeypatch.setattr(main.llm_adapter, "stream_with_tools", _fake_llm([
+        ("Der Wolf beisst zu. Dein Verteidigungswert sinkt.",
+         [("adjust_hp", {"delta": -3, "grund": "Biss"})]),
+        ("", []),
+        ("Der Wolf beisst zu.", [("adjust_hp", {"delta": -3, "grund": "Biss"})]),
+        ("", []),
+    ]))
+    r = client.post("/api/chat", json={"message": "Ich warte ab.", "mode": "handeln"})
+    assert r.status_code == 200
+
+    gs = env["gsm"].load_pc("marek")
+    assert gs["hp"] == hp_vorher - 3, "Schaden wurde doppelt angewandt"
+
+    inhalte = [str(m.get("content", "")) for m in main.load_history("marek")]
+    assert not any("Verteidigungswert sinkt" in c for c in inhalte), \
+        "verworfene Erzaehlung steht noch in der History"
+    assert any("REGELVERSTOSS" in c for c in inhalte)

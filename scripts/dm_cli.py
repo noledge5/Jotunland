@@ -103,6 +103,11 @@ def cmd_call(args) -> None:
     if not isinstance(tool_args, dict):
         raise SystemExit("FEHLER: args muss ein JSON-Objekt sein.")
 
+    if not _turnlog(gs["slug"]).exists():
+        # Undo-Punkt automatisch, wie im Server vor jedem Zug — sonst haengt
+        # er an der Selbstdisziplin des Erzaehlers (ADR-0005-Schwachstelle).
+        session.snapshot_turn(gs["slug"], f"CLI-Zug: {args.tool}")
+    _zug_beginnt(gs)          # Fingerprint VOR dem ersten Tool des Zugs
     res = tools.execute_tool(gs, args.tool, tool_args)
     gsm.save_pc(gs)
     # Tool-Namen fuer den Validator mitschreiben, damit 'zugende' weiss, was in
@@ -146,13 +151,14 @@ def cmd_zugende(args) -> None:
     if args.text:
         history.append({"role": "assistant", "content": args.text})
 
-    turn_tools = _hole_tools(slug)
+    zug = _hole_zug(slug)
+    turn_tools = zug.get("tools") or []
     bericht = session.finalize_turn(slug, gs, history, args.modus,
                                     args.text or "", turn_tools)
     bericht["tools"] = turn_tools
     if args.text:
         bericht["validator"] = session.validate_narration(
-            args.text, turn_tools, gs, args.modus)
+            args.text, turn_tools, gs, args.modus, vorher=zug.get("vorher"))
     _json(bericht)
 
 
@@ -181,27 +187,36 @@ def cmd_undo(args) -> None:
     _json(res)
 
 
-# --- Tool-Protokoll des laufenden Zugs ------------------------------------
-# Der Validator braucht die Liste der Tools DIESES Zugs. Im Server haelt sie
-# der Agent-Loop im Speicher; in der CLI ist jeder Aufruf ein eigener Prozess,
-# also muss sie auf die Platte. Wird bei jedem 'zugende' geleert.
+# --- Protokoll des laufenden Zugs -----------------------------------------
+# Der Validator braucht zweierlei: die Tools DIESES Zugs und den Zustand VOR
+# ihm. Im Server haelt der Agent-Loop beides im Speicher; in der CLI ist jeder
+# Aufruf ein eigener Prozess, also muss es auf die Platte. Der Fingerprint
+# wird beim ersten Tool des Zugs genommen — vor dessen Ausfuehrung.
 
 def _turnlog(pc_slug: str) -> Path:
-    return gsm.PC_DIR / pc_slug / "cli_turn_tools.json"
+    return gsm.PC_DIR / pc_slug / "cli_turn.json"
+
+
+def _zug_beginnt(gs: dict) -> None:
+    """Legt den Rueckfall-Fingerprint an, falls dieser Zug noch keinen hat."""
+    p = _turnlog(gs["slug"])
+    if not p.exists():
+        gsm.atomic_write_json(p, {"vorher": session.state_fingerprint(gs),
+                                  "tools": []})
 
 
 def _merke_tool(pc_slug: str, name: str) -> None:
     p = _turnlog(pc_slug)
-    namen = gsm.read_json(p, [])
-    namen.append(name)
-    gsm.atomic_write_json(p, namen)
+    log = gsm.read_json(p, {"vorher": None, "tools": []})
+    log.setdefault("tools", []).append(name)
+    gsm.atomic_write_json(p, log)
 
 
-def _hole_tools(pc_slug: str) -> list[str]:
+def _hole_zug(pc_slug: str) -> dict:
     p = _turnlog(pc_slug)
-    namen = gsm.read_json(p, [])
+    log = gsm.read_json(p, {"vorher": None, "tools": []})
     p.unlink(missing_ok=True)
-    return namen
+    return log
 
 
 def build_parser() -> argparse.ArgumentParser:

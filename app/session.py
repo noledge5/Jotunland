@@ -220,24 +220,83 @@ def _needs_time_tool(tool_names: list[str], gs: dict) -> bool:
     return not ({"advance_time", "rest", "request_skill_roll"} & set(tool_names))
 
 
+def state_fingerprint(gs: dict | None) -> dict:
+    """Die wenigen Zahlen, an denen man ablesen kann, ob in einem Zug wirklich
+    etwas passiert ist. Vor dem Zug einmal nehmen, nach dem Zug vergleichen."""
+    if not gs:
+        return {}
+    c = gs.get("combat") or {}
+    kal = gs.get("kalender") or {}
+    return {
+        "hp": gs.get("hp"),
+        "muenzen": gsm.total_copper(gs.get("coins") or {}),
+        "ort": (gs.get("location") or {}).get("slug"),
+        "uhr": (kal.get("tag", 0) * 1440 + kal.get("stunde", 0) * 60
+                + kal.get("minute", 0)),
+        "kampf": bool(c),
+        "kampf_log": len(c.get("log") or []),
+        "gegner_hp": sum(e.get("hp", 0) for e in c.get("enemies", [])),
+        "gegner": len(c.get("enemies", [])),
+        "verletzungen": len(gs.get("verletzungen") or []),
+    }
+
+
+def _kampf_delta(vorher: dict, nachher: dict) -> bool:
+    """True, wenn in diesem Zug tatsaechlich gekaempft wurde — Gegner-HP
+    gefallen, PC-HP gefallen, Kampf begonnen/beendet oder das Kampflog
+    gewachsen."""
+    if not vorher:
+        return False
+    return (nachher.get("kampf_log", 0) > vorher.get("kampf_log", 0)
+            or nachher.get("gegner_hp", 0) != vorher.get("gegner_hp", 0)
+            or nachher.get("gegner", 0) != vorher.get("gegner", 0)
+            or nachher.get("kampf") != vorher.get("kampf")
+            or nachher.get("hp", 0) < vorher.get("hp", 0))
+
+
 def validate_narration(text: str, tool_names: list[str], gs: dict,
-                       mode: str = "handeln", gate: dict | None = None) -> list[str]:
-    """Regelbasierter Narrator-Validator (ADR-0001): prueft die Erzaehlung
-    gegen Gamestate und Tool-Calls, ohne LLM."""
+                       mode: str = "handeln", gate: dict | None = None,
+                       vorher: dict | None = None) -> list[str]:
+    """Regelbasierter Narrator-Validator (ADR-0001).
+
+    Zwei Arten von Pruefungen, bewusst getrennt:
+
+    - BEHAUPTUNGEN ("Geld wechselt den Besitzer", "der Gegner faellt") werden
+      gegen den Zustands-Delta geprueft, nicht gegen Tool-Namen. Ein Tool, das
+      mit FEHLER endete, hat nichts veraendert und darf keine Behauptung
+      decken — mit reiner Namenspruefung befriedigte ein gescheitertes `pay`
+      die Muenz-Regel.
+    - VERBOTE ("keine Mechanik-Zahlen in der Prosa") bleiben Textpruefungen.
+      Sie fragen nicht, ob etwas passiert ist, sondern was im Text steht —
+      dort ist der Text die richtige Ebene.
+
+    `vorher` ist der state_fingerprint von VOR dem Zug. Fehlt er, faellt die
+    Pruefung auf Tool-Namen zurueck (schwaecher, aber nie strenger).
+    """
     problems = []
+    nachher = state_fingerprint(gs)
     if mode == "korrektur":
-        if not STATE_CHANGING_TOOLS & set(tool_names):
+        veraendert = bool(vorher) and nachher != vorher
+        if not (veraendert or STATE_CHANGING_TOOLS & set(tool_names)):
             problems.append("Korrektur hat nur den Text geaendert, nicht den Spielstand — "
                             "zieh ihn nach (set_location/adjust_hp/set_enemy_status/end_combat)")
         return problems
-    if gate and gate.get("ortswechsel") and "set_location" not in tool_names:
-        problems.append("Der Spieler wechselt den Ort, aber set_location fehlt — "
-                        "der Kontext bleibt sonst auf der alten Szene stehen")
+    if gate and gate.get("ortswechsel"):
+        gewechselt = (nachher.get("ort") != vorher.get("ort") if vorher is not None
+                      else "set_location" in tool_names)
+        if not gewechselt:
+            problems.append("Der Spieler wechselt den Ort, aber set_location fehlt — "
+                            "der Kontext bleibt sonst auf der alten Szene stehen")
     if gs.get("combat") and "roll_dice" in tool_names:
         problems.append("roll_dice im Kampf benutzt — Kampfwuerfe gehoeren in "
                         "request_skill_roll/npc_action/request_defense_roll")
-    if COIN_TX_RE.search(text) and not {"pay", "receive_coins"} & set(tool_names):
-        problems.append("Geld wechselt in der Erzaehlung die Hand, aber kein pay/receive_coins aufgerufen")
+    if COIN_TX_RE.search(text):
+        bewegt = (vorher is not None and nachher.get("muenzen") != vorher.get("muenzen"))
+        if not (bewegt or (vorher is None
+                           and {"pay", "receive_coins"} & set(tool_names))):
+            problems.append("Geld wechselt in der Erzaehlung die Hand, aber die Boerse "
+                            "hat sich nicht geaendert — pay/receive_coins fehlt oder "
+                            "ist fehlgeschlagen")
     if MECH_RE.search(text):
         problems.append("Mechanik-Werte (Ticks/XP/Level/VW) erzaehlt — die gehoeren in den Spielstand, nicht in die Prosa")
     for m in HP_RE.finditer(text):
@@ -246,11 +305,23 @@ def validate_narration(text: str, tool_names: list[str], gs: dict,
             problems.append(f"Erzaehlte HP ({val}) passen nicht zum Spielstand "
                             f"({gs['hp']}/{gs['hp_max']})")
             break
-    if (COMBAT_OUTCOME_RE.search(text) and not gs.get("combat")
-            and not {"request_skill_roll", "start_combat"} & set(tool_names)):
-        problems.append("Erzaehlung beschreibt einen Kampf-Ausgang, aber kein request_skill_roll/"
-                        "start_combat lief — moeglicher Regelverstoss (Rule Bypass)")
-    if _needs_time_tool(tool_names, gs):
+    # Rule Bypass: greift jetzt AUCH im Kampf. Vorher war die Pruefung dort
+    # abgeschaltet (`not gs.get("combat")`) — also genau an der Stelle, an der
+    # sie im Playtest gebraucht worden waere.
+    if COMBAT_OUTCOME_RE.search(text):
+        gedeckt = (_kampf_delta(vorher, nachher) if vorher is not None
+                   else bool({"request_skill_roll", "start_combat"} & set(tool_names)
+                             or gs.get("combat")))
+        if not gedeckt:
+            problems.append("Erzaehlung beschreibt einen Kampf-Ausgang, aber im "
+                            "Spielstand hat sich nichts bewegt — kein Treffer, kein "
+                            "Schaden, kein Kampfereignis. Moeglicher Regelverstoss "
+                            "(Rule Bypass): Angriffe laufen ueber request_skill_roll "
+                            "mit 'ziel', Gegnerangriffe ueber npc_action")
+    if vorher is not None and mode in ("handeln", "sprechen"):
+        if not gs.get("combat") and nachher.get("uhr") == vorher.get("uhr"):
+            problems.append("Kein Zeitfortschritt in diesem Zug (advance_time fehlt)")
+    elif _needs_time_tool(tool_names, gs):
         problems.append("Kein Zeitfortschritt in diesem Zug (advance_time fehlt)")
     return problems
 

@@ -402,3 +402,46 @@ def test_trivial_skip_spart_den_gate_call(env, monkeypatch):
     out = asyncio.get_event_loop().run_until_complete(
         clf.classify({}, "Ich schaue mich um", "or/x/y"))
     assert out["braucht_probe"] is False and called["n"] == 0
+
+
+def test_rule_bypass_greift_jetzt_auch_im_kampf(env):
+    """Die Pruefung war mit `not gs.get("combat")` genau dort abgeschaltet, wo
+    sie im Playtest gebraucht worden waere. Jetzt entscheidet der Delta."""
+    import app.main as main
+    importlib.reload(main)
+    from app import session
+    gs = env["gsm"].create_pc("Bjorn")
+    main.tools.execute_tool(gs, "start_combat", {"gegner": [{"name": "Schmuggler", "hp": 10}]})
+    text = "Du triffst den Schmuggler hart. Er geht zu Boden."
+
+    vorher = session.state_fingerprint(gs)
+    # a) Erzaehlung ohne jede Bewegung im Spielstand -> Verstoss
+    p = session.validate_narration(text, [], gs, vorher=vorher)
+    assert any("Rule Bypass" in x for x in p), p
+
+    # b) Derselbe Text, nachdem wirklich ein Treffer gelandet ist -> sauber
+    gs["combat"]["enemies"][0]["hp"] = 4
+    gs["combat"]["log"].append("PC-Angriff: 6 Schaden")
+    p = session.validate_narration(text, [], gs, vorher=vorher)
+    assert not any("Rule Bypass" in x for x in p), p
+
+
+def test_gescheitertes_tool_deckt_keine_behauptung(env):
+    """turn_tools wird im Server VOR der Ausfuehrung gefuellt. Ein an
+    'Nicht genug Muenzen' gescheitertes pay stand also im Protokoll und
+    befriedigte die Muenz-Regel — der Delta kennt diesen Unterschied."""
+    import app.main as main
+    importlib.reload(main)
+    from app import session
+    gs = env["gsm"].create_pc("Bjorn")
+    text = "Du zahlst dem Wirt drei Silber."
+    vorher = session.state_fingerprint(gs)
+
+    gescheitert = main.tools.execute_tool(gs, "pay", {"betrag_kp": 99999})
+    assert "FEHLER" in gescheitert
+    p = session.validate_narration(text, ["pay", "advance_time"], gs, vorher=vorher)
+    assert any("Boerse" in x for x in p), p
+
+    main.tools.execute_tool(gs, "pay", {"betrag_kp": 30})
+    p = session.validate_narration(text, ["pay", "advance_time"], gs, vorher=vorher)
+    assert not any("Boerse" in x for x in p), p

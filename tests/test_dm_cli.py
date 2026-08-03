@@ -81,7 +81,9 @@ def test_kampf_endet_auch_ueber_die_cli_von_selbst(cli):
 
 
 def test_undo_nimmt_den_zug_zurueck(cli):
-    cli["run"]("schnappschuss", "vor dem Schlag")
+    """Der erste Tool-Aufruf eines Zugs setzt den Undo-Punkt selbst — im
+    Server tut das die Route, in der CLI haette es sonst an der Disziplin
+    des Erzaehlers gehangen."""
     cli["run"]("call", "adjust_hp", '{"delta": -5, "grund": "Test"}')
     assert cli["gsm"].load_pc(cli["slug"])["hp"] == 6
     cli["run"]("undo")
