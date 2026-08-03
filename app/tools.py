@@ -104,16 +104,40 @@ def _kann_handeln(e: dict) -> bool:
     return e.get("distanz", 0) == 0 or e.get("fernkampf", False)
 
 
-def _maybe_next_round(gs: dict, c: dict) -> bool:
+def _maybe_end_combat(gs: dict, c: dict) -> dict | None:
+    """Ohne kampffaehigen Gegner ist der Kampf vorbei — das entscheidet die
+    Engine, nicht der Erzaehler. Vorher war end_combat freiwillig: der Kampf
+    blieb nach dem letzten Toten im Spielstand stehen, start_combat verweigerte
+    darum jeden neuen Kampf, und der Erzaehler mischte alte und neue Gegner
+    ineinander (Gegner-Wirrwarr aus dem zweiten Playtest)."""
+    if _aktive_gegner(c):
+        return None
+    gs["combat"] = None
+    return {"kampf_beendet": True, "ausgang": "sieg", "runden": c["round"],
+            "hinweis": "Kein kampffaehiger Gegner mehr — die Engine hat den "
+                       "Kampf beendet. end_combat ist nicht noetig.",
+            "log": c["log"][-6:]}
+
+
+def _maybe_next_round(gs: dict, c: dict, erzwingen: bool = False) -> bool:
     """Neue Runde, sobald der PC und alle handlungsfaehigen Gegner dran waren.
     Schliesst dabei Nahkaempfer auf, laesst Sterbende bluten und loescht die
-    aktive Verteidigung (sie gilt immer nur fuer eine Runde)."""
+    aktive Verteidigung (sie gilt immer nur fuer eine Runde).
+
+    Mit erzwingen=True (Zugende) schliesst die Runde auch dann, wenn der
+    Erzaehler fuer einen Gegner kein npc_action aufgerufen hat — der Gegner
+    verliert seine Aktion. Ohne diesen Ausweg blieb pc_gehandelt fuer immer
+    stehen und jede weitere Spieleraktion lief in 'bereits gehandelt'."""
     aktive = _aktive_gegner(c)
     if not c.get("pc_gehandelt"):
         return False
-    if any(e.get("gehandelt_runde") != c["round"]
-           for e in aktive if _kann_handeln(e)):
+    saeumig = [e for e in aktive
+               if _kann_handeln(e) and e.get("gehandelt_runde") != c["round"]]
+    if saeumig and not erzwingen:
         return False
+    if saeumig:
+        c["log"].append(f"Runde {c['round']} geschlossen ohne Aktion von: "
+                        + ", ".join(e["name"] for e in saeumig))
     c["round"] += 1
     c["pc_gehandelt"] = False
     c["aktive_verteidigung"] = None
@@ -127,9 +151,32 @@ def _maybe_next_round(gs: dict, c: dict) -> bool:
     return True
 
 
+def close_combat_round(gs: dict) -> dict | None:
+    """Zugende: eine Spieler-Nachricht ist eine Kampfrunde (ADR-0003). Die
+    Runde wird IMMER geschlossen, notfalls ohne die Gegneraktionen, die der
+    Erzaehler vergessen hat. Vorher konnte ein lebender Gegner ohne npc_action
+    den Rundenwechsel dauerhaft blockieren — der Spieler hing dann in
+    'bereits gehandelt' fest, bis er den Kampf haendisch beendete."""
+    c = gs.get("combat")
+    if not c or c.get("pending_roll"):
+        return None
+    _ensure_combat_shape(c)
+    ende = _maybe_end_combat(gs, c)
+    if ende:
+        return ende
+    c["pc_gehandelt"] = True
+    _maybe_next_round(gs, c, erzwingen=True)
+    _set_phase(gs, c)
+    return None
+
+
 def start_combat(gs: dict, args: dict) -> str:
-    if gs.get("combat"):
-        return "FEHLER: Kampf laeuft bereits. end_combat zuerst."
+    """Startet einen Kampf — oder haengt Verstaerkung an einen laufenden an.
+    Ein laufender Kampf hat nach _maybe_end_combat immer noch kampffaehige
+    Gegner, ein zweiter Aufruf ist also nie 'neue Szene', sondern Zuwachs."""
+    laufend = gs.get("combat")
+    if laufend:
+        _ensure_combat_shape(laufend)
     max_dist = rules.RULEBOOK["kampf_distanz_max"]
     enemies = []
     for e in args.get("gegner", []):
@@ -156,6 +203,21 @@ def start_combat(gs: dict, args: dict) -> str:
         except ValueError:
             return (f"FEHLER: Ungueltiger Schadenswuerfel '{e['schaden']}' fuer "
                     f"'{e['name']}'. Format z.B. 1d6, 2d4+1.")
+    if laufend:
+        vorhanden = {e["slug"] for e in laufend["enemies"]}
+        neu = [e for e in enemies if e["slug"] not in vorhanden]
+        if not neu:
+            return ("FEHLER: Diese Gegner sind bereits im laufenden Kampf. "
+                    "Der Kampfzustand steht im Spielstand — lies ihn dort ab.")
+        laufend["enemies"].extend(neu)
+        laufend["log"].append("Verstaerkung: " + ", ".join(e["name"] for e in neu))
+        _set_phase(gs, laufend)
+        return json.dumps({"status": "verstaerkung_hinzugefuegt",
+                           "runde": laufend["round"],
+                           "gegner": [{"name": e["name"], "hp": e["hp"],
+                                       "distanz": e["distanz"]}
+                                      for e in _aktive_gegner(laufend)]},
+                          ensure_ascii=False)
     gs["combat"] = {
         "round": 1,
         "phase": "pc_turn",
@@ -186,11 +248,15 @@ def set_enemy_status(gs: dict, args: dict) -> str:
         if e["slug"] == slug:
             e["status"] = status
             c["log"].append(f"{e['name']}: {status}")
-            _maybe_next_round(gs, c)
-            _set_phase(gs, c)
-            return json.dumps({"gegner": e["name"], "status": status,
-                               "kampffaehig": [x["name"] for x in _aktive_gegner(c)]},
-                              ensure_ascii=False)
+            ergebnis = {"gegner": e["name"], "status": status,
+                        "kampffaehig": [x["name"] for x in _aktive_gegner(c)]}
+            ende = _maybe_end_combat(gs, c)
+            if ende:
+                ergebnis["kampf_ende"] = ende
+            else:
+                _maybe_next_round(gs, c)
+                _set_phase(gs, c)
+            return json.dumps(ergebnis, ensure_ascii=False)
     return f"FEHLER: '{slug}' ist kein Gegner in diesem Kampf."
 
 
@@ -317,13 +383,17 @@ def resolve_player_roll(gs: dict, roll: int) -> dict:
 
     if c:
         c["pending_roll"] = None
-        if _maybe_next_round(gs, c):
-            result["neue_runde"] = c["round"]
-        _set_phase(gs, c)
-        result["kampf"] = {"runde": c["round"],
-                           "gegner": [{"name": e["name"], "hp": f"{e['hp']}/{e['hp_max']}",
-                                       "distanz": e.get("distanz", 0)}
-                                      for e in _aktive_gegner(c)]}
+        ende = _maybe_end_combat(gs, c)
+        if ende:
+            result["kampf_ende"] = ende
+        else:
+            if _maybe_next_round(gs, c):
+                result["neue_runde"] = c["round"]
+            _set_phase(gs, c)
+            result["kampf"] = {"runde": c["round"],
+                               "gegner": [{"name": e["name"], "hp": f"{e['hp']}/{e['hp_max']}",
+                                           "distanz": e.get("distanz", 0)}
+                                          for e in _aktive_gegner(c)]}
     else:
         gs["pending_roll"] = None
     return result

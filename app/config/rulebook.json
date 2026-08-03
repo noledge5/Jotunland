@@ -75,6 +75,7 @@
   "max_synopses_in_context": 2,
   "context_char_budgets": {
     "canon": 10000, "gamestate": 3000, "pinned": 15000, "locations": 15000,
-    "npcs": 10000, "quests_lore": 12000, "events": 6000, "synopses": 3000
+    "npcs": 10000, "quests_lore": 12000, "events": 6000, "synopses": 3000,
+    "register": 8000
   }
 }

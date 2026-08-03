@@ -43,7 +43,6 @@ def test_full_combat_cycle(env):
                                   {"gegner": [{"name": "Grubenwolf", "hp": 8,
                                                "angriffsbonus": 30, "schaden": "1d4"}]}))
     assert r["runde"] == 1
-    assert "FEHLER" in t.execute_tool(gs, "start_combat", {"gegner": [{"name": "X"}]})
     # Gegnerwerte sind ab jetzt gebunden
     wolf = gs["combat"]["enemies"][0]
     assert wolf["angriffsbonus"] == 30 and wolf["schaden"] == "1d4"
@@ -218,3 +217,79 @@ def test_alter_kampf_aus_dem_spielstand_laeuft_weiter(env):
                            "ziel": "Kontakt Hammer"}) == t.BLOCKING
     out = t.resolve_player_roll(gs, 15)
     assert "schaden" in out or out["erfolg"] is False
+
+
+def test_kampf_endet_automatisch_ohne_gegner(env):
+    """Der Kampf blieb nach dem letzten Toten im Spielstand stehen, weil
+    end_combat freiwillig war. start_combat verweigerte darum jeden neuen
+    Kampf — daher der Gegner-Wirrwarr im zweiten Playtest."""
+    t = env["tools"]
+    gs = _gs(env)
+    gs["attribute"]["STR"] = 18
+    t.execute_tool(gs, "start_combat", {"gegner": [{"name": "Saebelmann", "hp": 1}]})
+    t.execute_tool(gs, "request_skill_roll", {"skill": "Klingenwaffen",
+                                              "schwierigkeit": "Leicht",
+                                              "ziel": "Saebelmann"})
+    out = t.resolve_player_roll(gs, 20)
+    assert out["kampf_ende"]["kampf_beendet"] is True
+    assert gs["combat"] is None
+    # Ein neuer Kampf laesst sich sofort starten
+    r = json.loads(t.execute_tool(gs, "start_combat",
+                                  {"gegner": [{"name": "Neuer Gegner", "hp": 8}]}))
+    assert r["status"] == "kampf_gestartet" and r["runde"] == 1
+
+
+def test_flucht_des_letzten_gegners_beendet_den_kampf(env):
+    t = env["tools"]
+    gs = _gs(env)
+    t.execute_tool(gs, "start_combat", {"gegner": [{"name": "Rabe", "hp": 3}]})
+    r = json.loads(t.execute_tool(gs, "set_enemy_status",
+                                  {"gegner": "Rabe", "status": "fled"}))
+    assert r["kampf_ende"]["kampf_beendet"] is True
+    assert gs["combat"] is None
+
+
+def test_runde_schliesst_auch_ohne_npc_action(env):
+    """Deadlock aus dem Playtest: ein lebender Gegner, fuer den der Erzaehler
+    kein npc_action aufrief, blockierte den Rundenwechsel dauerhaft — jede
+    weitere Spieleraktion lief in 'bereits gehandelt'."""
+    t = env["tools"]
+    gs = _gs(env)
+    t.execute_tool(gs, "start_combat", {"gegner": [{"name": "Saebelmann", "hp": 10}]})
+    c = gs["combat"]
+    for erwartete_runde in (2, 3, 4):
+        c["pc_gehandelt"] = True
+        t.close_combat_round(gs)
+        assert c["round"] == erwartete_runde
+        assert c["pc_gehandelt"] is False
+        assert t.execute_tool(gs, "request_skill_roll",
+                              {"skill": "Klingenwaffen", "schwierigkeit": "Leicht",
+                               "ziel": "Saebelmann"}) == t.BLOCKING
+        c["pending_roll"] = None
+    assert "ohne Aktion von: Saebelmann" in " ".join(c["log"])
+
+
+def test_close_combat_round_wartet_auf_ausstehenden_wurf(env):
+    t = env["tools"]
+    gs = _gs(env)
+    t.execute_tool(gs, "start_combat", {"gegner": [{"name": "Wolf", "hp": 10}]})
+    t.execute_tool(gs, "request_skill_roll", {"skill": "Klingenwaffen",
+                                              "schwierigkeit": "Leicht", "ziel": "Wolf"})
+    t.close_combat_round(gs)
+    assert gs["combat"]["round"] == 1
+    assert gs["combat"]["pending_roll"] is not None
+
+
+def test_verstaerkung_im_laufenden_kampf(env):
+    t = env["tools"]
+    gs = _gs(env)
+    t.execute_tool(gs, "start_combat", {"gegner": [{"name": "Wolf", "hp": 10}]})
+    r = json.loads(t.execute_tool(gs, "start_combat", {
+        "gegner": [{"name": "Wolf", "hp": 99},          # Dublette wird ignoriert
+                   {"name": "Zweiter Wolf", "hp": 6, "distanz": 2}]}))
+    assert r["status"] == "verstaerkung_hinzugefuegt"
+    assert gs["combat"]["round"] == 1               # Runde laeuft weiter
+    assert [e["name"] for e in gs["combat"]["enemies"]] == ["Wolf", "Zweiter Wolf"]
+    assert gs["combat"]["enemies"][0]["hp"] == 10    # Dublette hat nichts ueberschrieben
+    assert "FEHLER" in t.execute_tool(gs, "start_combat",
+                                      {"gegner": [{"name": "Wolf", "hp": 1}]})

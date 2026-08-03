@@ -99,7 +99,14 @@ MECHANIK (PFLICHT):
   wenn der Spieler aktiv verteidigt. Die Runden schaltet die ENGINE
   selbst weiter — es gibt kein end_turn. Nahkaempfer muessen erst
   aufschliessen (distanz > 0 = noch nicht da). Im Kampf niemals roll_dice.
-  end_combat beendet.
+- Kampf-Ende und Gegnerbestand fuehrt ebenfalls die Engine: Sind alle
+  Gegner kampfunfaehig, geflohen oder tot, beendet sie den Kampf von
+  selbst und meldet 'kampf_beendet'. end_combat brauchst du nur fuer
+  Abbruch ohne Sieger (Flucht des PC, Verhandlung, Uebergabe). Stoesst
+  mitten im Kampf jemand dazu, ruf start_combat erneut auf — die neuen
+  Gegner werden als Verstaerkung angehaengt. Fuehre nie zwei Gegner-
+  Gruppen im Kopf: der Kampfzustand im Spielstand ist die vollstaendige
+  Liste, und wer dort nicht steht, kaempft nicht mit.
 - DER SPIELSTAND IST DIE WAHRHEIT, ausnahmslos. Weicht deine Erzaehlung
   von ihm ab, war DEINE ERZAEHLUNG falsch — nie der Spielstand. Tool-
   Ergebnisse und das Zustandspanel korrigierst du nicht "zurecht":
@@ -121,6 +128,15 @@ SZENEN-KONTINUITAET:
 - Bleibe in der aktuellen Szene bis der Spieler sie verlaesst. Keine
   Zeitspruenge ohne advance_time, keine Figuren aus dem Nichts, kein
   Umdeuten etablierter Fakten. Wiki und Journal sind kanonisch.
+- EIGENNAMEN: Jeder Name, den du nennst, steht im Kontext oder im
+  Namensregister. Amt, Rolle und Zugehoerigkeit einer Figur stehen dort
+  ebenfalls — uebernimm sie woertlich, statt sie neu zu erfinden. Ein
+  Stadtwache-Hauptmann bleibt Stadtwache-Hauptmann. Brauchst du eine
+  Figur, die nirgends steht, leg sie erst mit add_wiki_entry an.
+- Bewegt sich der Spieler weiter (Treppe, Tunnel, Nebenraum, anderes
+  Gebaeude), gehoert zu JEDEM Abschnitt ein set_location — auch wenn du
+  den Ort gerade selbst erfindest ('body' mitgeben legt ihn an). Sonst
+  liefert dir der Kontext im naechsten Zug weiter die alte Szene.
 - Antworte knapp: 2-6 Absaetze, dann Handlungsfreiheit lassen (keine
   Optionslisten).
 
@@ -865,14 +881,10 @@ async def _agent_stream(pc_slug: str, history: list[dict],
     if buffered and turn_text.strip():
         yield _sse({"type": "text", "text": turn_text})
 
-    # Eine Spieler-Nachricht = eine Kampfhandlung. Hat der PC in diesem Zug
-    # nicht gewuerfelt (Trank, Rueckzug, Reden), gilt seine Runde trotzdem als
-    # verbraucht — sonst blieben die Runden stehen (ADR-0003).
-    if gs.get("combat") and not gs["combat"].get("pending_roll"):
-        if not gs["combat"].get("pc_gehandelt"):
-            gs["combat"]["pc_gehandelt"] = True
-            tools._maybe_next_round(gs, gs["combat"])
-        tools._set_phase(gs, gs["combat"])
+    # Eine Spieler-Nachricht = eine Kampfrunde. Die Engine schliesst sie am
+    # Zugende in jedem Fall — auch wenn der Erzaehler Gegneraktionen vergessen
+    # hat oder der letzte Gegner gefallen ist (ADR-0003).
+    tools.close_combat_round(gs)
 
     auto_advanced_minutes = 0
     if mode in ("handeln", "sprechen"):

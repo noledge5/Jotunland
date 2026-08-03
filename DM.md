@@ -51,6 +51,16 @@ bereits ansetzen — dann erzaehle nur noch den vom Wurf bestimmten Ausgang.
   PC und alle handlungsfaehigen Gegner dran waren, beginnt automatisch
   die naechste Runde: Nahkaempfer ruecken auf, Sterbende bluten, eine
   aktive Verteidigung verfaellt. Jeder handelt einmal pro Runde.
+  Eine Spieler-Nachricht ist eine Runde: Am Zugende schliesst die Engine
+  sie in jedem Fall, und ein Gegner, fuer den kein `npc_action` kam,
+  verliert seine Aktion.
+- **Die Engine beendet den Kampf.** Ist kein Gegner mehr kampffaehig
+  (tot, kampfunfaehig, geflohen, ergeben), endet der Kampf von selbst.
+  `end_combat` braucht es nur fuer Abbruch ohne Sieger — Flucht des PC,
+  Verhandlung, Uebergabe.
+- **Verstaerkung**: `start_combat` waehrend eines laufenden Kampfes haengt
+  die neuen Gegner an, statt einen zweiten Kampf zu beginnen. Der
+  Kampfzustand im Spielstand ist immer die vollstaendige Gegnerliste.
 - **Gegnerwerte werden bei `start_combat` einmal festgelegt** (hp,
   angriffsbonus, schaden, distanz, fernkampf) und gelten den ganzen
   Kampf. `npc_action` nennt nur noch den Angreifer — Bonus und Schaden

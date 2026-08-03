@@ -161,3 +161,49 @@ def test_flags_overlay_and_schedule(env):
     t.execute_tool(gs, "set_world_flag", {"slug": "schenke", "feld": "abgebrannt", "wert": True})
     ctx = wctx.build_context(gs)
     assert "abgebrannt=True" in ctx
+
+
+def test_namensregister_liefert_abwesende_figuren_mit_rolle(env):
+    """Der Prompt kannte nur ANWESENDE NPCs. Sobald der Erzaehler ueber eine
+    abwesende Figur sprach, hatte er keinen Kanon zu ihr — im Playtest wurde
+    der Stadtwache-Hauptmann so zum Hafenmeister."""
+    wio, wctx, t = env["wio"], env["wctx"], env["tools"]
+    gs = env["gsm"].create_pc("Marek")
+
+    wio.write_world_entry("salzhaven", {"type": "settlement", "name": "Salzhaven"},
+                          "Hafenstadt an der Suedkueste.")
+    wio.write_world_entry("hafenviertel", {"type": "zone", "name": "Hafenviertel",
+                                           "parent": "salzhaven"}, "Kaianlagen.")
+    wio.write_world_entry("dura-fenk", {"type": "character", "name": "Dura Fenk",
+                                        "rolle": "Wachhauptmann, Salzhaven",
+                                        "faction": "stadtwache", "region": "Salzhaven"},
+                          "Eine hagere Frau Anfang vierzig mit kurzgeschorenem Haar.")
+    wio.write_world_entry("fernes-nest", {"type": "settlement", "name": "Fernes Nest",
+                                          "parent": "anderswo"}, "Weit weg.")
+    env["widx"].invalidate()
+    t.execute_tool(gs, "set_location", {"slug": "hafenviertel"})
+
+    reg = wctx.entity_register(gs)
+    # Rolle statt Aussehen — das Amt ist der Fakt, der driftet
+    assert "Dura Fenk [character] (dura-fenk) — Wachhauptmann, Salzhaven" in reg
+    assert "hagere Frau" not in reg
+    assert "Fraktion: stadtwache" in reg
+    assert "Fernes Nest" not in reg          # ausserhalb des Umkreises
+    assert "Hafenviertel" not in reg         # steht schon als Volltext im Kontext
+    assert "Namensregister" in wctx.build_context(gs)
+
+    # Was im Spiel passiert ist, ueberschreibt den Welt-Text (ADR-0002)
+    t.execute_tool(gs, "set_world_flag", {"slug": "dura-fenk", "feld": "tot", "wert": True})
+    assert "AKTUELL: tot=True" in wctx.entity_register(gs)
+
+
+def test_index_cache_wird_bei_versionswechsel_neu_gebaut(env):
+    """Ein alter _index.json ohne 'kurz' wuerde das Register still leeren."""
+    wio, widx = env["wio"], env["widx"]
+    wio.write_world_entry("alt", {"type": "location", "name": "Alt"}, "Beschreibung hier.")
+    widx.get_index()
+    from app.gamestate import atomic_write_json
+    atomic_write_json(widx.INDEX_PATH, {"entries": {}, "produced_by": {},
+                                        "imported_by": {}})   # ohne version
+    widx._mem_cache = None
+    assert widx.get_index()["entries"]["alt"]["kurz"] == "Beschreibung hier."

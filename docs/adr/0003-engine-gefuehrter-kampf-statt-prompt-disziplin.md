@@ -91,3 +91,36 @@ Einzelentscheidungen, gemeinsam durchgegrillt:
   verwaiste Eintraege hinterlassen, die `wiki_lint` meldet.
 - Das Proben-Gate bleibt im Kampf abgeschaltet: Dort hat der Erzaehler fuer
   Angriffe ohnehin nur einen Weg, und die Luecke lag auf der Gegnerseite.
+
+## Nachtrag (2026-08-03, zweiter Playtest)
+
+Zwei Entscheidungen dieses ADR waren zu schwach umgesetzt. Beide Fehler
+wurden am Code reproduziert, bevor sie behoben wurden.
+
+**Der Rundenwechsel konnte haengen.** Entscheidung 1 laesst die Engine
+schalten, sobald der PC und alle handlungsfaehigen Gegner dran waren. Ruft
+der Erzaehler fuer einen lebenden Gegner nie `npc_action` — weil der laut
+Prosa kniet, verhandelt oder flieht, ohne dass `set_enemy_status` kommt —,
+ist diese Bedingung nie erfuellt. `pc_gehandelt` blieb dann dauerhaft
+stehen und jede weitere Spieleraktion lief in "Der PC hat in dieser Runde
+bereits gehandelt". Genau das passierte im Transkript, samt der Folge: Der
+Erzaehler hatte keinen legalen Zug mehr und stellte dem Spieler eine
+Rueckfrage zum Kampfzustand, statt zu erzaehlen.
+
+Korrektur: Eine Spieler-Nachricht ist eine Runde, und die Engine schliesst
+sie am Zugende bedingungslos (`close_combat_round`). Ein Gegner ohne
+`npc_action` verliert seine Aktion und das Log haelt fest, wer ausfiel.
+
+**Der Kampf endete nie von selbst.** `end_combat` war freiwillig. Nach dem
+letzten gefallenen Gegner blieb `combat` im Spielstand, `start_combat`
+verweigerte darum jeden neuen Kampf ("Kampf laeuft bereits"), und der
+Erzaehler fuehrte den alten Gegnersatz weiter — das war die eigentliche
+Ursache des Gegner-Wirrwarrs, nicht mangelnde Aufmerksamkeit des Modells.
+
+Korrektur: Ohne kampffaehigen Gegner beendet die Engine den Kampf selbst
+und meldet `kampf_beendet`. `end_combat` bleibt fuer Abbrueche ohne Sieger.
+Und weil ein laufender Kampf damit immer lebende Gegner hat, ist ein
+zweites `start_combat` eindeutig Verstaerkung — es haengt die neuen Gegner
+an, statt zu scheitern. Damit gibt es fuer jeden Kampfverlauf einen legalen
+Weg; nach ADR-0003 selbst ist eine Sperre ohne Ausweg der Fehler, nicht die
+Loesung.

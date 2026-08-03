@@ -16,7 +16,25 @@ from .wiki_io import INSTITUTION_KEYWORDS, WORLD_DIR, parse_frontmatter
 INDEX_PATH = WORLD_DIR / "_index.json"
 LINK_RE = re.compile(r"\[\[([a-z0-9-]+)\]\]")
 
+# Hochzaehlen, wenn _scan neue Felder schreibt — sonst liefert der Disk-Cache
+# eines laufenden Servers weiter die alte Struktur und das neue Feld fehlt still.
+INDEX_VERSION = 2
+
 _mem_cache: dict | None = None
+
+
+def _kurzfassung(body: str) -> str:
+    """Erste inhaltliche Zeile eines Eintrags — Rollen-/Zweckzeile fuer das
+    Namensregister im Prompt. Wird beim Index-Scan einmal berechnet und
+    mitgecacht, kostet zur Laufzeit also keinen Datei-Read."""
+    for raw in body.splitlines():
+        line = raw.strip().lstrip("#*->").strip()
+        if len(line) < 8 or line.startswith(("|", "```", "[[", "!")):
+            continue
+        if len(line) <= 90:
+            return line
+        return line[:90].rsplit(" ", 1)[0] + " ..."
+    return ""
 
 
 def invalidate() -> None:
@@ -42,6 +60,10 @@ def _scan() -> dict:
                 "region": meta.get("region"),
                 "parent": meta.get("parent"),
                 "status": meta.get("status"),
+                # Rolle/Fraktion sind die driftanfaelligsten Fakten einer Figur
+                # und stehen im Frontmatter — sie gehoeren ins Namensregister.
+                "rolle": meta.get("rolle"),
+                "faction": meta.get("faction"),
                 "scope": meta.get("scope", "welt"),
                 "gesperrt": bool(meta.get("gesperrt", False)),
                 "pc": meta.get("pc"),
@@ -51,13 +73,15 @@ def _scan() -> dict:
                 "zeitplan": meta.get("zeitplan") or [],
                 "bounding_box": meta.get("bounding_box"),
                 "links": links,
+                "kurz": _kurzfassung(body),
                 "path": str(p.relative_to(WORLD_DIR)),
             }
             for good in meta.get("produces") or []:
                 produced_by.setdefault(good, []).append(slug)
             for good in meta.get("imports") or []:
                 imported_by.setdefault(good, []).append(slug)
-    return {"entries": entries, "produced_by": produced_by, "imported_by": imported_by}
+    return {"version": INDEX_VERSION, "entries": entries,
+            "produced_by": produced_by, "imported_by": imported_by}
 
 
 def get_index(force: bool = False) -> dict:
@@ -66,7 +90,7 @@ def get_index(force: bool = False) -> dict:
         return _mem_cache
     if not force:
         cached = read_json(INDEX_PATH)
-        if cached:
+        if cached and cached.get("version") == INDEX_VERSION:
             _mem_cache = cached
             return cached
     idx = _scan()

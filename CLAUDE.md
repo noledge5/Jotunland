@@ -31,9 +31,17 @@ Entscheidungen: docs/adr/.
 - **Muenzen nur ueber Gesamt-Kupferwert** (`pay_copper`/`add_coins`).
 - **Gemini-Tool-Results als Objekt** (`build_google_payload` parst JSON).
 - **Kampf fuehrt die Engine** (ADR-0003) — Runden schalten automatisch
-  (kein end_turn), Gegnerwerte werden bei start_combat gebunden,
-  Waffenschaden haengt am Skill, roll_dice ist im Kampf gesperrt. Das
-  LLM benennt Typen und Stufen, nie Zahlen.
+  (kein end_turn) und werden am Zugende bedingungslos geschlossen, der
+  Kampf endet ohne kampffaehige Gegner von selbst, ein zweites
+  start_combat ist Verstaerkung. Gegnerwerte werden bei start_combat
+  gebunden, Waffenschaden haengt am Skill, roll_dice ist im Kampf
+  gesperrt. Das LLM benennt Typen und Stufen, nie Zahlen.
+- **Namensregister als achte Kontext-Schicht** (ADR-0004) — jeder
+  kanonische Eigenname im Umkreis mit Rolle, Fraktion und World-Flags,
+  eine Zeile pro Eintrag. Was drinsteht, ist gesetzt; was fehlt, muss
+  erst ueber add_wiki_entry entstehen. Neue Index-Felder brauchen ein
+  hochgezaehltes wiki_index.INDEX_VERSION, sonst liefert der Disk-Cache
+  still die alte Struktur.
 - **Slugs kanonisch** ueber `canonical_slug()` mit Stadt-Parameter.
 - **history.json ist gedeckelt** (Archiv-Rotation), Rolling Window
   schneidet nie ein Tool-Result von seinem Call ab.
