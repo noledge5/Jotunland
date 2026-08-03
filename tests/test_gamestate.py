@@ -41,9 +41,12 @@ def test_probe_resolution_and_ticks(env):
     gs = g.create_pc("Marek")
     gs["attribute"]["GES"] = 16  # Mod +3
     gs["skills"]["Schleichen"] = {"wert": 20, "ticks": 0}
+    # Der Krieger traegt sein Kettenhemd: -2 Handicap auf Schleichen
     r = rules.resolve_probe(gs, "Schleichen", "Durchschnitt", 8)
-    assert r["gesamt"] == 8 + 3 + 2 and r["erfolg"] is True  # 13 >= SG 12
+    assert r["gesamt"] == 8 + 3 + 2 - 2 and r["erfolg"] is False  # 11 < SG 12
     assert gs["skills"]["Schleichen"]["ticks"] == 1
+    gs["inventar"] = []                                  # ohne Ruestung
+    assert rules.resolve_probe(gs, "Schleichen", "Durchschnitt", 8)["gesamt"] == 13
     # Nat 1 / Nat 20 schlagen alles
     assert rules.resolve_probe(gs, "Schleichen", "Sehr Leicht", 1)["erfolg"] is False
     assert rules.resolve_probe(gs, "Schleichen", "Extrem", 20)["kritisch"] == "erfolg"
@@ -131,3 +134,17 @@ def test_hp_status_tags(env):
     assert g.hp_status_tag(12, 12) == "unversehrt"
     assert g.hp_status_tag(4, 12) == "verwundet"
     assert g.hp_status_tag(0, 12) == "todgeweiht"
+
+
+def test_startruestung_zaehlt_ohne_explizites_feld(env):
+    """Startausruestung sind blosse Namen ('Kettenhemd'). Ohne Namensauflösung
+    lief der Krieger ab Zug eins mit VW wie ohne Ruestung herum."""
+    rules = env["rules"] if "rules" in env else __import__("app.rules", fromlist=["x"])
+    gs = env["gsm"].create_pc("Marek", klasse="Krieger")
+    assert any(i["name"] == "Kettenhemd" for i in gs["inventar"])
+    assert rules.ruestung_bonus(gs) == 3          # Kettenhemd
+    assert rules.ruestung_handicap(gs) == -2
+    schurke = env["gsm"].create_pc("Vex", klasse="Schurke")
+    assert rules.ruestung_bonus(schurke) == 2     # Lederweste
+    kundiger = env["gsm"].create_pc("Ansa", klasse="Essenzkundiger")
+    assert rules.ruestung_bonus(kundiger) == 0    # Gelehrtenrobe ist keine Ruestung

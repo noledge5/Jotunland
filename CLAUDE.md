@@ -42,6 +42,10 @@ Entscheidungen: docs/adr/.
   erst ueber add_wiki_entry entstehen. Neue Index-Felder brauchen ein
   hochgezaehltes wiki_index.INDEX_VERSION, sonst liefert der Disk-Cache
   still die alte Struktur.
+- **Zwei Erzaehler, eine Engine** (ADR-0005) — Web-App (API-Modell) und
+  Claude Code (`scripts/dm_cli.py`, Skill in `.claude/skills/dm/`) teilen
+  sich `app/session.py`: Prompt, History, Undo, Validator, Zugabschluss.
+  Eine Regel, die nur in einem der beiden Wege gilt, ist ein Bug.
 - **Slugs kanonisch** ueber `canonical_slug()` mit Stadt-Parameter.
 - **history.json ist gedeckelt** (Archiv-Rotation), Rolling Window
   schneidet nie ein Tool-Result von seinem Call ab.

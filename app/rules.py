@@ -73,13 +73,19 @@ def _ruestung_werte(typ: str) -> dict:
 
 
 def _item_ruestung(item: dict) -> str | None:
-    """Ruestungstyp eines Items. Bestandsschutz: aeltere Spielstaende haben
-    kein 'ruestung'-Feld — ein Item mit 'schild' im Namen zaehlt weiter als
-    Schild, damit niemand still seinen Bonus verliert."""
+    """Ruestungstyp eines Items.
+
+    Das explizite 'ruestung'-Feld gewinnt. Fehlt es, wird der Name gegen die
+    Typen aus dem Rulebook geprueft: Die Startausruestung der Klassen besteht
+    aus blossen Namen ('Kettenhemd', 'Lederweste'), also brachte sie sonst
+    null Verteidigungswert — der Krieger lief ab Zug eins ungeschuetzt herum.
+    Gleichzeitig Bestandsschutz fuer aeltere Spielstaende ohne das Feld."""
     if item.get("ruestung"):
         return str(item["ruestung"]).lower()
-    if "schild" in item.get("name", "").lower():
-        return "schild"
+    name = item.get("name", "").lower()
+    for typ in RULEBOOK["ruestung"]:
+        if typ != "keine" and typ in name:
+            return typ
     return None
 
 

@@ -44,6 +44,30 @@ env $(cat .env | xargs) python3 app/main.py    # Port 3111
 Charaktererstellung im Wizard: 78 Attributpunkte, 80 Skillpunkte,
 Klasse als narratives Label mit Startausruestung.
 
+## Zwei Wege, denselben Spielstand zu spielen
+
+Die Engine ist unabhaengig davon, wer den Erzaehler stellt. Regeln,
+Validator, Kampf-State-Machine und Wiki liegen in `app/session.py` und
+`app/tools.py`; beide Wege schreiben `data/pcs/<slug>/`, ein Wechsel mitten
+in der Kampagne ist moeglich.
+
+1. **Web-App mit API-Modell** — `python3 app/main.py`, Erzaehler ist ein
+   Modell ueber OpenRouter/Google/Anthropic, abgerechnet pro Token.
+2. **Claude Code als Spielleiter** — laeuft auf dem Claude-Abo statt pro
+   API-Call. Claude Code bedient dieselbe Engine ueber `scripts/dm_cli.py`;
+   die DM-Regeln liegen als Skill in `.claude/skills/dm/`. Im Repo:
+
+   ```
+   /dm                                       # Skill laden, dann losspielen
+   python3 -m scripts.dm_cli kontext         # was der DM diesen Zug sieht
+   python3 -m scripts.dm_cli call <tool> '<json>'
+   python3 -m scripts.dm_cli wurf 14         # W20 des Spielers
+   python3 -m scripts.dm_cli zugende --text '...'
+   ```
+
+   `zugende` gibt den Validator-Bericht zurueck — dieselben Pruefungen wie
+   im Web, kein zweiter, laxerer Regelsatz.
+
 ## Ansichten & Eingabe-Modi
 
 - **Chat** mit vier Modi: Handeln, Sprechen, DM-Frage (Zeit=0),
@@ -68,7 +92,8 @@ Klasse als narratives Label mit Startausruestung.
 
 | Modul | Aufgabe |
 |---|---|
-| `app/main.py` | Routen, Agent-Loop, Blocking-Wuerfe, Validator, History-Deckel |
+| `app/main.py` | Routen, Agent-Loop, Blocking-Wuerfe, SSE |
+| `app/session.py` | Prompt, History, Undo, Validator, Zugabschluss — geteilt von Server und CLI |
 | `app/rules.py` | Regel-Engine: Proben, Ticks, Level, VW, Sterben (Config: `app/config/`) |
 | `app/gamestate.py` | Spielstand, Kalender, Coin-Math, Charaktererstellung |
 | `app/tools.py` | 22 DM-Tools inkl. Kampf-State-Machine, Flags, Zeit |
@@ -78,6 +103,7 @@ Klasse als narratives Label mit Startausruestung.
 | `scripts/seed_world.py` | Avarr-Import aus `world/data/*.json` (81 Eintraege, idempotent) |
 | `scripts/generate_wiki.py` | 4-Stufen-City-Generator (Resume, Fallback, --dry-run) |
 | `scripts/wiki_lint.py` | 6 Konsistenz-Checks, Exit 1 bei Errors |
+| `scripts/dm_cli.py` | Engine ohne LLM-Adapter — Claude Code als Spielleiter |
 
 ## Tests
 
