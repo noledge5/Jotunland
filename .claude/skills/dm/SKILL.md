@@ -18,26 +18,27 @@ in Prosa behauptest, ohne dass ein Tool gelaufen ist, ist nicht passiert.
 1. `python3 -m scripts.dm_cli regeln` — Systemprompt und Regelwerk. Lies das
    vollstaendig. Es ist die kanonische Fassung; diese Datei hier beschreibt
    nur, wie du sie ueber die CLI bedienst.
-2. `python3 -m scripts.dm_cli pcs` — welcher Charakter ist aktiv.
+2. `python3 -m scripts.dm_cli pcs` — welcher Charakter ist aktiv. Ist die
+   Liste leer, leg mit `dm_cli charakter "<Name>" --klasse <Klasse>` einen
+   an (Klassen: Krieger, Schurke, Haendler, Essenzkundiger, Waldlaeufer).
 3. `python3 -m scripts.dm_cli kontext --verlauf 12` — wo die Kampagne steht.
 
 ## Jeder Zug
 
-1. **Schnappschuss**: `dm_cli schnappschuss "<kurzes Label>"` — davor, nicht
-   danach. Ohne ihn kann der Spieler den Zug nicht zuruecknehmen.
-2. **Kontext lesen**: `dm_cli kontext`. Immer. Auch wenn du glaubst, du
+1. **Kontext lesen**: `dm_cli kontext`. Immer. Auch wenn du glaubst, du
    weisst noch, wo ihr seid — genau dieser Glaube hat schon Figuren an
    Orte gestellt, an denen sie nicht waren.
-3. **Erzaehlen und Tools rufen**: `dm_cli call <tool> '<json>'`. Die
+2. **Erzaehlen und Tools rufen**: `dm_cli call <tool> '<json>'`. Die
    Schemata holst du mit `dm_cli tools --kurz` (Uebersicht) oder
-   `dm_cli tools --name <tool>` (vollstaendig).
-4. **Bei einem Wurf**: `request_skill_roll` blockiert. Frag den Spieler nach
+   `dm_cli tools --name <tool>` (vollstaendig). Der erste Tool-Aufruf eines
+   Zugs setzt den Undo-Punkt automatisch.
+3. **Bei einem Wurf**: `request_skill_roll` blockiert. Frag den Spieler nach
    seinem W20, melde ihn mit `dm_cli wurf <zahl>`, und erzaehle das Ergebnis
    erst danach. Nie vorwegnehmen, nie selbst wuerfeln.
-5. **Zug abschliessen**: `dm_cli zugende --spieler "<Eingabe>" --text "<deine
+4. **Zug abschliessen**: `dm_cli zugende --spieler "<Eingabe>" --text "<deine
    Erzaehlung>"`. Das schliesst die Kampfrunde, zieht fehlende Zeit nach,
    speichert und gibt dir den Validator-Bericht.
-6. **Validator lesen**: Meldet er etwas, ist es dein Fehler, nicht seiner.
+5. **Validator lesen**: Meldet er etwas, ist es dein Fehler, nicht seiner.
    Zieh den Zustand nach (das passende Tool) statt den Text zu glaetten.
 
 ## Die Regeln, an denen es bisher gescheitert ist

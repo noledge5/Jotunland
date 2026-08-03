@@ -54,6 +54,19 @@ def cmd_pcs(args) -> None:
         print(f"{p['slug']:<20} {p['name']} (Level {p.get('level', 1)}){mark}")
 
 
+def cmd_charakter(args) -> None:
+    """Schnellstart-Charakter. Der Wizard der Web-App verteilt 78 Attribut-
+    und 80 Skillpunkte frei; hier entstehen Standardwerte, damit man ohne
+    zweiten Weg ins Spiel kommt."""
+    try:
+        gs = gsm.create_pc(args.name, klasse=args.klasse)
+    except ValueError as e:
+        raise SystemExit(f"FEHLER: {e}")
+    gsm.set_active_pc_slug(gs["slug"])
+    print(f"{gs['name']} ({gs['klasse']}) angelegt und aktiv.\n")
+    print(session.state_panel(gs))
+
+
 def cmd_regeln(args) -> None:
     """Systemprompt + Regelwerk — einmal am Sessionanfang lesen."""
     print(session.build_system_prompt())
@@ -226,6 +239,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("pcs", help="Charaktere auflisten").set_defaults(fn=cmd_pcs)
+
+    p = sub.add_parser("charakter", help="Schnellstart-Charakter anlegen")
+    p.add_argument("name")
+    p.add_argument("--klasse", default=None,
+                   help="Krieger | Schurke | Haendler | Essenzkundiger | Waldlaeufer")
+    p.set_defaults(fn=cmd_charakter)
     sub.add_parser("regeln", help="Systemprompt + DM.md ausgeben").set_defaults(fn=cmd_regeln)
     sub.add_parser("zustand", help="Zustandspanel des PC").set_defaults(fn=cmd_zustand)
 

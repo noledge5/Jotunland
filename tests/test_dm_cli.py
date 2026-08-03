@@ -97,3 +97,15 @@ def test_ungueltiges_json_wird_abgewiesen(cli):
         cli["run"]("call", "adjust_hp", "{kaputt")
     with pytest.raises(SystemExit):
         cli["run"]("call", "adjust_hp", '[1,2]')
+
+
+def test_charakter_anlegen_ueber_die_cli(cli, env):
+    """Ohne diesen Befehl kaeme man auf einem frischen Clone nicht ins Spiel —
+    die CLI haette keinen Weg, einen Charakter zu erzeugen."""
+    out = cli["run"]("charakter", "Vex", "--klasse", "Schurke")
+    assert "Vex (Schurke) angelegt und aktiv" in out
+    assert env["gsm"].load_settings()["active_pc_slug"] == "vex"
+    with pytest.raises(SystemExit):
+        cli["run"]("charakter", "Vex")            # Name schon vergeben
+    with pytest.raises(SystemExit):
+        cli["run"]("charakter", "Nix", "--klasse", "Zauberer")
