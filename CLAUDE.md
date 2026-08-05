@@ -53,6 +53,13 @@ Entscheidungen: docs/adr/.
 - **Kampfgegner haben Instanz-Identitaeten** — gleichnamige werden
   durchnummeriert ("Wache 2"), `kanon_slug` haelt den Wiki-Bezug. Ein
   Wiki-Slug ist eindeutig, eine Kampfinstanz nicht.
+- **Bestiarium ist pruefbar, nicht behauptet** — `parent` bleibt Geografie,
+  `gattung` traegt die Abstammung; `frisst`/`biom`/`rang` spannen das
+  Nahrungsnetz. wiki_lint prueft Taxonomie, Nahrungsnetz und Trophie.
+- **Obsidian-Vault ueber `scripts/obsidian_sync.py`** — Anker der
+  Rueckrichtung ist immer `slug` im Frontmatter, nie der Dateiname
+  (Obsidian benennt Links beim Umbenennen mit um). Der Spielstand wird
+  exportiert, aber nie importiert: er gehoert der Engine (ADR-0001).
 - **Slugs kanonisch** ueber `canonical_slug()` mit Stadt-Parameter.
 - **history.json ist gedeckelt** (Archiv-Rotation), Rolling Window
   schneidet nie ein Tool-Result von seinem Call ab.

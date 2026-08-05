@@ -104,6 +104,7 @@ in der Kampagne ist moeglich.
 | `scripts/generate_wiki.py` | 4-Stufen-City-Generator (Resume, Fallback, --dry-run) |
 | `scripts/wiki_lint.py` | 6 Konsistenz-Checks, Exit 1 bei Errors |
 | `scripts/dm_cli.py` | Engine ohne LLM-Adapter — Claude Code als Spielleiter |
+| `scripts/obsidian_sync.py` | Rundlauf Engine-Wiki <-> Obsidian-Vault (Export/Import) |
 
 ## Tests
 

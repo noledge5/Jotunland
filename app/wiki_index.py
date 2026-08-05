@@ -37,6 +37,16 @@ def _kurzfassung(body: str) -> str:
     return ""
 
 
+def _dateistand() -> float:
+    """Juengste Aenderungszeit im Wiki. Der Cache wird invalidiert, wenn die
+    Engine schreibt — aber nicht, wenn jemand von aussen editiert (Obsidian,
+    Editor, Sync). Ohne diesen Vergleich liest ein laufender Server nach einer
+    externen Aenderung still die alte Fassung weiter."""
+    if not WORLD_DIR.exists():
+        return 0.0
+    return max((p.stat().st_mtime for p in WORLD_DIR.glob("*.md")), default=0.0)
+
+
 def invalidate() -> None:
     global _mem_cache
     _mem_cache = None
@@ -87,17 +97,23 @@ def _scan() -> dict:
                 produced_by.setdefault(good, []).append(slug)
             for good in meta.get("imports") or []:
                 imported_by.setdefault(good, []).append(slug)
-    return {"version": INDEX_VERSION, "entries": entries,
+    return {"version": INDEX_VERSION, "stand": _dateistand(), "entries": entries,
             "produced_by": produced_by, "imported_by": imported_by}
 
 
 def get_index(force: bool = False) -> dict:
     global _mem_cache
-    if _mem_cache is not None and not force:
+    stand = _dateistand()
+
+    def frisch(idx: dict | None) -> bool:
+        return bool(idx) and idx.get("version") == INDEX_VERSION \
+            and idx.get("stand", -1) >= stand
+
+    if not force and frisch(_mem_cache):
         return _mem_cache
     if not force:
         cached = read_json(INDEX_PATH)
-        if cached and cached.get("version") == INDEX_VERSION:
+        if frisch(cached):
             _mem_cache = cached
             return cached
     idx = _scan()
