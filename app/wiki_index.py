@@ -18,7 +18,7 @@ LINK_RE = re.compile(r"\[\[([a-z0-9-]+)\]\]")
 
 # Hochzaehlen, wenn _scan neue Felder schreibt — sonst liefert der Disk-Cache
 # eines laufenden Servers weiter die alte Struktur und das neue Feld fehlt still.
-INDEX_VERSION = 2
+INDEX_VERSION = 3
 
 _mem_cache: dict | None = None
 
@@ -64,6 +64,13 @@ def _scan() -> dict:
                 # und stehen im Frontmatter — sie gehoeren ins Namensregister.
                 "rolle": meta.get("rolle"),
                 "faction": meta.get("faction"),
+                # Biologie (Flora/Fauna): Abstammung und Nahrungsnetz. 'gattung'
+                # ist die Taxonomie-Achse, getrennt von 'parent' (Geografie).
+                "rang": meta.get("rang"),
+                "gattung": meta.get("gattung"),
+                "frisst": meta.get("frisst") or [],
+                "biom": meta.get("biom") or [],
+                "essenz": meta.get("essenz"),
                 "scope": meta.get("scope", "welt"),
                 "gesperrt": bool(meta.get("gesperrt", False)),
                 "pc": meta.get("pc"),

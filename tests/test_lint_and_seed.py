@@ -135,3 +135,58 @@ def test_generate_wiki_dry_run(env):
     gw.generate_city("salzhaven", dry_run=True)  # Resume ueberspringt
     meta = env["widx"].get_entry_meta("stadtwache-salzhaven")
     assert meta is not None and meta["type"] == "faction"
+
+
+def _art(wio, slug, typ="fauna", **meta):
+    wio.write_world_entry(slug, {"type": typ, "name": slug.title(), **meta},
+                          f"Beschreibung von {slug}.")
+
+
+def _checks(env, name):
+    from scripts.wiki_lint import run_lint
+    env["widx"].invalidate()
+    return [p for p in run_lint() if p["check"] == name]
+
+
+def test_taxonomie_prueft_abstammung(env):
+    """Eine erfundene Welt hat keine Quellen, aber Ableitungsautoritaet: eine
+    Art folgt aus ihrer Gattung. Genau das ist pruefbar."""
+    wio = env["wio"]
+    _art(wio, "woelfe", rang="gattung", biom=["biom-nordwald"])
+    _art(wio, "kammwolf", rang="art", gattung="woelfe", biom=["biom-nordwald"])
+    assert _checks(env, "taxonomie") == []
+
+    _art(wio, "geistwolf", rang="art", gattung="fehlt-im-wiki", biom=["biom-nordwald"])
+    _art(wio, "moosart", typ="flora", rang="art", gattung="woelfe", biom=["biom-nordwald"])
+    _art(wio, "falschrang", rang="gattung", gattung="woelfe", biom=["biom-nordwald"])
+    msgs = " ".join(p["msg"] for p in _checks(env, "taxonomie"))
+    assert "fehlt-im-wiki" in msgs                     # Gattung existiert nicht
+    assert "teilen keine Abstammung" in msgs           # Flora haengt an Fauna
+    assert "muss hoeher stehen" in msgs                # Gattung unter Gattung
+
+
+def test_nahrungsnetz_braucht_gemeinsames_biom(env):
+    wio = env["wio"]
+    _art(wio, "seegras", typ="flora", biom=["biom-binnenmeer"])
+    _art(wio, "bergkraut", typ="flora", biom=["biom-hochgebirge"])
+    _art(wio, "silberfisch", biom=["biom-binnenmeer"], frisst=["seegras"])
+    assert _checks(env, "nahrungsnetz") == []
+
+    _art(wio, "gratvogel", biom=["biom-hochgebirge"], frisst=["silberfisch", "phantom"])
+    msgs = " ".join(p["msg"] for p in _checks(env, "nahrungsnetz"))
+    assert "kein gemeinsames Biom" in msgs
+    assert "phantom" in msgs
+
+
+def test_trophie_pyramide_steht_richtig_herum(env):
+    """Ein Biom ohne Primaerproduzenten traegt keine Pflanzenfresser."""
+    wio = env["wio"]
+    _art(wio, "raubtier-a", biom=["biom-steppe"], frisst=[])
+    fehler = [p for p in _checks(env, "trophie") if p["level"] == "error"]
+    assert any("keine Primaerproduzenten" in p["msg"] for p in fehler)
+
+    _art(wio, "steppengras", typ="flora", biom=["biom-steppe"])
+    _art(wio, "grasfresser", biom=["biom-steppe"], frisst=["steppengras"])
+    assert [p for p in _checks(env, "trophie") if p["level"] == "error"] == []
+    # Raubtier ohne 'frisst' bleibt eine Warnung
+    assert any("keine Nahrungsquelle" in p["msg"] for p in _checks(env, "trophie"))

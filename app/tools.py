@@ -574,7 +574,11 @@ def add_wiki_entry(gs: dict, args: dict) -> str:
                 f"Wenn wirklich neu: erneut mit explizitem slug-Parameter aufrufen.")
     meta = {"type": etype, "name": name}
     for key in ("region", "parent", "status", "tags", "produces", "imports",
-                "zeitplan", "bounding_box"):
+                "zeitplan", "bounding_box",
+                # Biologie: 'parent' bleibt Geografie (lebt in), die Abstammung
+                # laeuft ueber 'gattung'. Beides auf eine Achse zu legen haette
+                # Arten in die Namensregister ihrer Fundorte gespuelt.
+                "rang", "gattung", "frisst", "biom", "rolle", "essenz"):
         if args.get(key):
             meta[key] = args[key]
     # Waehrend des Spiels erschaffene NPCs/Orte an den aktuellen Ort

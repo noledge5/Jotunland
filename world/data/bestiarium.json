@@ -1,0 +1,51 @@
+{
+  "_hinweis": "Autorenwelt, versioniert. Import: python3 -m scripts.import_bestiarium. Struktur pruefbar ueber scripts/wiki_lint (Checks taxonomie, nahrungsnetz, trophie).",
+
+  "grundlagen": {
+    "essenz_oekologie": {
+      "slug": "essenz-oekologie",
+      "name": "Essenz im Nahrungsnetz",
+      "type": "lore",
+      "status": "aktiv",
+      "tags": ["essenz", "oekologie", "grundlage"],
+      "body": "Essenz tritt in Avarr nicht nur als Kristall in Gesteinsadern auf, sondern als geloester Spurenstoff in Wasser und Boden. Ihre Verteilung ist die verborgene Achse, an der die gesamte Biologie der Welt haengt.\n\nDie Aufnahme beginnt bei den Pflanzen. Wenige Arten koennen geloeste Essenz binden statt sie auszuscheiden -- sie waschen den Boden aus und lagern sie in Geweben ab, die andere Pflanzen nicht bilden koennen. Solche Arten wachsen langsam, leben lang und sind an ihren charakteristischen Merkmalen erkennbar: eine Faerbung, die im Zwielicht nicht ganz erlischt, ein Geschmack wie feuchter Stein.\n\nEntscheidend ist, was danach geschieht. Tiere scheiden Essenz nicht vollstaendig aus. Wer Essenz-bindende Pflanzen frisst, behaelt einen Teil; wer diese Tiere frisst, behaelt einen Teil davon. Mit jeder Stufe im Nahrungsnetz steigt die Konzentration. Ein Weidegaenger traegt Spuren, ein Raubtier traegt das Vielfache, und die grossen Jaeger an der Spitze tragen mehr, als in jedem Kristall derselben Groesse steckt.\n\nDaraus folgt fast alles, was Menschen ueber Bestien wissen. Grosse Raubtiere sind gefaehrlich, weil eingelagerte Essenz Sehnen und Panzer haertet -- und sie sind wertvoll aus demselben Grund. Jaegergilden zahlen fuer Kadaver, Waagehaeuser kaufen, was aus ihnen gewonnen wird, und der Staat besteuert beides. Wo eine Kristallader liegt, sammeln sich zuerst die Pflanzen, dann die Pflanzenfresser, dann die Jaeger, und zuletzt die Menschen, die alle drei toeten.\n\nDie Kehrseite: Wird eine Ader ausgebeutet, bricht die Kette von unten weg. Ein leergefoerdertes Tal traegt zwei Jahrzehnte spaeter keine Essenz-Pflanzen mehr, keine Herden, keine Jaeger. Die Bergherren-Haeuser nennen das erschoepft, die Jaeger nennen es tot."
+    },
+    "mutation": {
+      "slug": "essenz-mutation",
+      "name": "Essenzzehrung und Missbildung",
+      "type": "lore",
+      "status": "aktiv",
+      "tags": ["essenz", "oekologie", "grundlage"],
+      "body": "Anhaltend hohe Essenz-Belastung veraendert Koerper. Das ist kein Zauber, sondern eine Belastungsreaktion: Gewebe, das mehr Essenz einlagert, als es binden kann, waechst falsch.\n\nBei Pflanzen bedeutet das verdickte Triebe, doppelte Blueten, Wuchs ohne Formgrenze. Bei Tieren zusaetzliche Gliedmassen, verhaertete Haut, ueberzaehlige Zaehne, Blindheit bei gleichzeitig geschaerften uebrigen Sinnen. Die meisten dieser Tiere sterben jung. Die wenigen, die es nicht tun, sind gefaehrlicher als ihre gesunden Artgenossen und werden von diesen gemieden.\n\nMissbildungen sind nicht erblich -- sie entstehen in jedem Individuum neu, wo die Belastung hoch genug ist. Deshalb gibt es keine Rassen aus Essenzzehrung, nur Einzeltiere. Wo mehrere zugleich auftreten, liegt eine Ader offen, und das ist eine Nachricht wert.\n\nDie Ausnahme ist Vhaelor. Dort ist die Belastung nicht ortsgebunden, sondern flaechendeckend und alt genug, dass Auslese greifen konnte. Was auf dem Festland eine Missbildung ist, ist dort ein Merkmal."
+    }
+  },
+
+  "biome": [
+    {"slug": "biom-binnenmeer", "name": "Binnenmeer", "kurz": "Das grosse Binnenmeer -- Salzwasser, Handelswege, tiefe Rinnen.",
+     "regionen": ["suedkueste", "seeprovince"]},
+    {"slug": "biom-kueste", "name": "Kueste und Watt", "kurz": "Kalksteinklippen, Flachhaefen, Priele und Salzwiesen.",
+     "regionen": ["suedkueste", "seeprovince"]},
+    {"slug": "biom-flussdelta", "name": "Flussdelta", "kurz": "Die fuenf Arme des Avar -- Schwemmland, Roehricht, Schlick.",
+     "regionen": ["deltaprovince"]},
+    {"slug": "biom-ackerebene", "name": "Ackerebene", "kurz": "Die Kornkammer -- offene Fluren, Hecken, Brachen.",
+     "regionen": ["mittelmark", "tiefebene"]},
+    {"slug": "biom-flusstal", "name": "Flusstal", "kurz": "Enge Taeler des oberen Avar, Terrassen und Trockenhaenge.",
+     "regionen": ["flusstal"]},
+    {"slug": "biom-vorgebirge", "name": "Vorgebirge", "kurz": "Wo die Ebene sich zum Gebirge aufwirft -- Geroell, Karst, Bergwald.",
+     "regionen": ["bergrand"]},
+    {"slug": "biom-hochgebirge", "name": "Hochgebirge", "kurz": "Ueber der Baumgrenze -- Fels, Firn, duenne Luft.",
+     "regionen": ["gebirgsstaaten"]},
+    {"slug": "biom-untertage", "name": "Untertage", "kurz": "Hoehlen, Spalten und Schaechte, lichtlos und essenznah.",
+     "regionen": ["bergrand", "gebirgsstaaten"]},
+    {"slug": "biom-nordwald", "name": "Nordwald", "kurz": "Nadel- und Mischwald des Nordens, lange Winter.",
+     "regionen": ["nordmark", "waldreiche"]},
+    {"slug": "biom-fjord", "name": "Fjord", "kurz": "Steilkueste des Nordens -- kaltes Wasser, Vogelfelsen, Eisrand.",
+     "regionen": ["nordklans"]},
+    {"slug": "biom-steppe", "name": "Steppe", "kurz": "Die suedoestliche Grassteppe, vertrocknend seit einem Menschenalter.",
+     "regionen": ["steppenvoelker", "ostmarsch"]},
+    {"slug": "biom-moor", "name": "Moor und Bruch", "kurz": "Saure Nassflaechen der Ostmarsch, schlecht kartiert.",
+     "regionen": ["ostmarsch"]},
+    {"slug": "biom-vhaelor", "name": "Vhaelor-Regenwald", "kurz": "Vulkanische Insel, flaechendeckend essenzbelastet -- evolutionaere Druckkammer.",
+     "regionen": ["vhaelor"]}
+  ]
+}
