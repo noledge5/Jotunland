@@ -77,20 +77,18 @@ python3 -m scripts.generate_wiki --city salzhaven --dry-run
 Nach Aenderungen an tools.py, rules.py oder llm_adapter.py: Kampf- und
 Proben-Zyklus in tests/test_combat.py gegenlesen.
 
-## Bekannter Stand (2026-07-23)
+## Bekannter Stand (2026-08-05)
 
-- Avarr ist Kanon (Grill-Session): Welt + Regeln aus dem Original-Stand
-  (Branch claude/import-dkills-main-ZS45N, Flask/SQLite) in die
-  FastAPI/Markdown-Architektur uebernommen. Die zwischenzeitliche
-  NovaTerrum-Eigenwelt wurde verworfen.
-- Seed importiert 81 Eintraege: 7 Realms, 9 Ostimperium-Provinzen,
-  Salzhaven voll (5 Zonen, 14 Szenen, 8 NPCs mit Zeitplaenen), Vareth.
-  Lint 0/0. Verdichtung weiterer Provinzen: world/GENERATION_GUIDE.md
-  + scripts/generate_wiki.py.
-- Frontend: Chat (4 Eingabe-Modi), Welt-Editor mit Netz- und
-  Karten-Layout (Klick-to-Add mit Meter-Koordinaten), Charakter-Wizard.
-- Offen laut altem Handoff: Kampf nie live gespielt (Tools getestet,
-  Prompt-Disziplin unbewiesen), Token-Budget-Messung pro Layer (Ziel 4),
-  Session-Synopsen. bug_log-Panel des Originals nicht uebernommen.
-- Google Free Tier per-Modell rate-limited — OpenRouter ist der
-  zuverlaessige Weg. Lokal: `python3 app/main.py`, Port 3111.
+**Offene Punkte, Reihenfolge und Begruendungen stehen in docs/ROADMAP.md —
+dort zuerst nachsehen.** Kurzfassung:
+
+- Avarr ist Kanon. Seed importiert 81 Eintraege (7 Realms, 9 Provinzen,
+  Salzhaven voll, Vareth); dazu 48 aus scripts/import_bergrand_bestiary.py.
+- Zwei Spielwege: Web-App mit API-Modell, und Claude Code ueber
+  `scripts/dm_cli.py` auf dem Abo (`/dm`-Skill).
+- Obsidian: am Rechner direkt auf `wiki/world/`, unterwegs ueber
+  `scripts/obsidian_sync.py`. Spielstand wird nie zurueckimportiert.
+- Bestiarium: Schema und Lint-Checks stehen, die Arten selbst fehlen noch.
+  Ziel 100+, biologisch stimmig (Gattungen, Nahrungsnetz, Trophie).
+- Groesste offene Luecken: Gegnerwerte kommen noch vom LLM statt aus dem
+  Kanon, NPC-Haltung fehlt ganz, Kampf nie live gespielt.
