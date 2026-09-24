@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Play, ScrollText, SlidersHorizontal, Workflow } from "lucide-react";
+import type { HassEntity } from "home-assistant-js-websocket";
 import { useHass } from "../ha/HassContext";
+import { INTERNAL_SCRIPT } from "../setup";
 import { Card, Chips, Empty, Toggle } from "../components/ui";
 import { HelperControl } from "../components/controls";
 import { name, relTime } from "../format";
@@ -11,10 +13,12 @@ export function Automations() {
   const { entities, callService } = useHass();
   const [scope, setScope] = useState("jotunland");
   const all = Object.values(entities);
-  const mine = (id: string) => scope === "all" || id.split(".")[1].startsWith("jotunland");
-  const automations = all.filter((e) => e.entity_id.startsWith("automation.") && mine(e.entity_id)).sort((a, b) => name(a).localeCompare(name(b), "de"));
-  const scripts = all.filter((e) => e.entity_id.startsWith("script.") && mine(e.entity_id)).sort((a, b) => name(a).localeCompare(name(b), "de"));
-  const helpers = all.filter((e) => HELPER_DOMAINS.includes(e.entity_id.split(".")[0]) && mine(e.entity_id));
+  // Automationen heißen in HA nach ihrem Alias – Jotunland erkennt seine an der festen ID
+  const mine = (e: HassEntity) =>
+    scope === "all" || e.entity_id.split(".")[1].startsWith("jotunland") || String(e.attributes.id ?? "").startsWith("jotunland");
+  const automations = all.filter((e) => e.entity_id.startsWith("automation.") && mine(e)).sort((a, b) => name(a).localeCompare(name(b), "de"));
+  const scripts = all.filter((e) => e.entity_id.startsWith("script.") && mine(e) && !INTERNAL_SCRIPT.test(e.entity_id)).sort((a, b) => name(a).localeCompare(name(b), "de"));
+  const helpers = all.filter((e) => HELPER_DOMAINS.includes(e.entity_id.split(".")[0]) && mine(e));
 
   return (
     <div className="view">

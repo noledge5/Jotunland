@@ -3,9 +3,11 @@ import { Check, Copy, Download, FileCode, LogOut, Search, Sparkles, Wand2 } from
 import { useHass } from "../ha/HassContext";
 import { logout } from "../ha/connection";
 import { Badge, Card, Chips, Empty } from "../components/ui";
-import { candidatesFor, KIND_LABEL, SLOTS, suggestDevices, type DeviceSuggestion } from "../discovery";
+import { candidatesFor, KIND_LABEL, SLOTS, suggestDevices } from "../discovery";
 import { fmtState, name, norm } from "../format";
 import { renderPackage } from "../haPackage";
+import { useSetupActions } from "../setup";
+import { Wizard } from "./Wizard";
 
 const SOURCE_LABEL = { manual: "von dir gewählt", config: "config.json", auto: "automatisch erkannt", none: "fehlt" } as const;
 const SOURCE_TONE = { manual: "ok", config: "info", auto: "info", none: "bad" } as const;
@@ -80,7 +82,8 @@ function MappingTab() {
 }
 
 function DevicesTab() {
-  const { infos, devices, areas, ws, refreshRegistry, registryAvailable } = useHass();
+  const { infos, devices, areas, registryAvailable } = useHass();
+  const { applySuggestions } = useSetupActions();
   const [onlyTodo, setOnlyTodo] = useState("todo");
   const [busy, setBusy] = useState<string>();
   const [err, setErr] = useState<string>();
@@ -90,19 +93,11 @@ function DevicesTab() {
 
   if (!registryAvailable) return <Empty>Die Geräteliste braucht einen Home-Assistant-Benutzer mit Administratorrechten.</Empty>;
 
-  const apply = async (s: DeviceSuggestion, what: "name" | "area" | "both") => {
-    const msg: Record<string, unknown> = { type: "config/device_registry/update", device_id: s.device.id };
-    if ((what === "name" || what === "both") && s.suggestedName) msg.name_by_user = s.suggestedName;
-    if ((what === "area" || what === "both") && s.suggestedArea) msg.area_id = s.suggestedArea.area_id;
-    await ws(msg);
-  };
-
   const run = async (key: string, fn: () => Promise<void>) => {
     setBusy(key);
     setErr(undefined);
     try {
       await fn();
-      await refreshRegistry();
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
     } finally {
@@ -124,7 +119,7 @@ function DevicesTab() {
           type="button"
           className="btn primary"
           disabled={!!busy}
-          onClick={() => confirm(`${todo.length} Vorschläge in Home Assistant übernehmen?`) && run("all", async () => { for (const s of todo) await apply(s, "both"); })}
+          onClick={() => confirm(`${todo.length} Vorschläge in Home Assistant übernehmen?`) && run("all", () => applySuggestions(todo))}
         >
           <Check size={14} /> Alle Vorschläge übernehmen
         </button>
@@ -152,7 +147,7 @@ function DevicesTab() {
                 )}
               </div>
               {(s.suggestedName || s.suggestedArea) && (
-                <button type="button" className="btn small" disabled={!!busy} onClick={() => run(s.device.id, () => apply(s, "both"))}>
+                <button type="button" className="btn small" disabled={!!busy} onClick={() => run(s.device.id, () => applySuggestions([s]))}>
                   {busy === s.device.id ? "…" : "Übernehmen"}
                 </button>
               )}
@@ -204,15 +199,18 @@ function download(filename: string, content: string, type: string) {
 }
 
 function PackageTab() {
-  const { mapping } = useHass();
-  const { yaml, missing } = useMemo(() => renderPackage(mapping), [mapping]);
+  const { mapping, rooms, addon } = useHass();
+  const { yaml, missing } = useMemo(() => renderPackage(mapping, rooms), [mapping, rooms]);
   const [copied, setCopied] = useState(false);
   return (
     <>
       <p className="lead">
         <FileCode size={16} />
         <span>
-          Automationen, Skripte und Helfer für Home Assistant, schon mit deinen Geräten ausgefüllt. Speichere die Datei als <code>/config/packages/jotunland.yaml</code>, prüfe unter Entwicklerwerkzeuge → YAML die Konfiguration und starte Home Assistant neu.
+          Automationen, Skripte und Helfer für Home Assistant, schon mit deinen Geräten ausgefüllt.{" "}
+          {addon
+            ? "Als Add-on installiert Jotunland das Paket selbst – im Assistenten auf „Installieren“ tippen."
+            : <>Speichere die Datei als <code>/config/packages/jotunland.yaml</code>, prüfe unter Entwicklerwerkzeuge → YAML die Konfiguration und starte Home Assistant neu.</>}
         </span>
       </p>
       {missing.length > 0 && (
@@ -230,17 +228,19 @@ function PackageTab() {
 }
 
 function ConnectionTab() {
-  const { settings, applySettings, status, entities, isDemo } = useHass();
+  const { settings, applySettings, status, entities, isDemo, addon } = useHass();
   return (
     <Card title="Verbindung">
       <ul className="rows">
-        <li><div className="row-text"><strong>Modus</strong><small>{isDemo ? "Demo (simuliert)" : settings.mode === "token" ? "Zugriffstoken" : "Home-Assistant-Anmeldung"}</small></div></li>
+        <li><div className="row-text"><strong>Modus</strong><small>{isDemo ? "Demo (simuliert)" : addon ? "Home-Assistant-Add-on (automatisch angemeldet)" : settings.mode === "token" ? "Zugriffstoken" : "Home-Assistant-Anmeldung"}</small></div></li>
         <li><div className="row-text"><strong>Server</strong><small>{settings.url || window.location.origin}</small></div></li>
         <li><div className="row-text"><strong>Status</strong><small>{status} · {Object.keys(entities).length} Entitäten</small></div></li>
       </ul>
       <div className="btn-row">
         {isDemo ? (
           <button type="button" className="btn" onClick={() => applySettings(null)}>Demo beenden</button>
+        ) : addon ? (
+          <button type="button" className="btn" onClick={() => applySettings({ mode: "demo" })}>Demo ansehen</button>
         ) : (
           <button type="button" className="btn" onClick={() => { logout(); applySettings(null); }}><LogOut size={14} /> Abmelden</button>
         )}
@@ -250,7 +250,7 @@ function ConnectionTab() {
 }
 
 export function Setup() {
-  const [tab, setTab] = useState("mapping");
+  const [tab, setTab] = useState("wizard");
   return (
     <div className="view">
       <header className="view-head">
@@ -260,6 +260,7 @@ export function Setup() {
         value={tab}
         onChange={setTab}
         options={[
+          { value: "wizard", label: "Assistent" },
           { value: "mapping", label: "Zuordnung" },
           { value: "devices", label: "Geräte benennen" },
           { value: "package", label: "HA-Paket" },
@@ -268,6 +269,7 @@ export function Setup() {
         ]}
       />
       <div className="tab-body">
+        {tab === "wizard" && <Wizard goTo={setTab} />}
         {tab === "mapping" && <MappingTab />}
         {tab === "devices" && <DevicesTab />}
         {tab === "package" && <PackageTab />}

@@ -10,62 +10,70 @@ Sie ist fürs Handy und den Desktop gebaut und zeigt alle Geräte an einem Ort:
 | **Energie** | Enphase-PV mit Tagesertrag und Autarkie, Wallbox mit Lademodus (Aus / Sofort / PV-Überschuss / Min + PV), AC THOR / Warmwasser |
 | **Geräte** | Alle Zigbee- und sonstigen Geräte nach Raum gruppiert: Licht (mit Dimmer), Steckdosen, Rollläden, Sensoren. Namen antippen zum Umbenennen |
 | **Automationen** | Automationen an/aus und manuell auslösen, Skripte starten, alle Stellschrauben (Temperaturen, Zeiten, Ladestrom …) |
-| **Einrichtung** | Automatische Geräteerkennung und Zuordnung, Namens- und Raumvorschläge, fertig ausgefülltes HA-Paket |
+| **Einrichtung** | Assistent mit Ein-Klick-Aktionen, automatische Geräteerkennung und Zuordnung, Namens- und Raumvorschläge, Installation der Automationen |
 
-Die Oberfläche spricht direkt über die WebSocket-API mit Home Assistant. Es gibt
-keinen eigenen Server und keine Cloud. Home Assistant bleibt das Gehirn, Jotunland
+Jotunland läuft als Home-Assistant-Add-on und spricht über die WebSocket-API mit
+Home Assistant. Es gibt keine Cloud. Home Assistant bleibt das Gehirn, Jotunland
 ist das Gesicht.
 
 ```
-frontend/                  React + Vite + TypeScript Oberfläche
-  public/config.json       optionale feste Zuordnung von Geräten (entity_ids)
-homeassistant/
-  packages/jotunland.yaml  Helfer, Automationen, Skripte
-  blueprints/…             Blueprint "Fenster offen → Heizung aus"
-scripts/deploy.sh          baut und kopiert die Oberfläche nach Home Assistant
+repository.yaml                 macht das Repository zur Add-on-Quelle
+jotunland/                      das Add-on
+  config.yaml, Dockerfile       Add-on-Beschreibung und Bauanleitung
+  server/                       kleiner Python-Server (Ingress, Installation)
+  frontend/                     React + Vite + TypeScript Oberfläche
+  homeassistant/packages/       Helfer, Automationen, Skripte
+  homeassistant/blueprints/     Blueprint "Fenster offen → Heizung aus"
+scripts/deploy.sh               Alternative ohne Add-ons (HA Container/Core)
 ```
 
 ---
 
-## 1. Ausprobieren ohne Home Assistant (Demo)
+## Installation (Home Assistant OS) – 3 Klicks
+
+[![Add-on-Repository zu Home Assistant hinzufügen](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fnoledge5%2FJotunland)
+
+1. Auf den Knopf oben klicken (öffnet dein Home Assistant) → **Hinzufügen**.
+   Ohne Knopf: *Einstellungen → Add-ons → Add-on-Store → ⋮ → Repositories* →
+   `https://github.com/noledge5/Jotunland`.
+2. **Jotunland** im Add-on-Store öffnen → **Installieren** → **Starten**.
+3. **Jotunland** in der Seitenleiste öffnen → *Einrichtung → Assistent* und die
+   offenen Punkte antippen. Das Add-on:
+   - meldet sich selbst an (kein Token, kein Passwort),
+   - erkennt Enphase, Wallbox, AC THOR, Fröling und alle Thermostate,
+   - benennt technisch benannte Zigbee-Geräte auf Wunsch um und ordnet Räume zu,
+   - installiert die Automationen: Sicherung → `packages` in der
+     `configuration.yaml` aktivieren → Paket und Blueprint ablegen →
+     Konfiguration prüfen (bei Fehler automatisch zurück) → Neustart,
+   - legt für jeden Raum mit Fensterkontakt „Fenster offen → Heizung aus“ an,
+   - setzt Startwerte (16 A, 3 Phasen, 21/18 °C, 6–22 Uhr, Warmwasser 45 °C).
+
+Jotunland steht danach in der Seitenleiste – und damit auch in der
+Home-Assistant-App auf dem Handy. Von unterwegs geht es überall dort, wo
+Home Assistant erreichbar ist (Home Assistant Cloud / Nabu Casa oder VPN).
+
+> Home Assistant liest Add-ons aus dem Standard-Branch (`main`) des Repositorys.
+
+### Ohne Add-ons (Home Assistant Container/Core)
 
 ```bash
-cd frontend
-npm install
-npm run dev
+HA_HOST=root@homeassistant.local ./scripts/deploy.sh
 ```
 
-Öffne `http://localhost:5173/?demo`. Alles ist simuliert, du kannst aber schon
-alles anklicken.
+Danach `http://homeassistant.local:8123/local/jotunland/index.html` öffnen und
+unter *Einstellungen → Dashboards → Webseite* in die Seitenleiste legen. Das
+Automationen-Paket gibt es dann unter *Einrichtung → HA-Paket* zum Herunterladen
+(schon mit deinen Geräten ausgefüllt).
 
-## 2. In Home Assistant installieren
+### Ausprobieren ohne Home Assistant
 
-1. **Bauen & kopieren.** Mit dem SSH-Add-on geht das automatisch:
-   ```bash
-   HA_HOST=root@homeassistant.local ./scripts/deploy.sh
-   ```
-   Alternativ: `cd frontend && npm run build` und den Inhalt von `frontend/dist/`
-   (z. B. per Samba-Add-on) nach `/config/www/jotunland/` kopieren. Existiert der
-   Ordner `www` noch nicht, Home Assistant danach einmal neu starten.
-2. **Aufrufen:** `http://homeassistant.local:8123/local/jotunland/index.html`.
-   Die Anmeldung läuft über den normalen Home-Assistant-Login, ein Token ist nicht nötig.
-3. **In die Seitenleiste und die HA-App:** *Einstellungen → Dashboards →
-   Dashboard hinzufügen → Webseite*, URL `/local/jotunland/index.html`, Titel
-   „Jotunland“. Damit ist die Oberfläche auch in der Companion-App auf dem Handy.
+```bash
+cd jotunland/frontend && npm install && npm run dev
+```
 
-### Von unterwegs
+`http://localhost:5173/?demo` zeigt ein simuliertes Zuhause.
 
-Jotunland ist unter jeder Adresse erreichbar, unter der auch dein Home Assistant
-erreichbar ist. Mit **Home Assistant Cloud (Nabu Casa)** also z. B.
-`https://<deine-id>.ui.nabu.casa/local/jotunland/index.html`. Alternativ geht
-das über die Companion-App oder einen eigenen Reverse-Proxy bzw. VPN (WireGuard,
-Tailscale). Die Anmeldung ist in jedem Fall der Home-Assistant-Login.
-
-> Dateien unter `/local/` sind ohne Anmeldung abrufbar. Das ist unkritisch, denn
-> dort liegt nur die Oberfläche selbst. Daten und Steuerung gibt es erst nach dem
-> HA-Login. Schreibe deshalb nie ein Token in `config.json`.
-
-## 3. Geräte zuordnen (automatisch)
+## Geräte zuordnen (automatisch)
 
 Unter **Einrichtung → Zuordnung** sucht Jotunland selbst nach deinen Geräten. Für
 jede Funktion (z. B. „PV-Leistung aktuell“ oder „Wallbox Ladestrom“) bewertet es
@@ -93,25 +101,14 @@ oder für alle auf einmal. Das braucht einen Admin-Benutzer.
 Räume für die Heizungsseite entstehen automatisch: Jedes Thermostat wird mit dem
 Fensterkontakt und dem Feuchtesensor aus demselben HA-Bereich kombiniert.
 
-## 4. Automationen installieren
+## Automationen
 
-1. In `configuration.yaml` Pakete aktivieren (falls noch nicht geschehen):
-   ```yaml
-   homeassistant:
-     packages: !include_dir_named packages
-   ```
-2. **Einrichtung → HA-Paket** öffnen. Dort ist `jotunland.yaml` schon mit deinen
-   erkannten entity_ids ausgefüllt. Herunterladen und als
-   `/config/packages/jotunland.yaml` speichern.
-   (Die Vorlage liegt in `homeassistant/packages/jotunland.yaml`. Nicht
-   zugeordnete Stellen heißen `…anpassen_…`.)
-3. *Entwicklerwerkzeuge → YAML → Konfiguration prüfen*, dann neu starten.
-4. Einmalig die Stellschrauben setzen (Seite **Automationen** oder **Energie**):
-   Wallbox max. Strom (z. B. 16 A), Phasen (1 oder 3), Komfort- und
-   Absenktemperatur, Heizzeiten, Warmwasser-Minimum.
-5. Blueprint `homeassistant/blueprints/automation/jotunland/fenster_offen_heizung_aus.yaml`
-   nach `/config/blueprints/automation/jotunland/` kopieren und pro Raum eine
-   Automation daraus anlegen.
+Mit dem Add-on installiert der Assistent alles selbst. Ohne Add-on: `packages`
+in der `configuration.yaml` aktivieren (`homeassistant: packages:
+!include_dir_named packages`), die Datei aus *Einrichtung → HA-Paket* als
+`/config/packages/jotunland.yaml` speichern, den Blueprint aus
+`jotunland/homeassistant/blueprints/` nach `/config/blueprints/automation/jotunland/`
+kopieren und Home Assistant neu starten.
 
 ### Was die Automationen tun
 
@@ -119,10 +116,10 @@ Fensterkontakt und dem Feuchtesensor aus demselben HA-Bereich kombiniert.
 |---|---|
 | **PV-Überschussladen** | Berechnet jede Minute den Überschuss (PV − Verbrauch + aktuelle Ladeleistung) und stellt den Ladestrom passend ein. Pausiert, wenn 5 Minuten lang zu wenig Sonne da ist. Bei *Min + PV* wird immer mindestens mit dem Mindeststrom geladen. |
 | **Modus Sofort / Aus** | *Sofort* lädt mit Maximalstrom und schaltet nach dem Ladeende automatisch zurück auf *PV-Überschuss*. Dazu kommt eine Push-Nachricht mit der geladenen Energie. |
-| **Heizzeiten** | Stellt alle Thermostate zur Heizzeit auf Komfort, sonst auf Absenktemperatur. Bei *Abwesend* bleibt es bei der Absenktemperatur. |
-| **Sommerbetrieb** | Schaltet die Thermostate aus. Warmwasser kommt dann vom AC THOR per PV. |
+| **Heizzeiten** | Stellt alle heizenden Thermostate zur Heizzeit auf Komfort, sonst auf Absenktemperatur. Bei *Abwesend* bleibt es bei der Absenktemperatur. Ausgeschaltete (Fenster offen) bleiben aus. |
+| **Sommerbetrieb** | Schaltet die Heizkörper aus, Warmwasser kommt dann vom AC THOR per PV. Beim Ausschalten wird der vorige Zustand wiederhergestellt. |
 | **Warmwasser-Nachheizung** | Liegt das Warmwasser 30 Minuten unter dem Minimum und scheint kaum Sonne, wird der Pelletkessel angefordert. |
-| **Kessel-Störung / Pelletvorrat** | Push-Nachricht bei einer Störung und bei weniger als 20 % Pellets. |
+| **Kessel-Störung / Pelletvorrat** | Meldung bei einer Störung und bei weniger als 20 % Pellets – in Home Assistant und aufs Handy, sobald die App verbunden ist. |
 | **Fenster offen** (Blueprint) | Schaltet das Thermostat bei offenem Fenster aus und stellt danach Modus und Temperatur wieder her. |
 
 Gerätespezifische Befehle stecken nur in den **Adapter-Skripten**
@@ -143,12 +140,14 @@ nur diese Skripte an.
 ## Entwicklung
 
 ```bash
-cd frontend
+cd jotunland/frontend
 cp .env.example .env.local   # HA-Adresse + langlebiges Token eintragen
 npm run dev                  # http://localhost:5173
 npm run build                # Typprüfung + Produktions-Build nach dist/
 ```
 
-Die Erkennungsregeln stehen in `frontend/src/discovery.ts` (`SLOTS`). Neue
-Geräte kommen dort als weiterer Eintrag hinzu. Karten und Seiten liegen unter
-`frontend/src/components` bzw. `frontend/src/views`.
+Die Erkennungsregeln stehen in `jotunland/frontend/src/discovery.ts` (`SLOTS`).
+Neue Geräte kommen dort als weiterer Eintrag hinzu. Karten und Seiten liegen
+unter `jotunland/frontend/src/components` bzw. `…/views`, der Add-on-Server unter
+`jotunland/server/`. Nach Änderungen am Add-on die `version` in
+`jotunland/config.yaml` erhöhen – Home Assistant bietet dann ein Update an.

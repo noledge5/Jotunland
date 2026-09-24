@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useHass } from "../ha/HassContext";
-import { fmtNum, fmtState, fmtTemp, name, relTime, unavailable } from "../format";
+import { fmtNum, fmtState, fmtTarget, fmtTemp, name, relTime, unavailable } from "../format";
 import { Badge, Chips, Slider, Toggle } from "./ui";
 
 const HVAC_LABEL: Record<string, string> = { heat: "Heizen", auto: "Auto", off: "Aus", cool: "Kühlen", heat_cool: "Auto", dry: "Trocknen", fan_only: "Lüfter" };
@@ -64,7 +64,7 @@ export function Thermostat({ entity, title, windowSensor, humidity }: { entity: 
           </button>
           <div className="thermo-set">
             <small>Soll</small>
-            <strong>{off ? "Aus" : fmtTemp(target)}</strong>
+            <strong>{off ? "Aus" : target === undefined ? fmtTarget(a) : fmtTemp(target)}</strong>
           </div>
           <button type="button" className="round" aria-label="Wärmer" disabled={off || unavailable(entity)} onClick={() => change(step)}>
             <Plus size={18} />

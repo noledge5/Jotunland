@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { callService as haCallService, subscribeEntities, type Connection, type HassEntities, type HassEntity } from "home-assistant-js-websocket";
-import { connect, loadSettings, needsSetup, saveSettings, type ConnSettings } from "./connection";
+import { addonApi, connect, connectAddon, loadSettings, needsSetup, probeAddon, saveSettings, type AddonStatus, type ConnSettings } from "./connection";
 import { startDemo, type DemoHome } from "./demo";
 import type { Area, DeviceInfo, EntityMeta, RegEntity } from "./types";
 import { EMPTY_CONFIG, loadConfig, resolveMapping, resolveRooms, type JotunConfig, type Mapping, type MappingSource, type RoomConfig } from "../config";
@@ -13,6 +13,10 @@ interface HassCtx {
   error?: string;
   settings: ConnSettings;
   isDemo: boolean;
+  /** null = kein Add-on, undefined = wird noch geprüft */
+  addon: AddonStatus | null | undefined;
+  refreshAddon: () => Promise<void>;
+  addonApi: typeof addonApi;
   entities: HassEntities;
   areas: Area[];
   devices: Record<string, DeviceInfo>;
@@ -49,7 +53,8 @@ function localMapping(): Mapping {
 
 export function HassProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<ConnSettings>(loadSettings);
-  const [status, setStatus] = useState<Status>(needsSetup(settings) ? "setup" : "connecting");
+  const [status, setStatus] = useState<Status>("connecting");
+  const [addon, setAddon] = useState<AddonStatus | null | undefined>(undefined);
   const [error, setError] = useState<string>();
   const [entities, setEntities] = useState<HassEntities>({});
   const [areas, setAreas] = useState<Area[]>([]);
@@ -63,6 +68,12 @@ export function HassProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     loadConfig().then(setConfig);
+    probeAddon().then(setAddon);
+  }, []);
+
+  const refreshAddon = useCallback(async () => {
+    const s = await probeAddon();
+    if (s) setAddon(s);
   }, []);
 
   const ws = useCallback(<T,>(msg: Record<string, unknown>): Promise<T> => {
@@ -98,8 +109,12 @@ export function HassProvider({ children }: { children: ReactNode }) {
     }
   }, [ws]);
 
+  const addonKnown = addon !== undefined;
+  const isAddon = !!addon;
+
   useEffect(() => {
-    if (needsSetup(settings)) {
+    if (!addonKnown && settings.mode !== "demo") return; // Add-on-Prüfung abwarten
+    if (!isAddon && needsSetup(settings)) {
       setStatus("setup");
       return;
     }
@@ -119,7 +134,7 @@ export function HassProvider({ children }: { children: ReactNode }) {
       };
     }
 
-    connect(settings)
+    (isAddon ? connectAddon() : connect(settings))
       .then((c) => {
         if (cancelled) return c.close();
         conn.current = c;
@@ -143,7 +158,7 @@ export function HassProvider({ children }: { children: ReactNode }) {
       conn.current?.close();
       conn.current = null;
     };
-  }, [settings, refreshRegistry, loadOverrides]);
+  }, [settings, addonKnown, isAddon, refreshRegistry, loadOverrides]);
 
   const callService = useCallback(async (domain: string, service: string, data?: Record<string, unknown>) => {
     if (demo.current) return demo.current.call(domain, service, data);
@@ -203,6 +218,9 @@ export function HassProvider({ children }: { children: ReactNode }) {
     error,
     settings,
     isDemo: settings.mode === "demo",
+    addon,
+    refreshAddon,
+    addonApi,
     entities,
     areas,
     devices,

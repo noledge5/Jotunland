@@ -1,3 +1,4 @@
+# jotunland-package-version: 3
 # =============================================================================
 #  Jotunland – Home-Assistant-Paket
 #  Helfer, Automationen und Skripte für PV-Überschussladen, Heizzeiten,
@@ -209,12 +210,60 @@ script:
       #  - select.froeling_boiler_betriebsart → "Einmal laden"
       #  - switch.froeling_ww_nachladen      → turn_on
       # Solange hier nichts eingetragen ist, gibt es nur eine Nachricht.
-      - action: persistent_notification.create
+      - action: script.jotunland_melden
         data:
-          title: Warmwasser
-          message: >
+          titel: Warmwasser
+          nachricht: >
             Warmwasser nur {{ states('sensor.anpassen_warmwasser_temperatur') }} °C und kaum PV –
             bitte Pelletkessel nachheizen lassen.
+
+  jotunland_thermostate:
+    alias: "Jotunland: Thermostate stellen"
+    icon: mdi:thermostat
+    mode: queued
+    fields:
+      temperatur:
+        description: Solltemperatur in °C
+        example: 21
+    sequence:
+      # Nur Thermostate im Heiz-/Automatikbetrieb – ausgeschaltete (Fenster offen,
+      # Sommer) und Klimageräte im Kühlbetrieb bleiben unberührt. Einzeln und
+      # fehlertolerant: ein Gerät, das den Befehl ablehnt, hält die anderen nicht auf.
+      - repeat:
+          for_each: >
+            {{ states.climate | selectattr('state', 'in', ['heat', 'auto'])
+               | map(attribute='entity_id') | list }}
+          sequence:
+            - action: climate.set_temperature
+              continue_on_error: true
+              target:
+                entity_id: "{{ repeat.item }}"
+              data:
+                temperature: "{{ temperatur | float }}"
+
+  jotunland_melden:
+    alias: "Jotunland: Meldung senden"
+    icon: mdi:bell
+    mode: queued
+    fields:
+      titel:
+        example: Pelletkessel
+      nachricht:
+        example: Störung
+    sequence:
+      # immer in Home Assistant sichtbar …
+      - action: persistent_notification.create
+        data:
+          title: "{{ titel }}"
+          message: "{{ nachricht }}"
+      # … und aufs Handy, sobald die Home-Assistant-App verbunden ist
+      - if: "{{ integration_entities('mobile_app') | count > 0 }}"
+        then:
+          - action: notify.notify
+            continue_on_error: true
+            data:
+              title: "{{ titel }}"
+              message: "{{ nachricht }}"
 
   # ---------------------------------------------------- Schnellaktionen ----
   jotunland_alles_aus:
@@ -233,15 +282,13 @@ script:
     icon: mdi:fire-alert
     mode: restart
     sequence:
-      - action: climate.set_temperature
-        target:
-          entity_id: all
+      - action: script.jotunland_thermostate
         data:
-          temperature: "{{ states('input_number.jotunland_komfort_temperatur') | float(21) + 2 }}"
+          temperatur: "{{ states('input_number.jotunland_komfort_temperatur') | float(21) + 2 }}"
       - delay: "01:00:00"
       - action: automation.trigger
         target:
-          entity_id: automation.jotunland_heizzeiten
+          entity_id: "{{ states.automation | selectattr('attributes.id', 'eq', 'jotunland_heizzeiten') | map(attribute='entity_id') | list }}"
 
   jotunland_auto_sofort_laden:
     alias: Auto sofort laden
@@ -337,10 +384,10 @@ automation:
         entity_id: input_select.jotunland_wallbox_modus
         state: Sofort
     actions:
-      - action: notify.notify
+      - action: script.jotunland_melden
         data:
-          title: Auto geladen
-          message: "Geladen: {{ states('sensor.anpassen_wallbox_geladen') }} kWh"
+          titel: Auto geladen
+          nachricht: "Geladen: {{ states('sensor.anpassen_wallbox_geladen') }} kWh"
       # Nach "Sofort" zurück auf PV-Überschuss, damit der nächste Ladevorgang wieder sparsam ist
       - action: input_select.select_option
         target:
@@ -354,8 +401,7 @@ automation:
     description: >
       Setzt alle Thermostate zu Beginn der Heizzeit auf Komfort und am Ende
       auf Absenktemperatur. Reagiert auch auf Änderungen der Temperaturen.
-      Nur bestimmte Thermostate? "entity_id: all" durch ein Label ersetzen,
-      z. B. "label_id: heizung".
+      Ausgeschaltete Thermostate (Fenster offen, Sommer) bleiben aus.
     mode: restart
     triggers:
       - trigger: time
@@ -366,6 +412,8 @@ automation:
         entity_id:
           - input_number.jotunland_komfort_temperatur
           - input_number.jotunland_eco_temperatur
+          - input_datetime.jotunland_heizen_start
+          - input_datetime.jotunland_heizen_ende
       - trigger: state
         entity_id: input_boolean.jotunland_abwesend
       - trigger: homeassistant
@@ -382,11 +430,9 @@ automation:
             {{ today_at(states('input_datetime.jotunland_heizen_start')) <= now()
                < today_at(states('input_datetime.jotunland_heizen_ende'))
                and is_state('input_boolean.jotunland_abwesend', 'off') }}
-      - action: climate.set_temperature
-        target:
-          entity_id: all
+      - action: script.jotunland_thermostate
         data:
-          temperature: >
+          temperatur: >
             {{ states('input_number.jotunland_komfort_temperatur' if komfort
                       else 'input_number.jotunland_eco_temperatur') | float }}
 
@@ -397,22 +443,49 @@ automation:
       - trigger: state
         entity_id: input_boolean.jotunland_sommerbetrieb
     actions:
+      - variables:
+          heizend: "{{ states.climate | selectattr('state', 'in', ['heat', 'auto']) | map(attribute='entity_id') | list }}"
       - if: "{{ trigger.to_state.state == 'on' }}"
         then:
-          - action: climate.set_hvac_mode
-            target:
-              entity_id: all
-            data:
-              hvac_mode: "off"
+          # Zustand merken, damit im Herbst alles wieder so wird wie vorher
+          - if: "{{ heizend | count > 0 }}"
+            then:
+              - action: scene.create
+                data:
+                  scene_id: jotunland_vor_sommer
+                  snapshot_entities: "{{ heizend }}"
+          - repeat:
+              for_each: "{{ heizend }}"
+              sequence:
+                - action: climate.set_hvac_mode
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ repeat.item }}"
+                  data:
+                    hvac_mode: "off"
         else:
-          - action: climate.set_hvac_mode
-            target:
-              entity_id: all
-            data:
-              hvac_mode: heat
+          - if: "{{ expand('scene.jotunland_vor_sommer') | count > 0 }}"
+            then:
+              - action: scene.turn_on
+                target:
+                  entity_id: scene.jotunland_vor_sommer
+            else:
+              # Schnappschuss ging durch einen Neustart verloren → alle Heizkörper wieder an
+              - repeat:
+                  for_each: >
+                    {{ states.climate | selectattr('state', 'eq', 'off')
+                       | selectattr('attributes.hvac_modes', 'contains', 'heat')
+                       | map(attribute='entity_id') | list }}
+                  sequence:
+                    - action: climate.set_hvac_mode
+                      continue_on_error: true
+                      target:
+                        entity_id: "{{ repeat.item }}"
+                      data:
+                        hvac_mode: heat
           - action: automation.trigger
             target:
-              entity_id: automation.jotunland_heizzeiten
+              entity_id: "{{ states.automation | selectattr('attributes.id', 'eq', 'jotunland_heizzeiten') | map(attribute='entity_id') | list }}"
 
   # ----------------------------------------------- Warmwasser / Pelletkessel
   - id: jotunland_warmwasser_nachheizen
@@ -441,14 +514,10 @@ automation:
         to: "on"
         for: "00:02:00"
     actions:
-      - action: notify.notify
+      - action: script.jotunland_melden
         data:
-          title: "⚠️ Pelletkessel"
-          message: Der Fröling-Kessel meldet eine Störung.
-      - action: persistent_notification.create
-        data:
-          title: Pelletkessel
-          message: "Störung seit {{ now().strftime('%H:%M') }} Uhr"
+          titel: "⚠️ Pelletkessel"
+          nachricht: "Der Fröling-Kessel meldet seit {{ now().strftime('%H:%M') }} Uhr eine Störung."
 
   - id: jotunland_pelletvorrat_niedrig
     alias: "Pelletkessel: Vorrat niedrig"
@@ -457,7 +526,7 @@ automation:
         entity_id: sensor.anpassen_pelletvorrat
         below: 20
     actions:
-      - action: notify.notify
+      - action: script.jotunland_melden
         data:
-          title: Pellets bestellen
-          message: "Pelletvorrat bei {{ states('sensor.anpassen_pelletvorrat') }} %."
+          titel: Pellets bestellen
+          nachricht: "Pelletvorrat bei {{ states('sensor.anpassen_pelletvorrat') }} %."

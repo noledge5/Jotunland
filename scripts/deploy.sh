@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
+# Nur für Home Assistant OHNE Add-ons (Container/Core). Mit HA OS lieber das Add-on nehmen.
 # Baut das Frontend und kopiert es nach Home Assistant (/config/www/jotunland).
-# Voraussetzung: Add-on "Advanced SSH & Web Terminal" (oder "Terminal & SSH") mit SSH-Zugang.
+# Voraussetzung: SSH-Zugang zum Rechner, auf dem Home Assistant läuft.
 #
 #   HA_HOST=root@homeassistant.local ./scripts/deploy.sh
 #
@@ -12,7 +13,7 @@ HA_PORT="${HA_PORT:-22}"
 TARGET="${HA_TARGET:-/config/www/jotunland}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-cd "$ROOT/frontend"
+cd "$ROOT/jotunland/frontend"
 [ -d node_modules ] || npm ci
 npm run build
 

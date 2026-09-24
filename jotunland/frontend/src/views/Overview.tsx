@@ -1,9 +1,10 @@
-import { Home, Plane, Thermometer, Zap } from "lucide-react";
+import { ChevronRight, Home, Plane, Sparkles, Thermometer, Zap } from "lucide-react";
+import { INTERNAL_SCRIPT, useSetupState } from "../setup";
 import { useHass } from "../ha/HassContext";
 import { Card, Empty, Toggle } from "../components/ui";
 import { EnergyFlow } from "../components/EnergyFlow";
 import { AcThorCard, PelletCard, WallboxCard } from "../components/systems";
-import { fmtNum, name } from "../format";
+import { fmtNum, fmtTarget, name } from "../format";
 
 function greeting() {
   const h = new Date().getHours();
@@ -13,7 +14,8 @@ function greeting() {
 export function Overview() {
   const { entities, rooms, callService, config } = useHass();
   const away = entities["input_boolean.jotunland_abwesend"];
-  const scripts = Object.values(entities).filter((e) => e.entity_id.startsWith("script.jotunland_"));
+  const setup = useSetupState();
+  const scripts = Object.values(entities).filter((e) => e.entity_id.startsWith("script.jotunland_") && !INTERNAL_SCRIPT.test(e.entity_id));
 
   return (
     <div className="view">
@@ -29,6 +31,16 @@ export function Overview() {
           </label>
         )}
       </header>
+
+      {setup.open > 0 && (
+        <a className="setup-banner" href="#/einrichtung">
+          <Sparkles size={18} />
+          <span>
+            <strong>Einrichtung abschließen</strong> – noch {setup.open} {setup.open === 1 ? "Schritt" : "Schritte"}, jeweils mit einem Klick erledigt.
+          </span>
+          <ChevronRight size={18} />
+        </a>
+      )}
 
       <div className="grid">
         <Card title="Energie jetzt" icon={Zap} className="span-2">
@@ -48,7 +60,7 @@ export function Overview() {
                   <li key={r.climate} className={c.attributes.hvac_action === "heating" ? "heating" : ""}>
                     <span>{r.name}{w?.state === "on" && <em> · Fenster offen</em>}</span>
                     <strong>{fmtNum(c.attributes.current_temperature == null ? undefined : Number(c.attributes.current_temperature), 1)}°</strong>
-                    <small>{c.state === "off" ? "aus" : `→ ${fmtNum(Number(c.attributes.temperature), 1)}°`}</small>
+                    <small>{c.state === "off" ? "aus" : `→ ${fmtTarget(c.attributes)}`}</small>
                   </li>
                 );
               })}
@@ -72,13 +84,6 @@ export function Overview() {
           </Card>
         )}
 
-        {entities["input_select.jotunland_wallbox_modus"] === undefined && entities["input_boolean.jotunland_abwesend"] === undefined && (
-          <Card title="Automationen einrichten" className="span-2">
-            <Empty>
-              Die Jotunland-Helfer (Abwesend, Lademodus, Heizzeiten …) fehlen noch in Home Assistant. Kopiere <code>homeassistant/packages/jotunland.yaml</code> nach <code>/config/packages/</code> – siehe README.
-            </Empty>
-          </Card>
-        )}
       </div>
     </div>
   );

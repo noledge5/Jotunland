@@ -110,3 +110,43 @@ export async function connect(s: ConnSettings): Promise<Connection> {
   }
   return createConnection({ auth });
 }
+
+/* ------------------------------------------------------------ Add-on ---- */
+
+export interface AddonStatus {
+  addon: true;
+  package: { installed: boolean; version: number | null; path: string | null };
+  blueprint: boolean;
+  setup: { automatic: boolean; note: string };
+  pending_defaults: boolean;
+  last_install?: number;
+}
+
+/** Läuft Jotunland als Home-Assistant-Add-on? Dann gibt es ./jotunland/status. */
+export async function probeAddon(): Promise<AddonStatus | null> {
+  try {
+    const res = await fetch("./jotunland/status", { cache: "no-store", signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.addon ? (data as AddonStatus) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function addonApi<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`./jotunland/${path}`, {
+    method: body === undefined ? "GET" : "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data?.error ?? `Fehler ${res.status}`), { data });
+  return data as T;
+}
+
+/** Im Add-on meldet der Server sich bei HA an – die Oberfläche braucht kein Token. */
+export function connectAddon(): Promise<Connection> {
+  const base = new URL(".", window.location.href).href.replace(/\/$/, "");
+  return createConnection({ auth: createLongLivedTokenAuth(base, "addon") });
+}
