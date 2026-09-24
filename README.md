@@ -31,11 +31,11 @@ scripts/deploy.sh               Alternative ohne Add-ons (HA Container/Core)
 
 ## Installation (Home Assistant OS) – 3 Klicks
 
-[![Add-on-Repository zu Home Assistant hinzufügen](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fnoledge5%2FJotunland)
+[![Add-on-Repository zu Home Assistant hinzufügen](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fnoledge5%2Fjotunland-smarthome)
 
 1. Auf den Knopf oben klicken (öffnet dein Home Assistant) → **Hinzufügen**.
    Ohne Knopf: *Einstellungen → Add-ons → Add-on-Store → ⋮ → Repositories* →
-   `https://github.com/noledge5/Jotunland`.
+   `https://github.com/noledge5/jotunland-smarthome`.
 2. **Jotunland** im Add-on-Store öffnen → **Installieren** → **Starten**.
 3. **Jotunland** in der Seitenleiste öffnen → *Einrichtung → Assistent* und die
    offenen Punkte antippen. Das Add-on:
@@ -52,7 +52,7 @@ Jotunland steht danach in der Seitenleiste – und damit auch in der
 Home-Assistant-App auf dem Handy. Von unterwegs geht es überall dort, wo
 Home Assistant erreichbar ist (Home Assistant Cloud / Nabu Casa oder VPN).
 
-> Home Assistant liest Add-ons aus dem Standard-Branch (`main`) des Repositorys.
+> Home Assistant liest Add-ons aus dem Standard-Branch (`main`) dieses Repositorys.
 
 ### Ohne Add-ons (Home Assistant Container/Core)
 
@@ -147,8 +147,8 @@ Regeln; zum Beispiel wird nichts an echten Geräten geschaltet, ohne dich zu fra
 **Einmalig einrichten** (Node.js ab Version 22 und Git müssen installiert sein):
 
 ```bash
-git clone https://github.com/noledge5/Jotunland.git
-cd Jotunland
+git clone https://github.com/noledge5/jotunland-smarthome.git
+cd jotunland-smarthome
 cd tools && npm install && cd ..
 cp .env.example .env.local        # Windows: copy .env.example .env.local
 ```
@@ -162,7 +162,7 @@ In `.env.local` eintragen:
   `HA_SSH=root@homeassistant.local`.
 - Die Geräte-IPs findet `node tools/geraete.mjs suchen` selbst.
 
-Danach im Ordner `Jotunland` Claude Code starten (Desktop-App oder `claude` im
+Danach im Ordner `jotunland-smarthome` Claude Code starten (Desktop-App oder `claude` im
 Terminal) und loslegen, z. B.: *„Such meine Geräte, zeig mir die echten Werte der
 Wallbox und bau das PV-Überschussladen so, dass es bei Wolken nicht ständig
 schaltet.“*
