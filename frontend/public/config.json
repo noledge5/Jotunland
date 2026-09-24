@@ -1,0 +1,38 @@
+{
+  "title": "Jotunland",
+  "_hinweis": "Leere Werte (null) werden automatisch erkannt. Trage hier die echten entity_ids ein, wenn die Erkennung daneben liegt. Einstellungen → Zuordnung zeigt, was gerade verwendet wird.",
+
+  "energy": {
+    "pv_power": null,
+    "pv_today": null,
+    "consumption": null,
+    "grid": null
+  },
+
+  "wallbox": {
+    "status": null,
+    "power": null,
+    "session_energy": null,
+    "charging_switch": null,
+    "current": null,
+    "mode": "input_select.jotunland_wallbox_modus"
+  },
+
+  "acthor": {
+    "power": null,
+    "temperature": null,
+    "target": null
+  },
+
+  "pellet": {
+    "state": null,
+    "boiler_temp": null,
+    "buffer_top": null,
+    "buffer_bottom": null,
+    "outside_temp": null,
+    "pellet_stock": null,
+    "error": null
+  },
+
+  "rooms": []
+}

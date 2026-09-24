@@ -1,0 +1,463 @@
+# =============================================================================
+#  Jotunland – Home-Assistant-Paket
+#  Helfer, Automationen und Skripte für PV-Überschussladen, Heizzeiten,
+#  Abwesenheit, Warmwasser und Kesselüberwachung.
+#
+#  Einrichtung:
+#   1. In configuration.yaml:      homeassistant:
+#                                    packages: !include_dir_named packages
+#   2. Diese Datei nach /config/packages/jotunland.yaml kopieren.
+#   3. Platzhalter "…anpassen_…" durch deine entity_ids ersetzen.
+#      Am einfachsten: Jotunland-Oberfläche → Einrichtung → HA-Paket.
+#      Dort ist die Datei schon mit den erkannten Geräten ausgefüllt.
+#   4. Entwicklerwerkzeuge → YAML → Konfiguration prüfen → Neu starten.
+#
+#  Platzhalter                              | Gerät
+#  -----------------------------------------|---------------------------------
+#  sensor.anpassen_pv_leistung              | Enphase: aktuelle Produktion (W)
+#  sensor.anpassen_hausverbrauch            | Enphase: aktueller Verbrauch (W)
+#  sensor.anpassen_wallbox_leistung         | Wallbox: Ladeleistung (W)
+#  sensor.anpassen_wallbox_geladen          | Wallbox: geladene Energie (kWh)
+#  switch.anpassen_wallbox_laden            | Wallbox: Laden an/aus
+#  number.anpassen_wallbox_ladestrom        | Wallbox: Ladestrom (A)
+#  sensor.anpassen_warmwasser_temperatur    | AC THOR: Speichertemperatur
+#  binary_sensor.anpassen_kessel_stoerung   | Fröling: Störung
+#  sensor.anpassen_pelletvorrat             | Fröling: Pelletvorrat (%)
+# =============================================================================
+
+# ----------------------------------------------------------------- Helfer ----
+# Die "Stellschrauben": alle in der Jotunland-Oberfläche bedienbar.
+
+input_boolean:
+  jotunland_abwesend:
+    name: Abwesend
+    icon: mdi:airplane
+  jotunland_sommerbetrieb:
+    name: Sommerbetrieb (Pellets aus)
+    icon: mdi:weather-sunny
+
+input_select:
+  jotunland_wallbox_modus:
+    name: Wallbox Lademodus
+    icon: mdi:ev-station
+    options:
+      - Aus
+      - Sofort
+      - PV-Überschuss
+      - Min + PV
+
+input_number:
+  jotunland_wallbox_min_ampere:
+    name: Wallbox min. Strom
+    min: 6
+    max: 16
+    step: 1
+    unit_of_measurement: A
+    icon: mdi:current-ac
+  jotunland_wallbox_max_ampere:
+    name: Wallbox max. Strom
+    min: 6
+    max: 32
+    step: 1
+    unit_of_measurement: A
+    icon: mdi:current-ac
+  jotunland_wallbox_phasen:
+    name: Wallbox Phasen
+    min: 1
+    max: 3
+    step: 1
+    mode: box
+  jotunland_komfort_temperatur:
+    name: Komforttemperatur
+    min: 16
+    max: 25
+    step: 0.5
+    unit_of_measurement: "°C"
+    icon: mdi:sofa
+  jotunland_eco_temperatur:
+    name: Absenktemperatur
+    min: 12
+    max: 21
+    step: 0.5
+    unit_of_measurement: "°C"
+    icon: mdi:weather-night
+  jotunland_warmwasser_minimum:
+    name: Warmwasser Minimum
+    min: 35
+    max: 60
+    step: 1
+    unit_of_measurement: "°C"
+    icon: mdi:water-thermometer
+
+input_datetime:
+  jotunland_heizen_start:
+    name: Heizen ab
+    has_date: false
+    has_time: true
+  jotunland_heizen_ende:
+    name: Absenken ab
+    has_date: false
+    has_time: true
+
+# ------------------------------------------------------------- Messwerte ----
+
+template:
+  - sensor:
+      # Überschuss inkl. dem, was die Wallbox gerade schon lädt – sonst würde
+      # sie sich beim Laden selbst den Überschuss "wegnehmen".
+      - name: Jotunland PV Ueberschuss
+        unique_id: jotunland_pv_ueberschuss
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        availability: "{{ has_value('sensor.anpassen_pv_leistung') and has_value('sensor.anpassen_hausverbrauch') }}"
+        state: >
+          {% macro w(id) -%}
+            {%- set v = states(id) | float(0) -%}
+            {{- v * 1000 if state_attr(id, 'unit_of_measurement') == 'kW' else v -}}
+          {%- endmacro %}
+          {{ (w('sensor.anpassen_pv_leistung') | float
+              - w('sensor.anpassen_hausverbrauch') | float
+              + w('sensor.anpassen_wallbox_leistung') | float) | round(0) }}
+
+      - name: Jotunland Wallbox Wunschstrom
+        unique_id: jotunland_wallbox_wunschstrom
+        unit_of_measurement: A
+        state: >
+          {% set ueberschuss = states('sensor.jotunland_pv_ueberschuss') | float(0) %}
+          {% set phasen = states('input_number.jotunland_wallbox_phasen') | float(3) %}
+          {% set maximal = states('input_number.jotunland_wallbox_max_ampere') | float(16) %}
+          {{ [ (ueberschuss / (230 * phasen)) | round(0, 'floor'), maximal ] | min | int }}
+
+  - binary_sensor:
+      - name: Jotunland Heizzeit
+        unique_id: jotunland_heizzeit
+        state: >
+          {{ today_at(states('input_datetime.jotunland_heizen_start')) <= now()
+             < today_at(states('input_datetime.jotunland_heizen_ende')) }}
+
+# ------------------------------------------------------ Adapter-Skripte ----
+# Die einzigen Stellen, die Geräte direkt ansprechen. Hat deine Wallbox eine
+# andere Integration, nur hier anpassen – die Automationen bleiben gleich.
+
+script:
+  jotunland_wallbox_start:
+    alias: "Wallbox: Laden freigeben"
+    icon: mdi:play
+    mode: queued
+    sequence:
+      - variables:
+          geraet: switch.anpassen_wallbox_laden
+      - if: "{{ geraet.startswith('select.') }}"
+        then:
+          # go-e (APIv2) hat statt eines Schalters ein Auswahlfeld "Ladefreigabe/frc".
+          # Option ggf. an den Wortlaut deiner Integration anpassen.
+          - action: select.select_option
+            target:
+              entity_id: "{{ geraet }}"
+            data:
+              option: "{{ state_attr(geraet, 'options') | select('search', '(?i)^(on|an|charge|laden)') | first | default('On') }}"
+        else:
+          - action: switch.turn_on
+            target:
+              entity_id: "{{ geraet }}"
+
+  jotunland_wallbox_stop:
+    alias: "Wallbox: Laden pausieren"
+    icon: mdi:pause
+    mode: queued
+    sequence:
+      - variables:
+          geraet: switch.anpassen_wallbox_laden
+      - if: "{{ geraet.startswith('select.') }}"
+        then:
+          - action: select.select_option
+            target:
+              entity_id: "{{ geraet }}"
+            data:
+              option: "{{ state_attr(geraet, 'options') | select('search', '(?i)^(off|aus|don)') | first | default('Off') }}"
+        else:
+          - action: switch.turn_off
+            target:
+              entity_id: "{{ geraet }}"
+
+  jotunland_wallbox_strom:
+    alias: "Wallbox: Ladestrom setzen"
+    icon: mdi:current-ac
+    mode: restart
+    fields:
+      ampere:
+        description: Ladestrom in Ampere
+        example: 10
+    sequence:
+      - variables:
+          geraet: number.anpassen_wallbox_ladestrom
+      # Nur senden, wenn sich etwas ändert – schont die Wallbox
+      - condition: template
+        value_template: "{{ states(geraet) | int(0) != ampere | int }}"
+      - action: "{{ geraet.split('.')[0] }}.set_value"
+        target:
+          entity_id: "{{ geraet }}"
+        data:
+          value: "{{ ampere | int }}"
+
+  jotunland_pellet_anfordern:
+    alias: "Pelletkessel: Warmwasser anfordern"
+    icon: mdi:fire
+    sequence:
+      # Hängt von deiner Fröling-Anbindung ab. Mögliche Varianten:
+      #  - select.froeling_boiler_betriebsart → "Einmal laden"
+      #  - switch.froeling_ww_nachladen      → turn_on
+      # Solange hier nichts eingetragen ist, gibt es nur eine Nachricht.
+      - action: persistent_notification.create
+        data:
+          title: Warmwasser
+          message: >
+            Warmwasser nur {{ states('sensor.anpassen_warmwasser_temperatur') }} °C und kaum PV –
+            bitte Pelletkessel nachheizen lassen.
+
+  # ---------------------------------------------------- Schnellaktionen ----
+  jotunland_alles_aus:
+    alias: Alles aus (Verlassen)
+    icon: mdi:home-export-outline
+    sequence:
+      - action: light.turn_off
+        target:
+          entity_id: all
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.jotunland_abwesend
+
+  jotunland_heizung_boost:
+    alias: Heizung Boost 1 h
+    icon: mdi:fire-alert
+    mode: restart
+    sequence:
+      - action: climate.set_temperature
+        target:
+          entity_id: all
+        data:
+          temperature: "{{ states('input_number.jotunland_komfort_temperatur') | float(21) + 2 }}"
+      - delay: "01:00:00"
+      - action: automation.trigger
+        target:
+          entity_id: automation.jotunland_heizzeiten
+
+  jotunland_auto_sofort_laden:
+    alias: Auto sofort laden
+    icon: mdi:car-electric
+    sequence:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.jotunland_wallbox_modus
+        data:
+          option: Sofort
+
+# ----------------------------------------------------------- Automationen ----
+
+automation:
+  # ---------------------------------------------------------------- Wallbox
+  - id: jotunland_wallbox_pv_ueberschuss
+    alias: "Wallbox: PV-Überschussladen"
+    description: >
+      Passt jede Minute den Ladestrom an den PV-Überschuss an. Bei "Min + PV"
+      wird mindestens mit dem Mindeststrom geladen, auch ohne Sonne.
+    mode: single
+    triggers:
+      - trigger: time_pattern
+        minutes: /1
+      - trigger: state
+        entity_id: input_select.jotunland_wallbox_modus
+        to: [PV-Überschuss, Min + PV]
+    conditions:
+      - condition: state
+        entity_id: input_select.jotunland_wallbox_modus
+        state: [PV-Überschuss, Min + PV]
+    actions:
+      - variables:
+          minimum: "{{ states('input_number.jotunland_wallbox_min_ampere') | int(6) }}"
+          wunsch: "{{ states('sensor.jotunland_wallbox_wunschstrom') | int(0) }}"
+          modus: "{{ states('input_select.jotunland_wallbox_modus') }}"
+      - choose:
+          - conditions: "{{ wunsch >= minimum }}"
+            sequence:
+              - action: script.jotunland_wallbox_strom
+                data:
+                  ampere: "{{ wunsch }}"
+              - action: script.jotunland_wallbox_start
+          - conditions: "{{ modus == 'Min + PV' }}"
+            sequence:
+              - action: script.jotunland_wallbox_strom
+                data:
+                  ampere: "{{ minimum }}"
+              - action: script.jotunland_wallbox_start
+        # zu wenig Überschuss im reinen PV-Modus → Pause regelt die nächste Automation
+
+  - id: jotunland_wallbox_pv_pause
+    alias: "Wallbox: Pause bei zu wenig Sonne"
+    description: Pausiert, wenn der Überschuss 5 Minuten lang nicht für den Mindeststrom reicht.
+    triggers:
+      - trigger: template
+        value_template: >
+          {{ states('sensor.jotunland_wallbox_wunschstrom') | int(0)
+             < states('input_number.jotunland_wallbox_min_ampere') | int(6) }}
+        for: "00:05:00"
+    conditions:
+      - condition: state
+        entity_id: input_select.jotunland_wallbox_modus
+        state: PV-Überschuss
+    actions:
+      - action: script.jotunland_wallbox_stop
+
+  - id: jotunland_wallbox_modus
+    alias: "Wallbox: Modus Sofort / Aus"
+    triggers:
+      - trigger: state
+        entity_id: input_select.jotunland_wallbox_modus
+        to: [Sofort, Aus]
+    actions:
+      - if: "{{ trigger.to_state.state == 'Sofort' }}"
+        then:
+          - action: script.jotunland_wallbox_strom
+            data:
+              ampere: "{{ states('input_number.jotunland_wallbox_max_ampere') | int(16) }}"
+          - action: script.jotunland_wallbox_start
+        else:
+          - action: script.jotunland_wallbox_stop
+
+  - id: jotunland_wallbox_fertig
+    alias: "Wallbox: Ladevorgang beendet"
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.anpassen_wallbox_leistung
+        below: 100
+        for: "00:03:00"
+    conditions:
+      - condition: state
+        entity_id: input_select.jotunland_wallbox_modus
+        state: Sofort
+    actions:
+      - action: notify.notify
+        data:
+          title: Auto geladen
+          message: "Geladen: {{ states('sensor.anpassen_wallbox_geladen') }} kWh"
+      # Nach "Sofort" zurück auf PV-Überschuss, damit der nächste Ladevorgang wieder sparsam ist
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.jotunland_wallbox_modus
+        data:
+          option: PV-Überschuss
+
+  # ---------------------------------------------------------------- Heizung
+  - id: jotunland_heizzeiten
+    alias: "Heizung: Heizzeiten"
+    description: >
+      Setzt alle Thermostate zu Beginn der Heizzeit auf Komfort und am Ende
+      auf Absenktemperatur. Reagiert auch auf Änderungen der Temperaturen.
+      Nur bestimmte Thermostate? "entity_id: all" durch ein Label ersetzen,
+      z. B. "label_id: heizung".
+    mode: restart
+    triggers:
+      - trigger: time
+        at: input_datetime.jotunland_heizen_start
+      - trigger: time
+        at: input_datetime.jotunland_heizen_ende
+      - trigger: state
+        entity_id:
+          - input_number.jotunland_komfort_temperatur
+          - input_number.jotunland_eco_temperatur
+      - trigger: state
+        entity_id: input_boolean.jotunland_abwesend
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.jotunland_sommerbetrieb
+        state: "off"
+    actions:
+      - variables:
+          # direkt berechnet statt über binary_sensor.jotunland_heizzeit,
+          # damit es auch in genau der Sekunde des Zeit-Triggers stimmt
+          komfort: >
+            {{ today_at(states('input_datetime.jotunland_heizen_start')) <= now()
+               < today_at(states('input_datetime.jotunland_heizen_ende'))
+               and is_state('input_boolean.jotunland_abwesend', 'off') }}
+      - action: climate.set_temperature
+        target:
+          entity_id: all
+        data:
+          temperature: >
+            {{ states('input_number.jotunland_komfort_temperatur' if komfort
+                      else 'input_number.jotunland_eco_temperatur') | float }}
+
+  - id: jotunland_sommerbetrieb
+    alias: "Heizung: Sommerbetrieb"
+    description: Im Sommer Thermostate aus – Warmwasser macht der AC THOR mit PV.
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.jotunland_sommerbetrieb
+    actions:
+      - if: "{{ trigger.to_state.state == 'on' }}"
+        then:
+          - action: climate.set_hvac_mode
+            target:
+              entity_id: all
+            data:
+              hvac_mode: "off"
+        else:
+          - action: climate.set_hvac_mode
+            target:
+              entity_id: all
+            data:
+              hvac_mode: heat
+          - action: automation.trigger
+            target:
+              entity_id: automation.jotunland_heizzeiten
+
+  # ----------------------------------------------- Warmwasser / Pelletkessel
+  - id: jotunland_warmwasser_nachheizen
+    alias: "Warmwasser: Pellet-Nachheizung"
+    description: >
+      Ist das Warmwasser 30 Minuten unter dem Minimum und die Sonne reicht
+      nicht, wird der Pelletkessel angefordert (Skript jotunland_pellet_anfordern).
+    triggers:
+      - trigger: template
+        value_template: >
+          {{ states('sensor.anpassen_warmwasser_temperatur') | float(99)
+             < states('input_number.jotunland_warmwasser_minimum') | float(45) }}
+        for: "00:30:00"
+    conditions:
+      - condition: numeric_state
+        entity_id: sensor.jotunland_pv_ueberschuss
+        below: 1500
+    actions:
+      - action: script.jotunland_pellet_anfordern
+
+  - id: jotunland_pellet_stoerung
+    alias: "Pelletkessel: Störung melden"
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.anpassen_kessel_stoerung
+        to: "on"
+        for: "00:02:00"
+    actions:
+      - action: notify.notify
+        data:
+          title: "⚠️ Pelletkessel"
+          message: Der Fröling-Kessel meldet eine Störung.
+      - action: persistent_notification.create
+        data:
+          title: Pelletkessel
+          message: "Störung seit {{ now().strftime('%H:%M') }} Uhr"
+
+  - id: jotunland_pelletvorrat_niedrig
+    alias: "Pelletkessel: Vorrat niedrig"
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.anpassen_pelletvorrat
+        below: 20
+    actions:
+      - action: notify.notify
+        data:
+          title: Pellets bestellen
+          message: "Pelletvorrat bei {{ states('sensor.anpassen_pelletvorrat') }} %."

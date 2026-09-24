@@ -1,0 +1,80 @@
+blueprint:
+  name: "Jotunland: Fenster offen → Heizung aus"
+  description: >
+    Schaltet ein Heizkörperthermostat aus, solange ein Fenster länger als die
+    eingestellte Zeit offen ist, und stellt danach den vorherigen Zustand
+    (Modus und Solltemperatur) wieder her. Für jeden Raum eine Automation anlegen.
+  domain: automation
+  input:
+    fenster:
+      name: Fensterkontakt(e)
+      description: Ein oder mehrere Kontakte. Heizung aus, sobald einer offen ist.
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: [window, door, opening]
+          multiple: true
+    thermostat:
+      name: Thermostat(e)
+      selector:
+        entity:
+          domain: climate
+          multiple: true
+    verzoegerung:
+      name: Verzögerung
+      description: So lange muss das Fenster offen sein, bevor die Heizung ausgeht.
+      default: 30
+      selector:
+        number:
+          min: 0
+          max: 600
+          unit_of_measurement: s
+
+mode: restart
+max_exceeded: silent
+
+variables:
+  thermostat: !input thermostat
+  fenster: !input fenster
+  szene: "jotunland_fenster_{{ this.entity_id | replace('automation.', '') }}"
+
+triggers:
+  - trigger: state
+    entity_id: !input fenster
+    to: "on"
+    for:
+      seconds: !input verzoegerung
+    id: offen
+  - trigger: state
+    entity_id: !input fenster
+    to: "off"
+    id: zu
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: offen
+        sequence:
+          - action: scene.create
+            data:
+              scene_id: "{{ szene }}"
+              snapshot_entities: "{{ thermostat }}"
+          - action: climate.set_hvac_mode
+            target:
+              entity_id: !input thermostat
+            data:
+              hvac_mode: "off"
+      - conditions:
+          - condition: trigger
+            id: zu
+          # erst wieder heizen, wenn ALLE Fenster zu sind
+          - condition: template
+            value_template: "{{ expand(fenster) | selectattr('state', 'eq', 'on') | list | count == 0 }}"
+          - condition: template
+            # nur wiederherstellen, wenn beim Öffnen ein Schnappschuss angelegt wurde
+            value_template: "{{ expand('scene.' ~ szene) | count > 0 }}"
+        sequence:
+          - action: scene.turn_on
+            target:
+              entity_id: "scene.{{ szene }}"
