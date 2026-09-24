@@ -188,6 +188,30 @@ async def apply_defaults() -> list[str] | None:
     return applied
 
 
+async def load_errors(since: float) -> list[str]:
+    """Fehler, die HA beim Laden des Pakets protokolliert hat.
+
+    Die Konfigurationsprüfung lässt z. B. fehlerhafte Template-Sensoren durch –
+    HA meldet sie erst beim Laden im Systemprotokoll.
+    """
+    async with ClientSession(timeout=ClientTimeout(total=30)) as session:
+        async with session.ws_connect(CORE_WS, max_msg_size=0) as ws:
+            msg = await ws.receive_json()
+            if msg.get("type") == "auth_required":
+                await ws.send_json({"type": "auth", "access_token": TOKEN})
+                await ws.receive_json()
+            await ws.send_json({"id": 1, "type": "system_log/list"})
+            while (res := await ws.receive_json()).get("id") != 1:
+                pass
+    return [
+        m
+        for e in res.get("result") or []
+        if e.get("timestamp", 0) >= since and e.get("level") in ("ERROR", "CRITICAL")
+        for m in e.get("message", [])
+        if "jotunland" in m and re.search(r"Invalid config|Error loading|Setup failed", m)
+    ]
+
+
 async def defaults_loop(_app: web.Application) -> None:
     while True:
         await asyncio.sleep(15)
@@ -202,6 +226,12 @@ async def defaults_loop(_app: web.Application) -> None:
         if applied is not None:
             LOG.info("Startwerte gesetzt: %s", ", ".join(applied) or "nichts nötig")
             state["pending_defaults"] = False
+            try:
+                state["load_errors"] = await load_errors(state.get("installed_at", 0))
+            except Exception as err:  # noqa: BLE001
+                LOG.info("Systemprotokoll nicht lesbar: %s", err)
+            if state.get("load_errors"):
+                LOG.warning("Paket mit Fehlern geladen: %s", state["load_errors"])
             save_state(state)
 
 
@@ -320,6 +350,7 @@ async def status(_request: web.Request) -> web.Response:
             "blueprint": BLUEPRINT_DST.is_file(),
             "setup": setup,
             "pending_defaults": bool(state.get("pending_defaults")),
+            "load_errors": state.get("load_errors") or [],
             "last_install": state.get("installed_at"),
         }
     )

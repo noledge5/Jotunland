@@ -91,7 +91,8 @@ export const SLOTS: Record<string, SlotRule> = {
   "energy.grid": { group: "Solar (Enphase)", label: "Netz (+Bezug / −Einspeisung)", domains: ["sensor"], units: POWER, vendor: /enphase|envoy|smart meter|zaehler|shelly em|tibber/, need: [/\bnet\b|grid|bezug|zaehler/], exclude: /today|heute|lifetime/ },
 
   "wallbox.status": { group: "Wallbox", label: "Status", domains: ["sensor"], vendor: WALLBOX, vendorRequired: true, need: [/status|state|zustand|car/], numeric: false, exclude: /error|fehler/ },
-  "wallbox.power": { group: "Wallbox", label: "Ladeleistung", domains: ["sensor"], units: POWER, vendor: WALLBOX, vendorRequired: true, bonus: [/power|leistung|nrg|charging|laden/], exclude: /\b(max|limit|l[123]|phase)\b/ },
+  // go-e (API v2) liefert Leistung je Phase und gesamt – "nrg_11" bzw. "gesamt/total" ist die richtige
+  "wallbox.power": { group: "Wallbox", label: "Ladeleistung", domains: ["sensor"], units: POWER, vendor: WALLBOX, vendorRequired: true, bonus: [/power|leistung|nrg|charging|laden/, /\bnrg 11\b|gesamt|total/], exclude: /\b(max|limit|l[123]|n|phase)\b/ },
   "wallbox.session_energy": { group: "Wallbox", label: "Geladen (Sitzung)", domains: ["sensor"], units: ENERGY, vendor: WALLBOX, vendorRequired: true, bonus: [/session|geladen|charged|\bwh\b/], exclude: /total|gesamt|eto/ },
   "wallbox.charging_switch": { group: "Wallbox", label: "Laden an/aus", domains: ["switch", "select"], vendor: WALLBOX, vendorRequired: true, bonus: [/charg|laden|frc|force|allow|start/] },
   "wallbox.current": { group: "Wallbox", label: "Ladestrom", domains: ["number", "input_number"], units: ["A"], vendor: WALLBOX, vendorRequired: true, bonus: [/amp|strom|current/], exclude: /\b(max|min|limit)\b/ },

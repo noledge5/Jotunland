@@ -137,13 +137,56 @@ nur diese Skripte an.
 | Fröling Pelletheizung | *Fröling Connect* (HACS) oder Modbus über die Lambdatronic |
 | Wallbox | go-e: *go-eCharger (APIv2)* (HACS); sonst die Integration deines Herstellers |
 
+## Mit echten Geräten weiterbauen (Claude Code auf deinem PC)
+
+Automationen mit echten IPs und Signalen baust du am besten mit Claude Code auf
+einem PC in deinem Heimnetz. Von dort erreicht es Home Assistant **und** die
+Geräte direkt. Die Datei `CLAUDE.md` erklärt Claude Code das Projekt und die
+Regeln; zum Beispiel wird nichts an echten Geräten geschaltet, ohne dich zu fragen.
+
+**Einmalig einrichten** (Node.js ab Version 22 und Git müssen installiert sein):
+
+```bash
+git clone https://github.com/noledge5/Jotunland.git
+cd Jotunland
+cd tools && npm install && cd ..
+cp .env.example .env.local        # Windows: copy .env.example .env.local
+```
+
+In `.env.local` eintragen:
+
+- `HA_URL` und `HA_TOKEN`: Token in Home Assistant unter *Profil → Sicherheit →
+  Langlebiges Zugriffstoken erstellen*.
+- Für `deploy` zusätzlich SSH: Add-on **Terminal & SSH** installieren, in dessen
+  Konfiguration deinen öffentlichen SSH-Schlüssel eintragen, starten. Dann
+  `HA_SSH=root@homeassistant.local`.
+- Die Geräte-IPs findet `node tools/geraete.mjs suchen` selbst.
+
+Danach im Ordner `Jotunland` Claude Code starten (Desktop-App oder `claude` im
+Terminal) und loslegen, z. B.: *„Such meine Geräte, zeig mir die echten Werte der
+Wallbox und bau das PV-Überschussladen so, dass es bei Wolken nicht ständig
+schaltet.“*
+
+**Die Werkzeuge**, die Claude Code (oder du) dabei benutzt:
+
+| Befehl | Zweck |
+|---|---|
+| `node tools/geraete.mjs suchen` | Heimnetz nach Home Assistant, go-e, Envoy und AC THOR durchsuchen und Rohwerte zeigen (nur lesend) |
+| `node tools/ha.mjs states <muster>` | Entitäten und Zustände auflisten |
+| `node tools/ha.mjs watch <muster> [sek]` | Signale live mitschreiben |
+| `node tools/ha.mjs validate <datei>` | Automationen/Skripte mit dem HA-Validator prüfen, unbekannte entity_ids melden |
+| `node tools/ha.mjs deploy <datei>` | prüfen → per SSH nach `/config/packages/` → Konfiguration prüfen → neu laden; bei Fehlern automatisch zurück |
+| `node tools/ha.mjs trace <automation>` | letzten Durchlauf zeigen: welcher Zweig, welche Aufrufe, welche Fehler |
+
+Eigene, hausbezogene Automationen kommen nach `haus/jotunland_haus.yaml`. Der
+Ordner wird nicht eingecheckt, weil das Repository öffentlich ist.
+
 ## Entwicklung
 
 ```bash
 cd jotunland/frontend
-cp .env.example .env.local   # HA-Adresse + langlebiges Token eintragen
-npm run dev                  # http://localhost:5173
-npm run build                # Typprüfung + Produktions-Build nach dist/
+npm run dev                  # http://localhost:5173 – nutzt VITE_HA_URL/VITE_HA_TOKEN aus .env.local
+npm run build                # Typprüfung + Produktions-Build nach dist/ (ohne Token)
 ```
 
 Die Erkennungsregeln stehen in `jotunland/frontend/src/discovery.ts` (`SLOTS`).

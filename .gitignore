@@ -1,2 +1,8 @@
 __pycache__/
 *.pyc
+node_modules/
+# Zugangsdaten und hausbezogene Daten – das Repository ist öffentlich
+.env.local
+.env.*.local
+lokal/
+haus/

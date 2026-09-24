@@ -5,6 +5,20 @@ import { Badge } from "../components/ui";
 import { SLOTS } from "../discovery";
 import { HELPER_MARKER, useSetupActions, useSetupState } from "../setup";
 
+/** Wie das jeweilige Gerät in Home Assistant kommt */
+const INTEGRATION_HINTS: Record<string, ReactNode> = {
+  Solar: (
+    <>
+      Integration „Enphase Envoy“ einrichten –{" "}
+      <a className="link" href="https://my.home-assistant.io/redirect/config_flow_start/?domain=enphase_envoy" target="_blank" rel="noreferrer">direkt starten</a>{" "}
+      (IP des Envoy und Enlighten-Zugang bereithalten).
+    </>
+  ),
+  Wallbox: "go-e: in der go-e App unter Internet → Erweiterte Einstellungen „HTTP API v2“ aktivieren, dann in HACS „go-eCharger (APIv2)“ installieren und einrichten.",
+  "AC THOR": "my-PV: in HACS nach „my-PV“ suchen – oder mit Claude Code auf deinem PC direkt per IP anbinden (siehe README).",
+  Pelletkessel: "Fröling: in HACS nach „Fröling“ suchen (Fröling Connect) – oder mit Claude Code auf deinem PC anbinden.",
+};
+
 function Step({ n, done, title, children, actions }: { n: number; done: boolean; title: string; children?: ReactNode; actions?: ReactNode }) {
   return (
     <li className={`step ${done ? "done" : ""}`}>
@@ -92,7 +106,19 @@ export function Wizard({ goTo }: { goTo: (tab: string) => void }) {
               <Badge key={g.group} tone={g.found ? "ok" : "bad"}>{g.found ? "✓" : "✗"} {g.group}</Badge>
             ))}
           </div>
-          {found < st.groups.length && <p className="hint">Nicht gefunden? Prüfe, ob die Integration in Home Assistant eingerichtet ist, und wähle die Entität unter Zuordnung aus.</p>}
+          {st.groups
+            .filter((g) => !g.found)
+            .map((g) => (
+              <p key={g.group} className="hint">
+                <b>{g.group}:</b> {INTEGRATION_HINTS[g.group]}
+              </p>
+            ))}
+          {found < st.groups.length && (
+            <p className="hint">
+              Ist die Integration schon eingerichtet, die Entität unter Zuordnung auswählen. Übersicht:{" "}
+              <a className="link" href="https://my.home-assistant.io/redirect/integrations/" target="_blank" rel="noreferrer">Geräte &amp; Dienste</a>
+            </p>
+          )}
         </Step>
 
         <Step
@@ -144,6 +170,9 @@ export function Wizard({ goTo }: { goTo: (tab: string) => void }) {
             <p className="hint">Ohne Zuordnung (diese Teile bleiben inaktiv): {st.pkg.missing.map((m) => SLOTS[m]?.label ?? m).join(", ")}</p>
           )}
           {addon && !addon.setup.automatic && <p className="hint bad">{addon.setup.note}</p>}
+          {addon && addon.load_errors?.length > 0 && (
+            <p className="hint bad">Home Assistant meldet beim Laden: {addon.load_errors.join(" · ")}</p>
+          )}
           {!addon && !isDemo && <p className="hint">Tipp: Als Home-Assistant-Add-on installiert Jotunland das Paket selbst (siehe README).</p>}
           {isDemo && <p className="hint">Im Demo-Modus wird nichts installiert.</p>}
         </Step>

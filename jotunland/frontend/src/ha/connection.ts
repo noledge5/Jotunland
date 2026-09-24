@@ -50,8 +50,9 @@ export function loadSettings(): ConnSettings {
       /* ignorieren */
     }
   }
-  const envUrl = import.meta.env.VITE_HA_URL as string | undefined;
-  const envToken = import.meta.env.VITE_HA_TOKEN as string | undefined;
+  // Nur im Entwicklungsmodus (npm run dev) – im Build gibt es diese Werte nicht
+  const envUrl = import.meta.env.DEV ? (import.meta.env.VITE_HA_URL as string | undefined) : undefined;
+  const envToken = import.meta.env.DEV ? (import.meta.env.VITE_HA_TOKEN as string | undefined) : undefined;
   if (envUrl && envToken) return { mode: "token", url: envUrl, token: envToken };
   if (servedFromHomeAssistant()) return { mode: "auto" };
   if (new URLSearchParams(window.location.search).has("demo")) return { mode: "demo" };
@@ -119,6 +120,8 @@ export interface AddonStatus {
   blueprint: boolean;
   setup: { automatic: boolean; note: string };
   pending_defaults: boolean;
+  /** Fehler, die HA beim Laden des Pakets gemeldet hat */
+  load_errors: string[];
   last_install?: number;
 }
 

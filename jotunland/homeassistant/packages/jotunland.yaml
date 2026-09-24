@@ -1,4 +1,4 @@
-# jotunland-package-version: 3
+# jotunland-package-version: 4
 # =============================================================================
 #  Jotunland – Home-Assistant-Paket
 #  Helfer, Automationen und Skripte für PV-Überschussladen, Heizzeiten,
@@ -157,7 +157,8 @@ script:
             target:
               entity_id: "{{ geraet }}"
             data:
-              option: "{{ state_attr(geraet, 'options') | select('search', '(?i)^(on|an|charge|laden)') | first | default('On') }}"
+              # Klartext (On/An/Charge) oder go-e-Rohwert frc=2 ("laden erzwingen")
+              option: "{{ state_attr(geraet, 'options') | select('search', '(?i)^(on|an|ein|charge|laden)|^2$') | first | default('On') }}"
         else:
           - action: switch.turn_on
             target:
@@ -176,7 +177,8 @@ script:
             target:
               entity_id: "{{ geraet }}"
             data:
-              option: "{{ state_attr(geraet, 'options') | select('search', '(?i)^(off|aus|don)') | first | default('Off') }}"
+              # Klartext (Off/Aus/Don't charge) oder go-e-Rohwert frc=1 ("nicht laden")
+              option: "{{ state_attr(geraet, 'options') | select('search', '(?i)^(off|aus|don|nicht)|^1$') | first | default('Off') }}"
         else:
           - action: switch.turn_off
             target:
