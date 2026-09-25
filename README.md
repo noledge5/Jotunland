@@ -167,6 +167,22 @@ Terminal) und loslegen, z. B.: *„Such meine Geräte, zeig mir die echten Werte
 Wallbox und bau das PV-Überschussladen so, dass es bei Wolken nicht ständig
 schaltet.“*
 
+**Auf dem Mac** zusätzlich beachten:
+
+- Node.js 22 z. B. von nodejs.org (macOS-Installer) oder `brew install node`. Git
+  bringt macOS mit (beim ersten `git` bietet es die Installation an).
+- SSH-Schlüssel für `deploy`: `ssh-keygen -t ed25519`, dann
+  `cat ~/.ssh/id_ed25519.pub` in die Konfiguration des Add-ons „Terminal & SSH“
+  (`authorized_keys`) kopieren und dort unter *Netzwerk* Port `22` eintragen.
+- Ab macOS 15 fragt das System beim ersten Zugriff auf Geräte im Heimnetz nach
+  „Lokales Netzwerk“. Bitte **Erlauben** – sonst meldet `geraete.mjs` jedes Gerät als
+  nicht erreichbar. Nachträglich: *Systemeinstellungen → Datenschutz & Sicherheit →
+  Lokales Netzwerk* → Terminal bzw. Claude einschalten.
+- `.env.local` ist im Finder versteckt (⌘⇧. zeigt es), bearbeiten z. B. mit
+  `nano .env.local`.
+- Unterwegs: `ha.mjs` funktioniert auch über deine Nabu-Casa-Adresse als `HA_URL`.
+  Geräte-IPs und `deploy` (SSH) gehen nur im Heimnetz oder per VPN.
+
 **Die Werkzeuge**, die Claude Code (oder du) dabei benutzt:
 
 | Befehl | Zweck |
