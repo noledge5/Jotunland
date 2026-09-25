@@ -18,5 +18,6 @@
   "warmwasser_voll": "binary_sensor.ac_thor_speicher_voll",
   "warmwasser_max_w": 9000,
 
-  "aussentemperatur": null
+  "aussentemperatur": null,
+  "boersenpreis": "sensor.nord_pool_ger_aktueller_preis"
 }
