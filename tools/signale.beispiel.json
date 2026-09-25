@@ -1,0 +1,22 @@
+{
+  "_hinweis": "Vorlage für haus/signale.json (nicht im Git). Welche Entität liefert welches Signal? null = nicht vorhanden. Leistungen in W oder kW, Energien als Zähler (kWh/MWh). Batterieleistung: + = Entladen, mehrere Einheiten als Liste.",
+  "pv_energie": "sensor.envoy_123456_energieerzeugung_uber_lebensdauer",
+  "bezug_energie": "sensor.envoy_123456_nettoenergieverbrauch_uber_lebensdauer",
+  "einspeisung_energie": "sensor.envoy_123456_nettoenergieerzeugung_uber_lebensdauer",
+  "warmwasser_energie": "sensor.ac_thor_energy",
+  "wallbox_energie": null,
+
+  "pv_leistung": "sensor.envoy_123456_aktuelle_stromproduktion",
+  "netz_leistung": "sensor.envoy_123456_aktueller_nettostromverbrauch",
+  "batterie_leistung": ["sensor.encharge_1_leistung", "sensor.encharge_2_leistung"],
+  "batterie_ladestand": "sensor.envoy_123456_batterie",
+  "wallbox_leistung": null,
+
+  "warmwasser_leistung": "sensor.ac_thor_power",
+  "warmwasser_temperatur": "sensor.ac_thor_temp_1",
+  "warmwasser_sollwert": "input_number.ac_thor_auto_sollwert_w",
+  "warmwasser_voll": "binary_sensor.ac_thor_speicher_voll",
+  "warmwasser_max_w": 9000,
+
+  "aussentemperatur": null
+}

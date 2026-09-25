@@ -190,6 +190,7 @@ schaltet.“*
 |---|---|
 | `node tools/geraete.mjs suchen` | Heimnetz durchsuchen: Home Assistant, Envoy, AC THOR und go-e mit Rohwerten, dazu alle übrigen Geräte mit Hersteller, Namen (mDNS/UPnP) und offenen Diensten (nur lesend) |
 | `node tools/geraete.mjs hersteller` | einmalig die Herstellerliste der IEEE laden (`lokal/oui.csv`), damit `suchen` jede MAC einem Hersteller zuordnet |
+| `node tools/auswertung.mjs <bericht>` | Auswertung mit echten Daten: Monats-/Tagesbilanz, Tagesprofil, Warmwasser (Heizenergie aus PV/Batterie/Netz), Heizung, Entscheidungs-Log, CSV-Export – Signale in `haus/signale.json` |
 | `node tools/ha.mjs states <muster>` | Entitäten und Zustände auflisten |
 | `node tools/ha.mjs watch <muster> [sek]` | Signale live mitschreiben |
 | `node tools/ha.mjs validate <datei>` | Automationen/Skripte mit dem HA-Validator prüfen, unbekannte entity_ids melden |

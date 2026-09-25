@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 import YAML from "yaml";
 import { loadEnv, need } from "./env.mjs";
+import { api, socket } from "./hass.mjs";
 
 const HILFE = `Nutzung: node tools/ha.mjs <befehl> …
 
@@ -26,63 +27,6 @@ if (!cmd || cmd === "hilfe" || cmd === "--help") {
   console.log(HILFE);
   process.exit(0);
 }
-const HA_URL = need("HA_URL").replace(/\/$/, "");
-const TOKEN = need("HA_TOKEN", "Home Assistant → Profil → Sicherheit → Langlebige Zugriffstoken.");
-
-/* --------------------------------------------------------------- REST ---- */
-
-async function api(method, path, body) {
-  const res = await fetch(`${HA_URL}/api/${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await res.text();
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = text;
-  }
-  if (!res.ok) throw new Error(`${method} /api/${path} → HTTP ${res.status}: ${typeof data === "string" ? data : JSON.stringify(data)}`);
-  return data;
-}
-
-/* ---------------------------------------------------------- WebSocket ---- */
-
-async function socket() {
-  const ws = new WebSocket(HA_URL.replace(/^http/, "ws") + "/api/websocket");
-  const pending = new Map();
-  const listeners = new Map();
-  let nextId = 1;
-  await new Promise((resolve, reject) => {
-    ws.addEventListener("error", () => reject(new Error(`WebSocket zu ${HA_URL} fehlgeschlagen`)));
-    ws.addEventListener("message", (ev) => {
-      const msg = JSON.parse(ev.data);
-      if (msg.type === "auth_required") ws.send(JSON.stringify({ type: "auth", access_token: TOKEN }));
-      else if (msg.type === "auth_ok") resolve();
-      else if (msg.type === "auth_invalid") reject(new Error("Token ungültig"));
-      else if (msg.type === "result" && pending.has(msg.id)) {
-        const { ok, fail } = pending.get(msg.id);
-        pending.delete(msg.id);
-        msg.success ? ok(msg.result) : fail(new Error(msg.error?.message ?? "Fehler"));
-      } else if (msg.type === "event") listeners.get(msg.id)?.(msg.event);
-    });
-  });
-  const send = (msg) =>
-    new Promise((ok, fail) => {
-      const id = nextId++;
-      pending.set(id, { ok, fail });
-      ws.send(JSON.stringify({ id, ...msg }));
-    });
-  const subscribe = async (msg, onEvent) => {
-    const id = nextId;
-    listeners.set(id, onEvent);
-    await send(msg);
-  };
-  return { send, subscribe, close: () => ws.close() };
-}
-
 /* ------------------------------------------------------------- Helfer ---- */
 
 const pad = (s, n) => (s.length > n ? s.slice(0, n - 1) + "…" : s.padEnd(n));
