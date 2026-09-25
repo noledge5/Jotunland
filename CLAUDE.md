@@ -8,7 +8,8 @@ Sprache im Projekt: Deutsch (Oberfläche, Kommentare, Commit-Nachrichten).
 | Gerät | Anbindung | Bekannte Details |
 |---|---|---|
 | Enphase PV (Envoy) | HA-Integration „Enphase Envoy“ | Ab Firmware 7 Token nötig; lokal `https://<IP>/production.json?details=1` (selbst signiertes Zertifikat) |
-| go-e Charger (Nutzer nennt ihn „freecharge go“) | HACS „go-eCharger (APIv2)“ oder REST | HTTP API v2 muss in der go-e App aktiv sein. `GET http://<IP>/api/status` – `car` (1 bereit, 2 lädt, 3 wartet, 4 fertig), `amp` (A), `frc` (0 neutral, 1 aus, 2 an), `nrg[11]` (Gesamtleistung W), `wh` (Wh seit Anstecken), `psm` (1/2 = 1-/3-phasig). Setzen: `GET /api/set?amp=10`, `/api/set?frc=1` |
+| eProWallbox Move (Free2move eSolutions, Art.-Nr. F2ME.EPROSE01CXX) | OCPP 1.6J – HACS „OCPP“ (lbbrhzn/ocpp); die Wallbox verbindet sich selbst zu `ws://<HA-IP>:9000/<Name>` | **Keine lokale Web-API**, kein eingebauter Zähler (Leistung nur geschätzt oder über externen Zähler). Modbus RTU nur per Kabel. OCPP-Backend in der eSolutions-App (Bluetooth) auf „Andere“ stellen – danach geht die Cloud-Steuerung der App nicht mehr, Bluetooth schon. Das Paket war ursprünglich für go-e gebaut (`geraete.mjs` erkennt go-e weiterhin) |
+| Kiwigrid gridBox | noch offen | Energiemanager, im Heimnetz gefunden – Rolle im Haus klären |
 | my-PV AC THOR (steuert Heizstab/„Tubratherm“ für Warmwasser) | noch offen – HACS, REST (`/data.jsn`) oder Modbus TCP | Temperaturen meist in Zehntel-Grad. Feldnamen erst am echten Gerät prüfen |
 | Fröling Pelletkessel | noch offen – Fröling Connect (Cloud) oder Modbus | Warmwasser-Anforderung ist im Paket nur als Meldung umgesetzt (`script.jotunland_pellet_anfordern`) |
 | Zigbee (Heizkörperthermostate, Fensterkontakte …) | ZHA oder Zigbee2MQTT | Namen oft technisch (`0x…`, `TS0601`) – die Oberfläche schlägt bessere vor |
@@ -27,7 +28,7 @@ jotunland/                      Home-Assistant-Add-on (Ingress)
   homeassistant/blueprints/…    Blueprint „Fenster offen → Heizung aus“
 tools/                          Werkzeuge für die Arbeit im Heimnetz (Node ≥ 22)
   ha.mjs                        Home Assistant: states, watch, call, validate, check, trace, reload, deploy
-  geraete.mjs                   Geräte finden und direkt per IP auslesen (nur lesend)
+  geraete.mjs                   Geräte finden, alle Netzgeräte benennen, bekannte direkt auslesen (nur lesend)
 haus/                           hausbezogene Pakete (nicht im Git, Repo ist öffentlich)
 lokal/                          Ausgaben der Werkzeuge (nicht im Git)
 ```

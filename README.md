@@ -135,7 +135,7 @@ nur diese Skripte an.
 | Heizkörperthermostate, Zigbee | ZHA oder Zigbee2MQTT |
 | AC THOR (my-PV) | *my-PV* (HACS) oder Modbus TCP |
 | Fröling Pelletheizung | *Fröling Connect* (HACS) oder Modbus über die Lambdatronic |
-| Wallbox | go-e: *go-eCharger (APIv2)* (HACS); sonst die Integration deines Herstellers |
+| Wallbox | eProWallbox Move: *OCPP* (HACS, lbbrhzn/ocpp) – die Wallbox hat keine lokale Web-API; go-e: *go-eCharger (APIv2)* (HACS); sonst die Integration deines Herstellers |
 
 ## Mit echten Geräten weiterbauen (Claude Code auf deinem PC)
 
@@ -187,7 +187,8 @@ schaltet.“*
 
 | Befehl | Zweck |
 |---|---|
-| `node tools/geraete.mjs suchen` | Heimnetz nach Home Assistant, go-e, Envoy und AC THOR durchsuchen und Rohwerte zeigen (nur lesend) |
+| `node tools/geraete.mjs suchen` | Heimnetz durchsuchen: Home Assistant, Envoy, AC THOR und go-e mit Rohwerten, dazu alle übrigen Geräte mit Hersteller, Namen (mDNS/UPnP) und offenen Diensten (nur lesend) |
+| `node tools/geraete.mjs hersteller` | einmalig die Herstellerliste der IEEE laden (`lokal/oui.csv`), damit `suchen` jede MAC einem Hersteller zuordnet |
 | `node tools/ha.mjs states <muster>` | Entitäten und Zustände auflisten |
 | `node tools/ha.mjs watch <muster> [sek]` | Signale live mitschreiben |
 | `node tools/ha.mjs validate <datei>` | Automationen/Skripte mit dem HA-Validator prüfen, unbekannte entity_ids melden |
