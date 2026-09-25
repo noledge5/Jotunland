@@ -51,6 +51,7 @@ DEFAULTS: dict[str, float | str] = {
     "input_number.jotunland_komfort_temperatur": 21,
     "input_number.jotunland_eco_temperatur": 18,
     "input_number.jotunland_warmwasser_minimum": 45,
+    "input_number.jotunland_batterie_vorrang": 90,
     "input_datetime.jotunland_heizen_start": "06:00:00",
     "input_datetime.jotunland_heizen_ende": "22:00:00",
 }

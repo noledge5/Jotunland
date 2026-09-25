@@ -15,6 +15,7 @@
   --water: #4fb3e8;
   --bolt: #a58cf5;
   --grid: #9aa7b1;
+  --battery: #4cc38a;
   --ok: #5fcf8f;
   --warn: #f0b441;
   --bad: #f06a6a;
@@ -41,6 +42,7 @@
     --water: #1f8fcf;
     --bolt: #7a5ce0;
     --grid: #6d7b86;
+    --battery: #1f9d63;
     --shadow: 0 1px 2px rgba(20, 30, 40, 0.06), 0 6px 20px rgba(20, 30, 40, 0.06);
   }
 }
@@ -130,6 +132,7 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-
 .card[data-tone="fire"] { --tone: var(--fire); }
 .card[data-tone="water"] { --tone: var(--water); }
 .card[data-tone="bolt"] { --tone: var(--bolt); }
+.card[data-tone="battery"] { --tone: var(--battery); }
 .card[data-tone="leaf"] { --tone: var(--ok); }
 
 .stats { display: flex; gap: 22px; flex-wrap: wrap; }
@@ -159,6 +162,7 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-
 .bar span { display: block; height: 100%; border-radius: inherit; background: var(--c, var(--accent)); transition: width 0.6s ease; }
 .bar[data-tone="sun"] { --c: var(--sun); }
 .bar[data-tone="water"] { --c: var(--water); }
+.bar[data-tone="battery"] { --c: var(--battery); }
 .bar[data-tone="fire"] { --c: var(--fire); }
 .bar[data-tone="bad"] { --c: var(--bad); }
 
@@ -223,7 +227,7 @@ textarea.input { resize: vertical; font-family: ui-monospace, monospace; font-si
 .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
 
 /* ---------- Energy flow ---------- */
-.flow { position: relative; width: 100%; max-width: 520px; margin: 0 auto; aspect-ratio: 320 / 340; }
+.flow { position: relative; width: 100%; max-width: 520px; margin: 0 auto; aspect-ratio: 320 / 392; }
 .flow > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .flow-line { stroke: var(--border); stroke-width: 2.5; stroke-linecap: round; }
 .flow-line.active { stroke-dasharray: 3 9; animation: flow 0.9s linear infinite; }
@@ -231,6 +235,7 @@ textarea.input { resize: vertical; font-family: ui-monospace, monospace; font-si
 .flow-line.active.tone-grid { stroke: var(--grid); }
 .flow-line.active.tone-water { stroke: var(--water); }
 .flow-line.active.tone-bolt { stroke: var(--bolt); }
+.flow-line.active.tone-battery { stroke: var(--battery); }
 @keyframes flow { to { stroke-dashoffset: -12; } }
 .flow-node { position: absolute; transform: translate(-50%, -24px); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; }
 .flow-bubble {
@@ -244,6 +249,7 @@ textarea.input { resize: vertical; font-family: ui-monospace, monospace; font-si
 .flow-node.tone-grid { --c: var(--grid); }
 .flow-node.tone-water { --c: var(--water); }
 .flow-node.tone-bolt { --c: var(--bolt); }
+.flow-node.tone-battery { --c: var(--battery); }
 .flow-node.hub { --c: var(--accent); }
 .flow-node.hub { transform: translate(-50%, -30px); }
 .flow-node.hub .flow-bubble { width: 60px; height: 60px; background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }

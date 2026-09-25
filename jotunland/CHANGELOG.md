@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0
+- Hausbatterie: eigener Knoten im Energiefluss (Laden/Entladen, Ladestand) und
+  Batterie-Karte unter Energie; Hausverbrauch und Autarkie berücksichtigen die Batterie
+- PV-Überschussladen berücksichtigt Batterie und Warmwasser: Reihenfolge
+  Haus → Batterie (bis „Batterie-Vorrang“) → Auto → Warmwasser; für PV-Laden wird nie
+  Netzstrom gekauft oder die Batterie entladen (Paket-Version 5, neue Platzhalter für
+  Netz, Batterie und Warmwasserleistung)
+- Erkennung: Stichwörter werden nur noch in Name/ID gesucht, nicht in der Modellbezeichnung
+  (Enphase-Modelle heißen „…net-consumption CT“ und wurden dadurch alle ausgeschlossen);
+  deutsche Envoy-Namen („Nettostromverbrauch“) werden erkannt, OCPP-Wallboxen ebenso
+
 ## 0.3.0
 - go-e Charger: Gesamtleistung (nrg_11) wird sicher erkannt, Ladefreigabe
   funktioniert auch mit Rohwerten (frc 1/2)

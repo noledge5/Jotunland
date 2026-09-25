@@ -1,4 +1,4 @@
-# jotunland-package-version: 4
+# jotunland-package-version: 5
 # =============================================================================
 #  Jotunland – Home-Assistant-Paket
 #  Helfer, Automationen und Skripte für PV-Überschussladen, Heizzeiten,
@@ -17,6 +17,10 @@
 #  -----------------------------------------|---------------------------------
 #  sensor.anpassen_pv_leistung              | Enphase: aktuelle Produktion (W)
 #  sensor.anpassen_hausverbrauch            | Enphase: aktueller Verbrauch (W)
+#  sensor.anpassen_netz                     | Netz: + Bezug / − Einspeisung (W)
+#  sensor.anpassen_batterie_leistung        | Batterie: + Entladen / − Laden (W) – optional
+#  sensor.anpassen_batterie_ladestand       | Batterie: Ladestand (%) – optional
+#  sensor.anpassen_warmwasser_leistung      | AC THOR: Heizleistung (W) – optional
 #  sensor.anpassen_wallbox_leistung         | Wallbox: Ladeleistung (W)
 #  sensor.anpassen_wallbox_geladen          | Wallbox: geladene Energie (kWh)
 #  switch.anpassen_wallbox_laden            | Wallbox: Laden an/aus
@@ -82,6 +86,13 @@ input_number:
     step: 0.5
     unit_of_measurement: "°C"
     icon: mdi:weather-night
+  jotunland_batterie_vorrang:
+    name: Batterie-Vorrang bis
+    min: 0
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:battery-charging-high
   jotunland_warmwasser_minimum:
     name: Warmwasser Minimum
     min: 35
@@ -104,22 +115,40 @@ input_datetime:
 
 template:
   - sensor:
-      # Überschuss inkl. dem, was die Wallbox gerade schon lädt – sonst würde
-      # sie sich beim Laden selbst den Überschuss "wegnehmen".
+      # Was die Wallbox bekommen darf. Reihenfolge: Haus → Batterie (bis "Batterie-Vorrang")
+      # → Auto → Warmwasser. Deshalb zählt, was Wallbox und AC THOR gerade nehmen, als
+      # verfügbar; die AC-THOR-Regelung weicht dann von selbst zurück.
+      # Nie für PV-Laden: Netzstrom kaufen oder die Batterie entladen.
+      # Mit Netzzähler wird direkt gerechnet – der "Verbrauch" mancher Anlagen (Enphase mit
+      # Netz-CT) ist nur PV + Netz und sieht die Batterie nicht.
       - name: Jotunland PV Ueberschuss
         unique_id: jotunland_pv_ueberschuss
         unit_of_measurement: W
         device_class: power
         state_class: measurement
-        availability: "{{ has_value('sensor.anpassen_pv_leistung') and has_value('sensor.anpassen_hausverbrauch') }}"
+        availability: >
+          {{ has_value('sensor.anpassen_netz')
+             or (has_value('sensor.anpassen_pv_leistung') and has_value('sensor.anpassen_hausverbrauch')) }}
         state: >
           {% macro w(id) -%}
             {%- set v = states(id) | float(0) -%}
             {{- v * 1000 if state_attr(id, 'unit_of_measurement') == 'kW' else v -}}
           {%- endmacro %}
-          {{ (w('sensor.anpassen_pv_leistung') | float
-              - w('sensor.anpassen_hausverbrauch') | float
-              + w('sensor.anpassen_wallbox_leistung') | float) | round(0) }}
+          {% set bat = w('sensor.anpassen_batterie_leistung') | float if has_value('sensor.anpassen_batterie_leistung') else 0 %}
+          {% if has_value('sensor.anpassen_netz') %}
+            {% set netz = w('sensor.anpassen_netz') | float %}
+          {% else %}
+            {% set netz = w('sensor.anpassen_hausverbrauch') | float - w('sensor.anpassen_pv_leistung') | float - bat %}
+          {% endif %}
+          {% set soc = states('sensor.anpassen_batterie_ladestand') | float(100) %}
+          {% set eigen = w('sensor.anpassen_wallbox_leistung') | float + w('sensor.anpassen_warmwasser_leistung') | float %}
+          {# unter dem Vorrang bekommt die Batterie ihre Ladeleistung; Entladen wird immer abgezogen #}
+          {% set batterie = bat if soc >= states('input_number.jotunland_batterie_vorrang') | float(90) else [bat, 0] | max %}
+          {% set frei = eigen - netz - batterie %}
+          {% if netz > 150 %}
+            {% set frei = [frei, eigen - netz] | min %}
+          {% endif %}
+          {{ [frei, 0] | max | round(0) }}
 
       - name: Jotunland Wallbox Wunschstrom
         unique_id: jotunland_wallbox_wunschstrom

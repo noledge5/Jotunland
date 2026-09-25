@@ -29,6 +29,9 @@ export interface EntityInfo {
   meta?: EntityMeta;
   /** normalisierter Suchtext: ID, Name, Gerät, Hersteller, Modell, Integration */
   text: string;
+  /** nur ID, Name und Gerätename – ohne Modellbezeichnung. Die enthält oft Wörter wie
+   *  "net-consumption CT" (Enphase) und würde sonst die Stichwortsuche verfälschen. */
+  own: string;
   /** normalisierter Hersteller-/Integrationstext */
   vendor: string;
 }
@@ -49,6 +52,7 @@ export function buildInfos(entities: HassEntities, meta: Record<string, EntityMe
       device,
       meta: m,
       text: norm(`${entity.entity_id} ${name} ${device?.name_by_user ?? ""} ${vendor}`),
+      own: norm(`${entity.entity_id} ${name} ${device?.name_by_user ?? ""} ${device?.name ?? ""}`),
       vendor,
     };
   });
@@ -70,6 +74,8 @@ export interface SlotRule {
   need?: RegExp[];
   /** Jeder Treffer gibt Zusatzpunkte */
   bonus?: RegExp[];
+  /** Deutlicher Vorzug, z. B. die Summe aller Batterien statt einer einzelnen */
+  prefer?: RegExp;
   exclude?: RegExp;
   /** Zustand muss numerisch (true) bzw. Text (false) sein */
   numeric?: boolean;
@@ -80,19 +86,24 @@ const ENERGY = ["kWh", "Wh", "MWh"];
 const TEMP = ["°C"];
 
 const ENPHASE = /enphase|envoy|iq gateway/;
-const WALLBOX = /go ?e|goe|freecharge|free charge|wallbox|charger|ladestation|lader/;
+const WALLBOX = /go ?e|goe|freecharge|free charge|wallbox|charger|ladestation|lader|ocpp|epro|free2move|esolutions|f2me/;
+const BATTERY = /batter|akku|speicher|encharge|storage|powerwall/;
+const BATTERY_VENDOR = /enphase|envoy|encharge|victron|sonnen|byd|huawei|luna2000|sungrow|fronius|kostal|tesla|powerwall|senec|e3dc|solaredge|growatt|goodwe|varta|alpha ?ess|1komma5|kiwigrid/;
 const MYPV = /my ?pv|ac ?thor|acthor|elwa/;
 const FROELING = /froeling|froling|lambdatronic|pellet|p4|pe1|s3 turbo/;
 
 export const SLOTS: Record<string, SlotRule> = {
-  "energy.pv_power": { group: "Solar (Enphase)", label: "PV-Leistung aktuell", domains: ["sensor"], units: POWER, vendor: ENPHASE, need: [/produc|produkt|erzeug|solar|pv/], exclude: /consum|verbrauch|inverter|wechselrichter|\bnet\b|today|heute|lifetime|gesamt|7 ?day/ },
+  "energy.pv_power": { group: "Solar (Enphase)", label: "PV-Leistung aktuell", domains: ["sensor"], units: POWER, vendor: ENPHASE, need: [/produc|produkt|erzeug|solar|pv/], exclude: /consum|verbrauch|inverter|wechselrichter|\bnet\b|netto|today|heute|lifetime|gesamt|7 ?day|ueberschuss|surplus|verfuegbar|batter|encharge/ },
   "energy.pv_today": { group: "Solar (Enphase)", label: "PV-Ertrag heute", domains: ["sensor"], units: ENERGY, vendor: ENPHASE, need: [/produc|produkt|erzeug|solar|pv/, /today|heute|tag/], exclude: /consum|verbrauch|inverter/ },
   "energy.consumption": { group: "Solar (Enphase)", label: "Hausverbrauch aktuell", domains: ["sensor"], units: POWER, vendor: ENPHASE, need: [/consum|verbrauch/], exclude: /\bnet\b|netto|today|heute|lifetime|7 ?day/ },
-  "energy.grid": { group: "Solar (Enphase)", label: "Netz (+Bezug / −Einspeisung)", domains: ["sensor"], units: POWER, vendor: /enphase|envoy|smart meter|zaehler|shelly em|tibber/, need: [/\bnet\b|grid|bezug|zaehler/], exclude: /today|heute|lifetime/ },
+  "energy.grid": { group: "Solar (Enphase)", label: "Netz (+Bezug / −Einspeisung)", domains: ["sensor"], units: POWER, vendor: /enphase|envoy|smart meter|zaehler|shelly em|tibber/, need: [/\bnet\b|netto|grid|bezug|zaehler/], exclude: /today|heute|lifetime|ausgeglichen|balanced|\bl[123]\b|ueberschuss|surplus/ },
+  // Batterie: + = Entladen (Batterie → Haus), − = Laden. Mehrere Einheiten (z. B. 2 × Encharge) → Summe bevorzugen.
+  "energy.battery_power": { group: "Batterie", label: "Batterieleistung (+ Entladen / − Laden)", domains: ["sensor"], units: POWER, vendor: BATTERY_VENDOR, need: [BATTERY], bonus: [/leistung|power|entlad|discharg/], prefer: /battery power|batterieleistung|batterie leistung|gesamt|total/, exclude: /kapazit|capacity|energie|energy|reserve|temperatur|ladestand|level|\bsoc\b|scheinleistung|apparent|phone|ipad|handy/ },
+  "energy.battery_soc": { group: "Batterie", label: "Batterie-Ladestand", domains: ["sensor"], units: ["%"], vendor: BATTERY_VENDOR, vendorRequired: true, need: [/batter|akku|speicher|storage|\bsoc\b|ladestand/], prefer: /envoy|gesamt|total|system/, exclude: /reserve|temperatur|phone|ipad|handy|thermostat|0x[0-9a-f]|leistung|power/ },
 
   "wallbox.status": { group: "Wallbox", label: "Status", domains: ["sensor"], vendor: WALLBOX, vendorRequired: true, need: [/status|state|zustand|car/], numeric: false, exclude: /error|fehler/ },
   // go-e (API v2) liefert Leistung je Phase und gesamt – "nrg_11" bzw. "gesamt/total" ist die richtige
-  "wallbox.power": { group: "Wallbox", label: "Ladeleistung", domains: ["sensor"], units: POWER, vendor: WALLBOX, vendorRequired: true, bonus: [/power|leistung|nrg|charging|laden/, /\bnrg 11\b|gesamt|total/], exclude: /\b(max|limit|l[123]|n|phase)\b/ },
+  "wallbox.power": { group: "Wallbox", label: "Ladeleistung", domains: ["sensor"], units: POWER, vendor: WALLBOX, vendorRequired: true, bonus: [/power|leistung|nrg|charging|laden/, /\bnrg 11\b|gesamt|total/], exclude: /\b(max|limit|l[123]|n|phase)\b|reactive|offered|blind|angeboten/ },
   "wallbox.session_energy": { group: "Wallbox", label: "Geladen (Sitzung)", domains: ["sensor"], units: ENERGY, vendor: WALLBOX, vendorRequired: true, bonus: [/session|geladen|charged|\bwh\b/], exclude: /total|gesamt|eto/ },
   "wallbox.charging_switch": { group: "Wallbox", label: "Laden an/aus", domains: ["switch", "select"], vendor: WALLBOX, vendorRequired: true, bonus: [/charg|laden|frc|force|allow|start/] },
   "wallbox.current": { group: "Wallbox", label: "Ladestrom", domains: ["number", "input_number"], units: ["A"], vendor: WALLBOX, vendorRequired: true, bonus: [/amp|strom|current/], exclude: /\b(max|min|limit)\b/ },
@@ -119,7 +130,7 @@ export interface Candidate {
 
 export function scoreEntity(rule: SlotRule, e: EntityInfo): Candidate | null {
   if (!rule.domains.includes(e.domain)) return null;
-  if (rule.exclude?.test(e.text)) return null;
+  if (rule.exclude?.test(e.own)) return null;
   const numeric = e.entity.state !== "" && !isNaN(Number(e.entity.state));
   if (rule.numeric === false && numeric) return null;
   if (rule.units?.length && !rule.units.includes(e.unit)) return null;
@@ -133,12 +144,16 @@ export function scoreEntity(rule: SlotRule, e: EntityInfo): Candidate | null {
     reasons.push(e.device?.manufacturer ?? e.meta?.platform ?? "Hersteller");
   }
   for (const re of rule.need ?? []) {
-    if (!re.test(e.text)) return null;
+    if (!re.test(e.own)) return null;
     score += 3;
   }
   if (rule.need?.length) reasons.push("Name passt");
+  if (rule.prefer?.test(e.own)) {
+    score += 8;
+    reasons.push("bevorzugt");
+  }
   for (const re of rule.bonus ?? []) {
-    if (re.test(e.text)) {
+    if (re.test(e.own)) {
       score += 2;
       reasons.push("Stichwort");
     }

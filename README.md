@@ -5,7 +5,7 @@ Sie ist fürs Handy und den Desktop gebaut und zeigt alle Geräte an einem Ort:
 
 | Bereich | Was du siehst & steuerst |
 |---|---|
-| **Übersicht** | Energiefluss (PV → Haus / Netz / Wallbox / Warmwasser), Räume, Wallbox, AC THOR, Pelletkessel, Schnellaktionen, Abwesend-Schalter |
+| **Übersicht** | Energiefluss (PV → Haus / Netz / Batterie / Wallbox / Warmwasser), Räume, Wallbox, AC THOR, Pelletkessel, Schnellaktionen, Abwesend-Schalter |
 | **Heizung** | Jedes Heizkörperthermostat mit ± Solltemperatur, Modus, Fenster-offen-Hinweis und Batteriewarnung; Fröling-Kessel mit Pufferspeicher; Heizprogramm (Komfort-/Absenkzeiten) |
 | **Energie** | Enphase-PV mit Tagesertrag und Autarkie, Wallbox mit Lademodus (Aus / Sofort / PV-Überschuss / Min + PV), AC THOR / Warmwasser |
 | **Geräte** | Alle Zigbee- und sonstigen Geräte nach Raum gruppiert: Licht (mit Dimmer), Steckdosen, Rollläden, Sensoren. Namen antippen zum Umbenennen |
@@ -132,6 +132,7 @@ nur diese Skripte an.
 | Gerät | Empfohlene Integration |
 |---|---|
 | Enphase PV | *Enphase Envoy* (in HA enthalten). Für Hausverbrauch und Netz braucht der Envoy Verbrauchs-Stromwandler (CTs). |
+| Hausbatterie | Enphase Encharge/IQ Battery über dieselbe Integration. Bei mehreren Einheiten eine Template-Summe anlegen, z. B. `{{ states('sensor.encharge_1_leistung') \| float(0) + states('sensor.encharge_2_leistung') \| float(0) }}` (+ = Entladen). |
 | Heizkörperthermostate, Zigbee | ZHA oder Zigbee2MQTT |
 | AC THOR (my-PV) | *my-PV* (HACS) oder Modbus TCP |
 | Fröling Pelletheizung | *Fröling Connect* (HACS) oder Modbus über die Lambdatronic |

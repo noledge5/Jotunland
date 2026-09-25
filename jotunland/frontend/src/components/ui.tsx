@@ -7,7 +7,7 @@ export function Card({ title, icon: Icon, action, children, className = "", tone
   action?: ReactNode;
   children: ReactNode;
   className?: string;
-  tone?: "sun" | "fire" | "water" | "leaf" | "bolt";
+  tone?: "sun" | "fire" | "water" | "leaf" | "bolt" | "battery";
 }) {
   return (
     <section className={`card ${className}`} data-tone={tone}>

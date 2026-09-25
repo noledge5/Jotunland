@@ -3,7 +3,7 @@ import { useHass } from "../ha/HassContext";
 import { Card } from "../components/ui";
 import { EnergyFlow } from "../components/EnergyFlow";
 import { HelperControl } from "../components/controls";
-import { AcThorCard, PvCard, WallboxCard } from "../components/systems";
+import { AcThorCard, BatteryCard, PvCard, WallboxCard } from "../components/systems";
 
 const ENERGY_HELPERS = ["input_number.jotunland_wallbox_min_ampere", "input_number.jotunland_wallbox_max_ampere", "input_number.jotunland_wallbox_phasen"];
 
@@ -20,6 +20,7 @@ export function Energy() {
           <EnergyFlow />
         </Card>
         <PvCard />
+        <BatteryCard />
         <WallboxCard />
         <AcThorCard />
         {helpers.length > 0 && (
@@ -29,7 +30,7 @@ export function Energy() {
                 <HelperControl key={h.entity_id} entity={h} />
               ))}
             </div>
-            <p className="hint">Geladen wird, sobald der Überschuss für den Mindeststrom reicht. Fällt er 5 Minuten darunter, pausiert die Wallbox.</p>
+            <p className="hint">Geladen wird, sobald der Überschuss für den Mindeststrom reicht. Fällt er 5 Minuten darunter, pausiert die Wallbox. Das Auto hat Vorrang vor dem Warmwasser, aber nie vor dem Netz: Für PV-Laden wird kein Strom gekauft und die Batterie nicht entladen.</p>
           </Card>
         )}
       </div>

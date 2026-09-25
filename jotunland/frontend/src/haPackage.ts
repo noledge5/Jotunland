@@ -9,6 +9,10 @@ export const PACKAGE_VERSION = Number(/jotunland-package-version:\s*(\d+)/.exec(
 export const PLACEHOLDERS: Record<string, string> = {
   "sensor.anpassen_pv_leistung": "energy.pv_power",
   "sensor.anpassen_hausverbrauch": "energy.consumption",
+  "sensor.anpassen_netz": "energy.grid",
+  "sensor.anpassen_batterie_leistung": "energy.battery_power",
+  "sensor.anpassen_batterie_ladestand": "energy.battery_soc",
+  "sensor.anpassen_warmwasser_leistung": "acthor.power",
   "sensor.anpassen_wallbox_leistung": "wallbox.power",
   "sensor.anpassen_wallbox_geladen": "wallbox.session_energy",
   "switch.anpassen_wallbox_laden": "wallbox.charging_switch",
@@ -69,6 +73,7 @@ export const HELPER_DEFAULTS: Record<string, number | string> = {
   "input_number.jotunland_komfort_temperatur": 21,
   "input_number.jotunland_eco_temperatur": 18,
   "input_number.jotunland_warmwasser_minimum": 45,
+  "input_number.jotunland_batterie_vorrang": 90,
   "input_datetime.jotunland_heizen_start": "06:00:00",
   "input_datetime.jotunland_heizen_ende": "22:00:00",
 };

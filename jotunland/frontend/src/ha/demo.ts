@@ -46,6 +46,7 @@ export const demoAreas: Area[] = [
 // Bewusst teils "technische" Namen und fehlende Räume, wie frisch angelernte Zigbee-Geräte.
 const DEVICES: (DeviceInfo & { platform: string; entities: string[] })[] = [
   { id: "d_envoy", name: "Envoy 122301", manufacturer: "Enphase", model: "Envoy-S Metered", area_id: "technik", platform: "enphase_envoy", entities: ["sensor.envoy_122301_current_power_production", "sensor.envoy_122301_energy_production_today", "sensor.envoy_122301_current_power_consumption", "sensor.envoy_122301_current_net_power_consumption"] },
+  { id: "d_encharge", name: "Encharge 482231", manufacturer: "Enphase", model: "Encharge", area_id: "technik", platform: "enphase_envoy", entities: ["sensor.envoy_122301_battery", "sensor.encharge_482231_power"] },
   { id: "d_goe", name: "go-eCharger 204512", manufacturer: "go-e", model: "Gemini flex 11kW", area_id: null, platform: "goecharger_api2", entities: ["sensor.wallbox_status", "sensor.wallbox_leistung", "sensor.wallbox_geladen_session", "switch.wallbox_laden", "number.wallbox_ladestrom_ampere"] },
   { id: "d_thor", name: "AC THOR 9s", manufacturer: "my-PV", model: "AC•THOR 9s", area_id: "technik", platform: "mypv", entities: ["sensor.ac_thor_leistung", "sensor.ac_thor_temperatur", "number.ac_thor_soll_temperatur"] },
   { id: "d_froeling", name: "Fröling P4", manufacturer: "Fröling", model: "Lambdatronic P 3200", area_id: "technik", platform: "froeling_connect", entities: ["sensor.froeling_kesselzustand", "sensor.froeling_kesseltemperatur", "sensor.froeling_puffer_oben", "sensor.froeling_puffer_unten", "sensor.aussentemperatur", "sensor.froeling_pelletvorrat", "binary_sensor.froeling_stoerung"] },
@@ -83,7 +84,10 @@ function initialStates(): HassEntities {
     e("sensor.envoy_122301_current_power_production", 5230, { friendly_name: "Envoy Aktuelle Produktion", unit_of_measurement: "W", device_class: "power" }),
     e("sensor.envoy_122301_energy_production_today", 21.4, { friendly_name: "Envoy Produktion heute", unit_of_measurement: "kWh", device_class: "energy" }),
     e("sensor.envoy_122301_current_power_consumption", 1480, { friendly_name: "Envoy Aktueller Verbrauch", unit_of_measurement: "W", device_class: "power" }),
-    e("sensor.envoy_122301_current_net_power_consumption", -3750, { friendly_name: "Envoy Netz", unit_of_measurement: "W", device_class: "power" }),
+    e("sensor.envoy_122301_current_net_power_consumption", -2550, { friendly_name: "Envoy Netz", unit_of_measurement: "W", device_class: "power" }),
+
+    e("sensor.envoy_122301_battery", 78, { friendly_name: "Envoy Batterie", unit_of_measurement: "%", device_class: "battery" }),
+    e("sensor.encharge_482231_power", -1200, { friendly_name: "Encharge Leistung", unit_of_measurement: "W", device_class: "power" }),
 
     e("sensor.wallbox_status", "Lädt", { friendly_name: "Wallbox Status" }),
     e("sensor.wallbox_leistung", 0, { friendly_name: "Wallbox Leistung", unit_of_measurement: "W", device_class: "power" }),
@@ -129,6 +133,7 @@ function initialStates(): HassEntities {
     e("input_number.jotunland_wallbox_phasen", 3, { friendly_name: "Wallbox Phasen", min: 1, max: 3, step: 1, mode: "box" }),
     e("input_number.jotunland_komfort_temperatur", 21.5, { friendly_name: "Komforttemperatur", min: 16, max: 25, step: 0.5, unit_of_measurement: "°C", mode: "slider" }),
     e("input_number.jotunland_eco_temperatur", 18, { friendly_name: "Absenktemperatur", min: 12, max: 21, step: 0.5, unit_of_measurement: "°C", mode: "slider" }),
+    e("input_number.jotunland_batterie_vorrang", 90, { friendly_name: "Batterie-Vorrang bis", min: 0, max: 100, step: 5, unit_of_measurement: "%", mode: "slider" }),
     e("input_number.jotunland_warmwasser_minimum", 45, { friendly_name: "Warmwasser Minimum", min: 35, max: 60, step: 1, unit_of_measurement: "°C", mode: "slider" }),
     e("input_datetime.jotunland_heizen_start", "06:00:00", { friendly_name: "Heizen ab", has_date: false, has_time: true }),
     e("input_datetime.jotunland_heizen_ende", "22:00:00", { friendly_name: "Absenken ab", has_date: false, has_time: true }),
@@ -188,11 +193,19 @@ export function startDemo(onChange: (s: HassEntities) => void): DemoHome {
       set("number.wallbox_ladestrom_ampere", amps);
     }
     const wb = charging && mode !== "Aus" ? amps * 690 : 0;
-    const thor = Math.max(0, Math.min(3000, pv - house - wb));
+    // Batterie nimmt den Überschuss bis voll (max. 3 kW), deckt Defizite bis 10 %; der Rest geht ins Warmwasser.
+    const soc = num("sensor.envoy_122301_battery");
+    const surplus = pv - house - wb;
+    const laden = soc < 100 ? Math.min(3000, Math.max(0, surplus)) : 0;
+    const entladen = surplus < 0 && soc > 10 ? Math.min(3000, -surplus) : 0;
+    const thor = Math.max(0, Math.min(3000, surplus - laden));
     const water = Math.min(num("number.ac_thor_soll_temperatur"), num("sensor.ac_thor_temperatur") + thor / 20000);
+    const net = house + wb + thor + laden - entladen - pv;
+    set("sensor.envoy_122301_battery", Math.round(Math.max(0, Math.min(100, soc + (laden - entladen) / 20000)) * 10) / 10);
+    set("sensor.encharge_482231_power", Math.round(entladen - laden));
     set("sensor.envoy_122301_current_power_production", Math.round(pv));
-    set("sensor.envoy_122301_current_power_consumption", Math.round(house + wb + thor));
-    set("sensor.envoy_122301_current_net_power_consumption", Math.round(house + wb + thor - pv));
+    set("sensor.envoy_122301_current_power_consumption", Math.round(pv + net));
+    set("sensor.envoy_122301_current_net_power_consumption", Math.round(net));
     set("sensor.wallbox_leistung", Math.round(wb));
     set("sensor.wallbox_status", wb > 0 ? "Lädt" : "Bereit");
     set("sensor.ac_thor_leistung", Math.round(thor));

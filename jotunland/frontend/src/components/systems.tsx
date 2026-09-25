@@ -1,4 +1,4 @@
-import { AlertTriangle, BatteryCharging, Car, Droplets, Flame, Sun } from "lucide-react";
+import { AlertTriangle, BatteryCharging, BatteryMedium, Car, Droplets, Flame, Sun } from "lucide-react";
 import { useEntity, useHass } from "../ha/HassContext";
 import { fmtNum, fmtPower, fmtState, fmtTemp, num, unavailable, watts } from "../format";
 import { Badge, Bar, Card, Chips, Empty, Stat, Toggle } from "./ui";
@@ -14,7 +14,12 @@ export function PvCard() {
   const today = useEntity("energy.pv_today");
   const peak = 9800; // Anzeigeskala; bei Bedarf an die kWp der Anlage anpassen
   if (n.pv === undefined) return <Card title="Solar" icon={Sun} tone="sun"><Missing what="Die Enphase-Anlage ist" /></Card>;
-  const selfUse = n.consumption ? Math.min(100, (Math.min(n.pv, n.consumption) / Math.max(n.consumption, 1)) * 100) : undefined;
+  // Autarkie: Anteil des Verbrauchs, der nicht aus dem Netz kommt (PV und Batterie zählen beide)
+  const selfUse = n.consumption
+    ? n.grid !== undefined
+      ? Math.max(0, Math.min(100, (1 - Math.max(n.grid, 0) / Math.max(n.consumption, 1)) * 100))
+      : Math.min(100, (Math.min(n.pv, n.consumption) / Math.max(n.consumption, 1)) * 100)
+    : undefined;
   return (
     <Card title="Solar" icon={Sun} tone="sun" action={<Badge tone={n.pv > 50 ? "ok" : "muted"}>{n.pv > 50 ? "produziert" : "ruht"}</Badge>}>
       <div className="stats">
@@ -25,6 +30,30 @@ export function PvCard() {
       <Bar value={n.pv} max={peak} tone="sun" />
       {n.grid !== undefined && (
         <p className="hint">{n.grid < 0 ? `${fmtPower(-n.grid)} Überschuss werden eingespeist.` : `${fmtPower(n.grid)} kommen aus dem Netz.`}</p>
+      )}
+    </Card>
+  );
+}
+
+export function BatteryCard() {
+  const { entities, mapping } = useHass();
+  const n = useEnergy();
+  if (!mapping["energy.battery_power"] && !mapping["energy.battery_soc"]) return null;
+  const b = n.battery;
+  const zustand = b === undefined || Math.abs(b) <= 20 ? "ruht" : b > 0 ? "entlädt" : "lädt";
+  const vorrang = entities["input_number.jotunland_batterie_vorrang"];
+  return (
+    <Card title="Batterie" icon={BatteryMedium} tone="battery" action={<Badge tone={zustand === "lädt" ? "ok" : zustand === "entlädt" ? "info" : "muted"}>{zustand}</Badge>}>
+      <div className="stats">
+        <Stat big label="Ladestand" value={n.batterySoc === undefined ? "–" : `${fmtNum(n.batterySoc, 0)} %`} />
+        <Stat label={b !== undefined && b > 20 ? "Entladen" : "Laden"} value={fmtPower(b === undefined ? undefined : Math.abs(b))} />
+      </div>
+      <Bar value={n.batterySoc} max={100} tone="battery" />
+      {vorrang && (
+        <>
+          <HelperControl entity={vorrang} label="Vorrang vor dem Auto bis" />
+          <p className="hint">Bis zu diesem Ladestand bekommt die Batterie den Überschuss zuerst, darüber lädt das Auto mit. Warmwasser kommt nach dem Auto.</p>
+        </>
       )}
     </Card>
   );
