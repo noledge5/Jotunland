@@ -32,10 +32,18 @@ interface HassCtx {
   rooms: RoomConfig[];
   areaName: (id?: string | null) => string | undefined;
   callService: (domain: string, service: string, data?: Record<string, unknown>) => Promise<void>;
+  toasts: Toast[];
+  notify: (text: string, tone?: Toast["tone"]) => void;
   ws: <T>(msg: Record<string, unknown>) => Promise<T>;
   refreshRegistry: () => Promise<void>;
   setOverride: (slot: string, entityId: string | null) => Promise<void>;
   applySettings: (s: ConnSettings | null) => void;
+}
+
+export interface Toast {
+  id: number;
+  text: string;
+  tone: "ok" | "bad" | "info";
 }
 
 const Ctx = createContext<HassCtx | null>(null);
@@ -160,11 +168,30 @@ export function HassProvider({ children }: { children: ReactNode }) {
     };
   }, [settings, addonKnown, isAddon, refreshRegistry, loadOverrides]);
 
-  const callService = useCallback(async (domain: string, service: string, data?: Record<string, unknown>) => {
-    if (demo.current) return demo.current.call(domain, service, data);
-    if (!conn.current) throw new Error("Nicht verbunden");
-    await haCallService(conn.current, domain, service, data);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const notify = useCallback((text: string, tone: Toast["tone"] = "info") => {
+    const id = Date.now() + Math.random();
+    setToasts((t) => [...t.slice(-3), { id, text, tone }]);
+    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), tone === "bad" ? 9000 : 4000);
   }, []);
+
+  /** Dienstaufruf mit sichtbarer Fehlermeldung – sonst scheitert eine Bedienung stumm */
+  const callService = useCallback(
+    async (domain: string, service: string, data?: Record<string, unknown>) => {
+      try {
+        if (demo.current) return await demo.current.call(domain, service, data);
+        if (!conn.current) throw new Error("Nicht mit Home Assistant verbunden");
+        await haCallService(conn.current, domain, service, data);
+      } catch (err) {
+        const msg = (err as { message?: string })?.message ?? String(err);
+        const target = data?.entity_id ? ` (${[data.entity_id].flat().join(", ")})` : "";
+        notify(`Befehl ${domain}.${service}${target} fehlgeschlagen: ${msg}`, "bad");
+        // Aufrufer ohne eigene Fehlerbehandlung: schon gemeldet, nicht zusätzlich als Konsolenfehler
+        throw Object.assign(new Error(msg), { gemeldet: true });
+      }
+    },
+    [notify],
+  );
 
   const setOverride = useCallback(
     async (slot: string, entityId: string | null) => {
@@ -234,6 +261,8 @@ export function HassProvider({ children }: { children: ReactNode }) {
     rooms,
     areaName,
     callService,
+    toasts,
+    notify,
     ws,
     refreshRegistry,
     setOverride,

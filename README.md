@@ -9,6 +9,7 @@ Sie ist fürs Handy und den Desktop gebaut und zeigt alle Geräte an einem Ort:
 | **Heizung** | Jedes Heizkörperthermostat mit ± Solltemperatur, Modus, Fenster-offen-Hinweis und Batteriewarnung; Fröling-Kessel mit Pufferspeicher; Heizprogramm (Komfort-/Absenkzeiten) |
 | **Energie** | Enphase-PV mit Tagesertrag und Autarkie, Wallbox mit Lademodus (Aus / Sofort / PV-Überschuss / Min + PV), AC THOR / Warmwasser |
 | **Geräte** | Alle Zigbee- und sonstigen Geräte nach Raum gruppiert: Licht (mit Dimmer), Steckdosen, Rollläden, Sensoren. Namen antippen zum Umbenennen |
+| **Verlauf** | Wann AC THOR und Wallbox gelaufen sind (Zeitstrahl, Dauer, kWh) und was wann passiert ist: Automationen, Entscheidungen der Regelungen, Eingriffe von Hand |
 | **Automationen** | Automationen an/aus und manuell auslösen, Skripte starten, alle Stellschrauben (Temperaturen, Zeiten, Ladestrom …) |
 | **Einrichtung** | Assistent mit Ein-Klick-Aktionen, automatische Geräteerkennung und Zuordnung, Namens- und Raumvorschläge, Installation der Automationen |
 

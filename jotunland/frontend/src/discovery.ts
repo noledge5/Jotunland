@@ -89,7 +89,7 @@ const ENPHASE = /enphase|envoy|iq gateway/;
 const WALLBOX = /go ?e|goe|freecharge|free charge|wallbox|charger|ladestation|lader|ocpp|epro|free2move|esolutions|f2me/;
 const BATTERY = /batter|akku|speicher|encharge|storage|powerwall/;
 const BATTERY_VENDOR = /enphase|envoy|encharge|victron|sonnen|byd|huawei|luna2000|sungrow|fronius|kostal|tesla|powerwall|senec|e3dc|solaredge|growatt|goodwe|varta|alpha ?ess|1komma5|kiwigrid/;
-const MYPV = /my ?pv|ac ?thor|acthor|elwa/;
+export const MYPV = /my ?pv|ac ?thor|acthor|elwa/;
 const FROELING = /froeling|froling|lambdatronic|pellet|p4|pe1|s3 turbo/;
 
 export const SLOTS: Record<string, SlotRule> = {

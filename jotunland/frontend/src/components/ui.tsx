@@ -74,7 +74,7 @@ export function Slider({ value, min, max, step, onCommit, format, disabled }: {
   min: number;
   max: number;
   step: number;
-  onCommit: (v: number) => void;
+  onCommit: (v: number) => void | Promise<unknown>;
   format?: (v: number) => string;
   disabled?: boolean;
 }) {
@@ -85,7 +85,8 @@ export function Slider({ value, min, max, step, onCommit, format, disabled }: {
   }, [value, dragging]);
   const commit = () => {
     setDragging(false);
-    if (local !== value) onCommit(local);
+    // Lehnt Home Assistant ab, wieder den echten Wert zeigen
+    if (local !== value) Promise.resolve(onCommit(local)).catch(() => setLocal(value));
   };
   return (
     <div className="slider">

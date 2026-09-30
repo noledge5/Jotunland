@@ -60,7 +60,9 @@ Zugangsdaten stehen in `.env.local` (Vorlage `.env.example`), nie im Code.
    ungenutzte Einspeisung), `tage`, `profil 2026-06 2026-08`, `heizung`, `entscheidungen`.
    Welche Entität welches Signal ist, steht in `haus/signale.json` (Vorlage `tools/signale.beispiel.json`).
    Regelungen schreiben ihre Entscheidungen per `logbook.log` mit Namen „Jotunland …“ – bei neuen
-   Regelungen genauso machen, damit `entscheidungen` sie zeigt. Recorder hebt 90 Tage auf (`haus/messdaten.yaml`).
+   Regelungen genauso machen, damit `entscheidungen` und die Seite **Verlauf** sie als
+   „Entscheidung“ zeigen (Meldung kurz und mit Grund, z. B. „Hand: Sollwert 3000 W“ oder
+   „Speicher voll (Messwert 60 °C) → 0 W“). Recorder hebt 90 Tage auf (`haus/messdaten.yaml`).
 
 Wichtig: `check_config` von Home Assistant meldet fehlerhafte Automationen und Template-Sensoren
 **nicht** – deshalb immer `validate` vorher und das Systemprotokoll nachher (macht `deploy` selbst).
@@ -72,6 +74,10 @@ Wichtig: `check_config` von Home Assistant meldet fehlerhafte Automationen und T
   ein Gerät etwas verändert (Wallbox-Strom, Laden an/aus, Heizmodus, Kessel), kurz sagen, was
   passiert, und auf ein Ja warten.
 - Beim Testen von Wallbox-Automationen den Lademodus beachten: im Modus „Aus“ greift nichts.
+- Stellschrauben einer eigenen Regelung (z. B. `input_select.ac_thor_modus`,
+  `input_number.ac_thor_hand_leistung`) zeigt die AC-THOR-Karte automatisch, wenn „ac_thor“
+  in ID oder Namen steht. Ein Handbetrieb sollte auch ohne Überschuss den eingestellten Wert
+  regelmäßig schreiben (Watchdog 60 s!) und jede Sperre ins Logbuch schreiben.
 - `configuration.yaml` in Home Assistant nicht per SSH ändern – das Add-on richtet `packages` ein.
 - Nie `.env.local`, Tokens, `haus/` oder `lokal/` committen oder in Logs ausgeben.
 - Vor dem Commit: `cd jotunland/frontend && npm run build` (Typprüfung) und bei Paketänderungen

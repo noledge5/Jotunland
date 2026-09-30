@@ -365,3 +365,54 @@ textarea.input { resize: vertical; font-family: ui-monospace, monospace; font-si
 .setup-banner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); }
 .setup-banner svg { color: var(--accent); flex-shrink: 0; }
 .setup-banner span { flex: 1; font-size: 14px; }
+
+/* ---------- Verlauf ---------- */
+.toolbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.strips { display: flex; flex-direction: column; gap: 6px; }
+.strip-row { display: flex; align-items: center; gap: 10px; }
+.strip-label { width: 74px; flex-shrink: 0; font-size: 12px; color: var(--muted); }
+.strip { position: relative; flex: 1; height: 18px; border-radius: 6px; background: var(--surface-2); overflow: hidden; --c: var(--accent); }
+.strip[data-tone="water"] { --c: var(--water); }
+.strip[data-tone="bolt"] { --c: var(--bolt); }
+.strip[data-tone="battery"] { --c: var(--ok); }
+.strip-run { position: absolute; top: 0; bottom: 0; background: var(--c); border-radius: 3px; }
+.strip-tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); }
+.strip-now { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); opacity: 0.6; }
+.strip-row.scale { height: 14px; }
+.strip-scale { position: relative; flex: 1; height: 14px; font-size: 10.5px; color: var(--muted); }
+.strip-scale span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.strip-scale span:first-child { transform: none; }
+.strip-scale span:last-child { transform: translateX(-100%); }
+.today-runs { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.today-runs:hover span { color: var(--text); }
+.today-runs .strip { height: 12px; }
+.rows.runs li { cursor: default; }
+.rows.runs strong { display: flex; gap: 8px; align-items: center; font-size: 13.5px; }
+
+.events { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.events-day { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 14px 0 6px; font-weight: 700; }
+.events-day:first-child { padding-top: 0; }
+.event { display: grid; grid-template-columns: 92px 14px 1fr; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); --c: var(--muted); }
+.event[data-tone="water"] { --c: var(--water); }
+.event[data-tone="bolt"] { --c: var(--bolt); }
+.event[data-tone="battery"] { --c: var(--ok); }
+.event[data-tone="fire"] { --c: var(--fire); }
+.event[data-tone="accent"] { --c: var(--accent); }
+.event.decision { background: color-mix(in srgb, var(--c) 6%, transparent); }
+.event-time { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
+.event-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); margin-top: 5px; }
+.event-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.event-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; }
+.event-text { font-size: 13px; }
+.event-cause { font-size: 12px; color: var(--muted); }
+@media (max-width: 600px) {
+  .event { grid-template-columns: 70px 12px 1fr; }
+  .strip-label { width: 58px; }
+}
+
+/* ---------- Meldungen ---------- */
+.toasts { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; flex-direction: column; gap: 8px; max-width: min(440px, calc(100vw - 32px)); }
+.toast { padding: 12px 14px; border-radius: 12px; font-size: 13.5px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
+.toast[data-tone="bad"] { border-color: color-mix(in srgb, var(--bad) 60%, var(--border)); background: color-mix(in srgb, var(--bad) 12%, var(--surface)); }
+.toast[data-tone="ok"] { border-color: color-mix(in srgb, var(--ok) 60%, var(--border)); }
+@media (max-width: 860px) { .toasts { bottom: 84px; left: 16px; right: 16px; max-width: none; } }

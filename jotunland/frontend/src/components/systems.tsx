@@ -1,5 +1,9 @@
 import { AlertTriangle, BatteryCharging, BatteryMedium, Car, Droplets, Flame, Sun } from "lucide-react";
+import { useMemo } from "react";
 import { useEntity, useHass } from "../ha/HassContext";
+import { MYPV } from "../discovery";
+import { fmtClock, startOfDay, useRuns } from "../history";
+import { DayStrip, runSummary } from "./Timeline";
 import { fmtNum, fmtPower, fmtState, fmtTemp, num, unavailable, watts } from "../format";
 import { Badge, Bar, Card, Chips, Empty, Stat, Toggle } from "./ui";
 import { HelperControl } from "./controls";
@@ -95,21 +99,70 @@ export function WallboxCard() {
   );
 }
 
+const CONTROL_ORDER = ["input_select", "select", "input_boolean", "switch", "input_number", "number", "input_button", "button", "script"];
+
+/** Alle Stellschrauben des AC THOR – auch die der eigenen Regelung (Modus, Handleistung …) */
+function useAcThorControls() {
+  const { infos } = useHass();
+  return useMemo(
+    () =>
+      infos
+        .filter((i) => CONTROL_ORDER.includes(i.domain) && MYPV.test(i.own) && i.entity.state !== "unavailable")
+        .sort((a, b) => CONTROL_ORDER.indexOf(a.domain) - CONTROL_ORDER.indexOf(b.domain) || a.name.localeCompare(b.name, "de")),
+    [infos],
+  );
+}
+
 export function AcThorCard() {
+  const { infos } = useHass();
   const power = useEntity("acthor.power");
   const temp = useEntity("acthor.temperature");
   const target = useEntity("acthor.target");
+  const controls = useAcThorControls();
+  const today = useMemo(() => startOfDay(Date.now()), []);
+  const { runs } = useRuns([power?.entity_id], today);
   if (!power && !temp) return <Card title="Warmwasser · AC THOR" icon={Droplets} tone="water"><Missing what="Der AC THOR ist" /></Card>;
   const t = num(temp);
-  const tt = num(target);
+  const tt = target?.attributes.unit_of_measurement === "°C" ? num(target) : undefined;
+  const w = watts(power) ?? 0;
+  const todayRuns = power ? runs[power.entity_id] ?? [] : [];
+
+  // Warum heizt er nicht? Speicher voll sperrt auch den Handbetrieb.
+  const full = infos.find((i) => i.domain === "binary_sensor" && MYPV.test(i.own) && /voll|full|sperr|block/.test(i.own) && i.entity.state === "on");
+  // Handbetrieb: Auswahl "Modus = Hand" oder ein Schalter "…Handbetrieb…" = an
+  const hand =
+    controls.find((c) => c.domain.endsWith("select") && /modus|mode|betrieb/.test(c.own) && /hand|manu/i.test(c.entity.state)) ??
+    controls.find((c) => (c.domain === "input_boolean" || c.domain === "switch") && /hand|manu/.test(c.own) && c.entity.state === "on");
+  const handSince = hand ? Date.parse(hand.entity.last_changed) : undefined;
+  const handButIdle = handSince !== undefined && !full && w < 50 && Date.now() - handSince > 90_000;
+
   return (
-    <Card title="Warmwasser · AC THOR" icon={Droplets} tone="water" action={(watts(power) ?? 0) > 50 ? <Badge tone="warn"><Flame size={12} /> heizt mit PV</Badge> : undefined}>
+    <Card title="Warmwasser · AC THOR" icon={Droplets} tone="water" action={w > 50 ? <Badge tone="warn"><Flame size={12} /> heizt</Badge> : <Badge tone="muted">aus</Badge>}>
       <div className="stats">
         <Stat big label="Speicher" value={fmtTemp(t)} sub={tt !== undefined ? `Soll ${fmtTemp(tt)}` : undefined} />
-        <Stat label="Heizstab" value={fmtPower(watts(power))} />
+        <Stat label="Heizstab" value={fmtPower(w)} />
       </div>
       <Bar value={t} max={tt ?? 70} tone="water" />
-      {target && <HelperControl entity={target} label="Solltemperatur" />}
+      {full && <p className="hint bad">„{full.name}“ ist an – es wird nicht geheizt, auch nicht im Handbetrieb.</p>}
+      {handButIdle && (
+        <p className="hint bad">
+          Handbetrieb ist seit {fmtClock(handSince!)} an, aber der Heizstab nimmt keine Leistung auf. Mögliche Gründe: Temperaturgrenze, Modbus-Verbindung
+          oder Watchdog der Regelung – die Entscheidungen stehen im <a href="#/verlauf">Verlauf</a>.
+        </p>
+      )}
+      {controls.length > 0 && (
+        <div className="helpers">
+          {controls.map((c) => (
+            <HelperControl key={c.id} entity={c.entity} label={c.name.replace(/^(my-?pv\s*)?ac[ -]?thor\s*/i, "") || c.name} />
+          ))}
+        </div>
+      )}
+      {power && (
+        <a className="today-runs" href="#/verlauf">
+          <DayStrip runs={todayRuns} day={today} tone="water" />
+          <span>Heute: {runSummary(todayRuns)} →</span>
+        </a>
+      )}
     </Card>
   );
 }

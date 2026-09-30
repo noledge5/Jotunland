@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+- Neue Seite **Verlauf**: wann AC THOR und Wallbox gelaufen sind (Zeitstrahl je Tag,
+  Dauer, kWh, Ø/max Leistung) und ein Ereignisprotokoll aus dem Logbuch – Automationen,
+  Entscheidungen der Regelungen („Jotunland …“), Schaltvorgänge und Eingriffe von Hand,
+  jeweils mit Auslöser; wiederkehrende Einträge zusammengefasst
+- AC-THOR-Karte zeigt alle AC-THOR-Stellschrauben (auch Modus/Handleistung der eigenen
+  Regelung), die heutigen Läufe und erklärt, warum nicht geheizt wird („Speicher voll“,
+  Handbetrieb ohne Leistungsaufnahme)
+- Fehlgeschlagene Befehle werden sichtbar gemeldet (mit Grund von Home Assistant);
+  Schieberegler springen dann auf den echten Wert zurück
+
 ## 0.4.0
 - Hausbatterie: eigener Knoten im Energiefluss (Laden/Entladen, Ladestand) und
   Batterie-Karte unter Energie; Hausverbrauch und Autarkie berücksichtigen die Batterie

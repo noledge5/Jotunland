@@ -48,7 +48,7 @@ const DEVICES: (DeviceInfo & { platform: string; entities: string[] })[] = [
   { id: "d_envoy", name: "Envoy 122301", manufacturer: "Enphase", model: "Envoy-S Metered", area_id: "technik", platform: "enphase_envoy", entities: ["sensor.envoy_122301_current_power_production", "sensor.envoy_122301_energy_production_today", "sensor.envoy_122301_current_power_consumption", "sensor.envoy_122301_current_net_power_consumption"] },
   { id: "d_encharge", name: "Encharge 482231", manufacturer: "Enphase", model: "Encharge", area_id: "technik", platform: "enphase_envoy", entities: ["sensor.envoy_122301_battery", "sensor.encharge_482231_power"] },
   { id: "d_goe", name: "go-eCharger 204512", manufacturer: "go-e", model: "Gemini flex 11kW", area_id: null, platform: "goecharger_api2", entities: ["sensor.wallbox_status", "sensor.wallbox_leistung", "sensor.wallbox_geladen_session", "switch.wallbox_laden", "number.wallbox_ladestrom_ampere"] },
-  { id: "d_thor", name: "AC THOR 9s", manufacturer: "my-PV", model: "AC•THOR 9s", area_id: "technik", platform: "mypv", entities: ["sensor.ac_thor_leistung", "sensor.ac_thor_temperatur", "number.ac_thor_soll_temperatur"] },
+  { id: "d_thor", name: "AC THOR 9s", manufacturer: "my-PV", model: "AC•THOR 9s", area_id: "technik", platform: "mypv", entities: ["sensor.ac_thor_leistung", "sensor.ac_thor_temperatur", "number.ac_thor_soll_temperatur", "input_select.ac_thor_modus", "input_number.ac_thor_hand_leistung", "binary_sensor.ac_thor_speicher_voll"] },
   { id: "d_froeling", name: "Fröling P4", manufacturer: "Fröling", model: "Lambdatronic P 3200", area_id: "technik", platform: "froeling_connect", entities: ["sensor.froeling_kesselzustand", "sensor.froeling_kesseltemperatur", "sensor.froeling_puffer_oben", "sensor.froeling_puffer_unten", "sensor.aussentemperatur", "sensor.froeling_pelletvorrat", "binary_sensor.froeling_stoerung"] },
   { id: "d_trv1", name: "0x00158d0004a1b2c3", manufacturer: "_TZE200_ckud7u2l", model: "TS0601", area_id: "wohnzimmer", platform: "zha", entities: ["climate.wohnzimmer"] },
   { id: "d_trv2", name: "Thermostat Küche", manufacturer: "Bosch", model: "BTH-RA", area_id: "kueche", platform: "zha", entities: ["climate.kueche"] },
@@ -98,6 +98,9 @@ function initialStates(): HassEntities {
     e("sensor.ac_thor_leistung", 900, { friendly_name: "AC THOR Leistung", unit_of_measurement: "W", device_class: "power" }),
     e("sensor.ac_thor_temperatur", 54.5, { friendly_name: "Warmwasser", unit_of_measurement: "°C", device_class: "temperature" }),
     e("number.ac_thor_soll_temperatur", 60, { friendly_name: "Warmwasser Soll", min: 40, max: 75, step: 1, unit_of_measurement: "°C" }),
+    e("input_select.ac_thor_modus", "Automatik", { friendly_name: "AC THOR Modus", options: ["Automatik", "Hand", "Aus"] }),
+    e("input_number.ac_thor_hand_leistung", 3000, { friendly_name: "AC THOR Handleistung", min: 0, max: 9000, step: 100, unit_of_measurement: "W", mode: "slider" }),
+    e("binary_sensor.ac_thor_speicher_voll", "off", { friendly_name: "AC THOR Speicher voll" }),
 
     e("sensor.froeling_kesselzustand", "Heizen", { friendly_name: "Kesselzustand" }),
     e("sensor.froeling_kesseltemperatur", 71, { friendly_name: "Kesseltemperatur", unit_of_measurement: "°C", device_class: "temperature" }),
@@ -198,7 +201,10 @@ export function startDemo(onChange: (s: HassEntities) => void): DemoHome {
     const surplus = pv - house - wb;
     const laden = soc < 100 ? Math.min(3000, Math.max(0, surplus)) : 0;
     const entladen = surplus < 0 && soc > 10 ? Math.min(3000, -surplus) : 0;
-    const thor = Math.max(0, Math.min(3000, surplus - laden));
+    // AC THOR: Automatik nimmt den Rest, Hand fährt die eingestellte Leistung, "Speicher voll" sperrt beides
+    const thorMode = states["input_select.ac_thor_modus"]?.state ?? "Automatik";
+    const full = states["binary_sensor.ac_thor_speicher_voll"]?.state === "on";
+    const thor = full || thorMode === "Aus" ? 0 : thorMode === "Hand" ? num("input_number.ac_thor_hand_leistung") : Math.max(0, Math.min(3000, surplus - laden));
     const water = Math.min(num("number.ac_thor_soll_temperatur"), num("sensor.ac_thor_temperatur") + thor / 20000);
     const net = house + wb + thor + laden - entladen - pv;
     set("sensor.envoy_122301_battery", Math.round(Math.max(0, Math.min(100, soc + (laden - entladen) / 20000)) * 10) / 10);
@@ -246,6 +252,10 @@ export function startDemo(onChange: (s: HassEntities) => void): DemoHome {
           if ("area_id" in rest) d.area_id = rest.area_id as string;
           return d as T;
         }
+        case "history/history_during_period":
+          return demoHistory(Date.parse(String(rest.start_time)), (rest.entity_ids as string[]) ?? []) as T;
+        case "logbook/get_events":
+          return demoLogbook(Date.parse(String(rest.start_time))) as T;
         case "config/entity_registry/update": {
           const x = reg.entities.find((r) => r.entity_id === rest.entity_id);
           if (!x) throw new Error("Entität nicht gefunden");
@@ -287,4 +297,81 @@ export function startDemo(onChange: (s: HassEntities) => void): DemoHome {
       push();
     },
   };
+}
+
+/* ------------------------------------------------------ Demo-Verlauf ---- */
+
+const DAY_MS = 86_400_000;
+const dayStart = (ms: number) => {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
+/** reproduzierbarer Zufall je Tag */
+const rand = (seed: number) => {
+  const x = Math.sin(seed * 9301 + 49297) * 233280;
+  return x - Math.floor(x);
+};
+
+/** Läufe je Tag: [Startstunde, Endstunde, Spitzenleistung W] */
+function demoRuns(entity: string, day: number): [number, number, number][] {
+  const r = rand(day / DAY_MS);
+  if (/ac_thor/.test(entity)) {
+    const runs: [number, number, number][] = [[10.8 + r, 14.2 + r * 0.8, 3000 + r * 3000]];
+    if (r > 0.4) runs.push([15.9, 16.6, 1800]);
+    return runs;
+  }
+  if (/wallbox/.test(entity) && r > 0.35) return [[9.5 + r * 2, 12.5 + r * 2, 6900]];
+  return [];
+}
+
+function demoHistory(start: number, ids: string[]) {
+  const now = Date.now();
+  const out: Record<string, { s: string; lu: number }[]> = {};
+  for (const id of ids) {
+    const points: { s: string; lu: number }[] = [];
+    for (let t = start - (start % 120_000); t <= now; t += 120_000) {
+      const day = dayStart(t);
+      const h = (t - day) / 3_600_000;
+      let w = 0;
+      for (const [a, b, peak] of demoRuns(id, day)) {
+        if (h >= a && h < b) w = Math.round(peak * Math.sin(((h - a) / (b - a)) * Math.PI) ** 0.5);
+      }
+      if (!points.length || points[points.length - 1].s !== String(w)) points.push({ s: String(w), lu: t / 1000 });
+    }
+    out[id] = points;
+  }
+  return out;
+}
+
+function demoLogbook(start: number) {
+  const now = Date.now();
+  const at = (day: number, h: number) => (day + h * 3_600_000) / 1000;
+  const list: Record<string, unknown>[] = [];
+  for (let day = dayStart(start); day <= now; day += DAY_MS) {
+    for (const [a, b, peak] of demoRuns("sensor.ac_thor_leistung", day)) {
+      list.push({ when: at(day, a), name: "Jotunland AC THOR", message: `Automatik: Überschuss ${(peak / 1000).toFixed(1).replace(".", ",")} kW → Sollwert ${Math.round(peak / 100) * 100} W`, entity_id: "sensor.ac_thor_leistung" });
+      list.push({ when: at(day, b), name: "Jotunland AC THOR", message: "Automatik: kein Überschuss mehr → Sollwert 0 W", entity_id: "sensor.ac_thor_leistung" });
+    }
+    for (const [a, b] of demoRuns("sensor.wallbox_leistung", day)) {
+      for (let h = a; h < b; h += 1 / 60) {
+        list.push({ when: at(day, h), name: "Wallbox: PV-Überschussladen", message: "triggered by time pattern", entity_id: "automation.jotunland_wallbox_pv_ueberschuss", domain: "automation", source: "time pattern" });
+      }
+      list.push({ when: at(day, b + 0.05), name: "Wallbox: Pause bei zu wenig Sonne", message: "triggered by template", entity_id: "automation.jotunland_wallbox_pv_pause", domain: "automation" });
+    }
+    list.push({ when: at(day, 6), name: "Heizung: Heizzeiten", message: "triggered by time", entity_id: "automation.jotunland_heizzeiten", domain: "automation" });
+    list.push({ when: at(day, 22), name: "Heizung: Heizzeiten", message: "triggered by time", entity_id: "automation.jotunland_heizzeiten", domain: "automation" });
+    if (rand(day / DAY_MS + 7) > 0.5) {
+      list.push({ when: at(day, 18.5), entity_id: "input_select.ac_thor_modus", state: "Hand", context_user_id: "demo" });
+      list.push({ when: at(day, 18.5), name: "Jotunland AC THOR", message: "Hand: Sollwert 3000 W", entity_id: "sensor.ac_thor_leistung" });
+      list.push({ when: at(day, 18.9), name: "Jotunland AC THOR", message: "Speicher voll (Messwert 60 °C) → Sollwert 0 W, gilt auch im Handbetrieb", entity_id: "sensor.ac_thor_leistung" });
+      list.push({ when: at(day, 19.2), entity_id: "input_select.ac_thor_modus", state: "Automatik", context_user_id: "demo" });
+    }
+    list.push({ when: at(day, 7.2), entity_id: "binary_sensor.fenster_schlafzimmer", state: "on" });
+    list.push({ when: at(day, 7.2) + 30, name: "Fenster offen → Heizung aus (Schlafzimmer)", message: "triggered by state of Fenster Schlafzimmer", entity_id: "automation.jotunland_fenster_schlafzimmer", domain: "automation" });
+    list.push({ when: at(day, 7.5), entity_id: "binary_sensor.fenster_schlafzimmer", state: "off" });
+  }
+  return list
+    .filter((e) => (e.when as number) * 1000 >= start && (e.when as number) * 1000 <= now)
+    .sort((a, b) => (a.when as number) - (b.when as number));
 }

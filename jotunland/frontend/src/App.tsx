@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Flame, LayoutGrid, Lightbulb, Mountain, Settings, Workflow, Zap } from "lucide-react";
+import { Flame, History, LayoutGrid, Lightbulb, Mountain, Settings, Workflow, Zap } from "lucide-react";
 import { HassProvider, useHass } from "./ha/HassContext";
 import { Overview } from "./views/Overview";
 import { Heating } from "./views/Heating";
@@ -7,6 +7,7 @@ import { Energy } from "./views/Energy";
 import { Devices } from "./views/Devices";
 import { Automations } from "./views/Automations";
 import { Setup } from "./views/Setup";
+import { History as HistoryView } from "./views/History";
 import { Connect } from "./views/Connect";
 
 const ROUTES = [
@@ -14,6 +15,7 @@ const ROUTES = [
   { path: "heizung", label: "Heizung", icon: Flame, view: Heating },
   { path: "energie", label: "Energie", icon: Zap, view: Energy },
   { path: "geraete", label: "Geräte", icon: Lightbulb, view: Devices },
+  { path: "verlauf", label: "Verlauf", icon: History, view: HistoryView },
   { path: "automationen", label: "Automationen", short: "Abläufe", icon: Workflow, view: Automations },
   { path: "einrichtung", label: "Einrichtung", short: "Setup", icon: Settings, view: Setup },
 ];
@@ -33,7 +35,7 @@ function useRoute() {
 }
 
 function Shell() {
-  const { status, isDemo, config } = useHass();
+  const { status, isDemo, config, toasts } = useHass();
   const route = useRoute();
   if (status === "setup" || status === "error") return <Connect />;
   const current = ROUTES.find((r) => r.path === route) ?? ROUTES[0];
@@ -55,6 +57,11 @@ function Shell() {
           {isDemo ? "Demo" : status === "connected" ? "Verbunden" : status === "reconnecting" ? "Verbinde neu …" : "Verbinde …"}
         </div>
       </nav>
+      <div className="toasts" role="status" aria-live="polite">
+        {toasts.map((t) => (
+          <div key={t.id} className="toast" data-tone={t.tone}>{t.text}</div>
+        ))}
+      </div>
       <main className="main">
         {isDemo && <div className="demo-banner">Demo-Modus: simulierte Daten. Unter Einrichtung → Verbindung beenden.</div>}
         {status === "connecting" ? <div className="loading">Verbinde mit Home Assistant …</div> : <View />}
