@@ -4,7 +4,7 @@ node_modules/
 # Zugangsdaten und hausbezogene Daten – das Repository ist öffentlich
 .env.local
 .env.*.local
-lokal/
+/lokal/
 # alter, nur lokaler Ort der Hausregeln – jetzt jotunland/haus/ (ohne Geheimes, Werte per !secret)
-haus/
+/haus/
 secrets.yaml

@@ -1,0 +1,16 @@
+# Vorlage für eine Hausregel – wird nicht installiert (Name beginnt mit "_").
+# Kopieren, umbenennen (z. B. ac_thor.yaml) und anpassen. Geheimes immer per !secret.
+input_boolean:
+  beispiel_aktiv:
+    name: Beispiel aktiv
+automation:
+  - id: beispiel_regel
+    alias: "Beispiel: Entscheidung protokollieren"
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.beispiel_aktiv
+    actions:
+      - action: logbook.log
+        data:
+          name: Jotunland Beispiel
+          message: "Beispiel {{ trigger.to_state.state }}"
