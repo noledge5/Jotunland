@@ -25,7 +25,8 @@ export function useSetupState() {
     const groups = CORE_SLOTS.map((g) => ({ group: g.group, found: g.slots.some((s) => !!mapping[s]) }));
     const pkg = renderPackage(mapping, rooms);
     const helpersInstalled = !!entities[HELPER_MARKER];
-    const packageCurrent = addon ? addon.package.installed && (addon.package.version ?? 0) >= PACKAGE_VERSION : helpersInstalled;
+    const hausCurrent = !addon?.haus || addon.haus.files.every((f) => f.current);
+    const packageCurrent = addon ? addon.package.installed && (addon.package.version ?? 0) >= PACKAGE_VERSION && hausCurrent : helpersInstalled;
     const helpersNeedingDefaults = Object.keys(HELPER_DEFAULTS).filter((id) => needsDefault(entities[id]));
     const windowRooms = rooms.filter((r) => r.window).length;
     const open = [!packageCurrent, suggestions.length > 0, helpersInstalled && helpersNeedingDefaults.length > 0].filter(Boolean).length;

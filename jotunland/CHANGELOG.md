@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+- Hausregeln im Repo: jede `*.yaml` in `jotunland/haus/` (z. B. die AC-THOR-Regelung) wird
+  beim Installieren/Aktualisieren mit nach `/config/packages/` gespielt – mit Sicherung,
+  Validierung, Konfigurationsprüfung und automatischem Zurücksetzen
+- Geheimes (IP-Adressen, Passwörter) per `!secret`: der Assistent zeigt fehlende Werte und
+  trägt sie in `/config/secrets.yaml` ein (vorhandene Werte werden nie überschrieben)
+- Verständliche Meldung, wenn Home Assistant bei der Installation nicht erreichbar ist
+
 ## 0.5.1
 - AC-THOR-Karte: Bei „Speicher voll“ stehen Messwert und Temperaturgrenze im Hinweis,
   dazu, wie die Sperre wieder freigegeben wird – und eine Warnung, falls die Sperre

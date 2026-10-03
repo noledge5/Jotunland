@@ -34,9 +34,10 @@ if (!cmd || cmd === "hilfe" || cmd === "--help") {
 /* ------------------------------------------------------------- Helfer ---- */
 
 function signale() {
-  const file = join(ROOT, "haus", "signale.json");
-  if (!existsSync(file)) {
-    console.error("✗ haus/signale.json fehlt – Vorlage: tools/signale.beispiel.json");
+  // neu: jotunland/haus/ (im Repo, wird mit dem Add-on ausgeliefert); alt: haus/ (nur lokal)
+  const file = [join(ROOT, "jotunland", "haus", "signale.json"), join(ROOT, "haus", "signale.json")].find(existsSync) ?? "";
+  if (!file) {
+    console.error("✗ jotunland/haus/signale.json fehlt – Vorlage: tools/signale.beispiel.json");
     process.exit(2);
   }
   return JSON.parse(readFileSync(file, "utf8"));

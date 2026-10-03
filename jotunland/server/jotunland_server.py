@@ -38,6 +38,11 @@ _BLUEPRINT_REL = "homeassistant/blueprints/automation/jotunland/fenster_offen_he
 # im Container liegt homeassistant/ neben dem Server, im Repository eine Ebene höher
 BLUEPRINT_SRC = next((d / _BLUEPRINT_REL for d in (APP_DIR, APP_DIR.parent) if (d / _BLUEPRINT_REL).is_file()), APP_DIR / _BLUEPRINT_REL)
 BLUEPRINT_DST = CONFIG_DIR / "blueprints/automation/jotunland/fenster_offen_heizung_aus.yaml"
+# Hausbezogene Pakete (z. B. ac_thor.yaml) – werden mit dem Jotunland-Paket installiert
+HAUS_SRC = next((d / "haus" for d in (APP_DIR, APP_DIR.parent) if (d / "haus").is_dir()), APP_DIR / "haus")
+SECRETS_FILE = CONFIG_DIR / "secrets.yaml"
+SECRET_RE = re.compile(r"!secret\s+([A-Za-z0-9_]+)")
+SECRET_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 PORT = int(os.environ.get("JOTUNLAND_PORT", "8099"))
 DEV = os.environ.get("JOTUNLAND_DEV") == "1"
 INGRESS_IP = "172.30.32.2"
@@ -55,6 +60,46 @@ DEFAULTS: dict[str, float | str] = {
     "input_datetime.jotunland_heizen_start": "06:00:00",
     "input_datetime.jotunland_heizen_ende": "22:00:00",
 }
+
+
+class HaLoader(yaml.SafeLoader):
+    """Liest HA-YAML mit !secret, !include … – die Tags bleiben als Text erhalten."""
+
+
+for _tag in ("!secret", "!include", "!include_dir_named", "!include_dir_merge_named", "!include_dir_list", "!include_dir_merge_list", "!env_var", "!input"):
+    HaLoader.add_constructor(_tag, lambda loader, node, t=_tag: f"{t} {loader.construct_scalar(node)}")
+
+
+def haus_files() -> list[Path]:
+    # "_…" sind Vorlagen, jotunland.yaml gehört dem Paket selbst
+    return sorted(p for p in HAUS_SRC.glob("*.yaml") if not p.name.startswith("_") and p.name != "jotunland.yaml")
+
+
+def haus_target(package_path: Path, src: Path) -> Path:
+    """Gleicher Dateiname wie bisher per SSH eingespielt → ersetzt die alte Fassung sauber."""
+    return package_path.parent / src.name
+
+
+def haus_content(src: Path, merge: bool) -> str:
+    text = src.read_text()
+    if merge:  # !include_dir_merge_named braucht den Paketnamen als Wurzel
+        return f"{src.stem}:\n" + "\n".join(f"  {line}" if line else line for line in text.splitlines()) + "\n"
+    return text
+
+
+def secrets_needed() -> list[str]:
+    names: set[str] = set()
+    for f in haus_files():
+        names.update(SECRET_RE.findall(f.read_text()))
+    return sorted(names)
+
+
+def secrets_present() -> set[str]:
+    try:
+        data = yaml.load(SECRETS_FILE.read_text(), Loader=HaLoader) or {}
+        return set(data) if isinstance(data, dict) else set()
+    except (OSError, yaml.YAMLError):
+        return set()
 
 
 class ManualSetup(Exception):
@@ -340,9 +385,21 @@ async def status(_request: web.Request) -> web.Response:
     except OSError:
         setup = {"automatic": False, "note": "configuration.yaml nicht lesbar"}
     state = load_state()
+    try:
+        current_plan = plan_packages((CONFIG_DIR / "configuration.yaml").read_text())
+        pkg_path, merge = current_plan.package_path, current_plan.merge
+    except (ManualSetup, OSError):
+        pkg_path, merge = CONFIG_DIR / "packages" / "jotunland.yaml", False
+    haus = []
+    for src in haus_files():
+        dst = haus_target(pkg_path, src)
+        installed = dst.read_text() if dst.is_file() else None
+        haus.append({"name": src.name, "installed": installed is not None, "current": installed == haus_content(src, merge)})
+    present = secrets_present()
     return web.json_response(
         {
             "addon": True,
+            "haus": {"files": haus, "secrets_missing": [n for n in secrets_needed() if n not in present]},
             "package": {
                 "installed": path is not None,
                 "version": version,
@@ -395,6 +452,22 @@ async def install(request: web.Request) -> web.Response:
         await validate_package(parsed)
     except ConfigInvalid as err:
         return web.json_response({"ok": False, "error": f"Paket abgelehnt, nichts verändert: {err}"}, status=400)
+    except Exception as err:  # noqa: BLE001 – HA startet gerade o. Ä.
+        return web.json_response({"ok": False, "error": f"Home Assistant nicht erreichbar, nichts verändert: {err}"}, status=503)
+
+    # Hausregeln aus dem Add-on prüfen
+    missing = [n for n in secrets_needed() if n not in secrets_present()]
+    if missing:
+        return web.json_response({"ok": False, "error": f"Für die Hausregeln fehlen Geheimwerte in secrets.yaml: {', '.join(missing)} – im Assistenten eintragen."}, status=409)
+    for src in haus_files():
+        try:
+            haus_doc = yaml.load(src.read_text(), Loader=HaLoader)
+            if isinstance(haus_doc, dict):
+                await validate_package(haus_doc)
+        except (yaml.YAMLError, ConfigInvalid) as err:
+            return web.json_response({"ok": False, "error": f"Hausregel {src.name} abgelehnt, nichts verändert: {err}"}, status=400)
+        except Exception as err:  # noqa: BLE001
+            return web.json_response({"ok": False, "error": f"Home Assistant nicht erreichbar, nichts verändert: {err}"}, status=503)
 
     config_file = CONFIG_DIR / "configuration.yaml"
     try:
@@ -402,7 +475,8 @@ async def install(request: web.Request) -> web.Response:
     except ManualSetup as err:
         return web.json_response({"ok": False, "error": str(err), "manual": True}, status=409)
 
-    snapshot = _snapshot([config_file, plan.package_path, BLUEPRINT_DST])
+    haus_dst = [haus_target(plan.package_path, src) for src in haus_files()]
+    snapshot = _snapshot([config_file, plan.package_path, BLUEPRINT_DST, *haus_dst])
     backup_dir = _backup(snapshot)
     steps.append(f"Sicherung angelegt: {backup_dir.relative_to(CONFIG_DIR)}")
     try:
@@ -418,6 +492,9 @@ async def install(request: web.Request) -> web.Response:
         BLUEPRINT_DST.parent.mkdir(parents=True, exist_ok=True)
         BLUEPRINT_DST.write_text(BLUEPRINT_SRC.read_text())
         steps.append(f"Blueprint gespeichert: {BLUEPRINT_DST.relative_to(CONFIG_DIR)}")
+        for src, dst in zip(haus_files(), haus_dst):
+            dst.write_text(haus_content(src, plan.merge))
+            steps.append(f"Hausregel gespeichert: {dst.relative_to(CONFIG_DIR)}")
         await check_config()
         steps.append("Konfiguration geprüft: gültig")
     except Exception as err:  # noqa: BLE001
@@ -454,6 +531,26 @@ async def uninstall(_request: web.Request) -> web.Response:
     save_state(state)
     asyncio.create_task(restart_later())
     return web.json_response({"ok": True, "restarting": True})
+
+
+async def set_secrets(request: web.Request) -> web.Response:
+    """Trägt fehlende Geheimwerte (z. B. ac_thor_ip) in /config/secrets.yaml ein.
+
+    Nur Namen, die eine Hausregel wirklich verwendet, und nur neue – vorhandene
+    Werte werden nie überschrieben. Werte landen nicht im Protokoll.
+    """
+    body = await request.json()
+    allowed = set(secrets_needed()) - secrets_present()
+    values = {k: str(v) for k, v in (body or {}).items() if k in allowed and SECRET_NAME_RE.match(k) and str(v).strip()}
+    if not values:
+        return web.json_response({"ok": False, "error": "Keine passenden Werte"}, status=400)
+    _backup(_snapshot([SECRETS_FILE]))
+    old_text = SECRETS_FILE.read_text() if SECRETS_FILE.is_file() else ""
+    lines = [f"{k}: {json.dumps(v.strip(), ensure_ascii=False)}" for k, v in values.items()]
+    sep = "" if not old_text or old_text.endswith("\n") else "\n"
+    SECRETS_FILE.write_text(old_text + sep + "# eingetragen vom Jotunland-Add-on\n" + "\n".join(lines) + "\n")
+    LOG.info("Geheimwerte eingetragen: %s", ", ".join(values))
+    return web.json_response({"ok": True, "saved": sorted(values)})
 
 
 async def set_defaults(_request: web.Request) -> web.Response:
@@ -535,6 +632,7 @@ def make_app() -> web.Application:
     app.router.add_post("/jotunland/install", install)
     app.router.add_post("/jotunland/uninstall", uninstall)
     app.router.add_post("/jotunland/defaults", set_defaults)
+    app.router.add_post("/jotunland/secrets", set_secrets)
     if (WWW / "assets").is_dir():
         app.router.add_static("/assets", WWW / "assets")
 

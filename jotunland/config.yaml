@@ -1,5 +1,5 @@
 name: Jotunland
-version: "0.5.1"
+version: "0.6.0"
 slug: jotunland
 description: Smarthome-Oberfläche mit automatischer Geräteerkennung, PV-Überschussladen und Heizungssteuerung
 url: https://github.com/noledge5/jotunland-smarthome

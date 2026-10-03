@@ -416,3 +416,4 @@ textarea.input { resize: vertical; font-family: ui-monospace, monospace; font-si
 .toast[data-tone="bad"] { border-color: color-mix(in srgb, var(--bad) 60%, var(--border)); background: color-mix(in srgb, var(--bad) 12%, var(--surface)); }
 .toast[data-tone="ok"] { border-color: color-mix(in srgb, var(--ok) 60%, var(--border)); }
 @media (max-width: 860px) { .toasts { bottom: 84px; left: 16px; right: 16px; max-width: none; } }
+.secrets { display: flex; flex-direction: column; gap: 8px; max-width: 420px; }

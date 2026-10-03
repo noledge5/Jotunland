@@ -32,6 +32,39 @@ function Step({ n, done, title, children, actions }: { n: number; done: boolean;
   );
 }
 
+/** Fehlende Geheimwerte der Hausregeln (z. B. IP des AC THOR) direkt in secrets.yaml eintragen */
+function SecretsForm({ names }: { names: string[] }) {
+  const { addonApi, refreshAddon, notify } = useHass();
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    try {
+      await addonApi("secrets", values);
+      notify("Gespeichert in secrets.yaml", "ok");
+      await refreshAddon();
+    } catch (err) {
+      notify(err instanceof Error ? err.message : String(err), "bad");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="secrets">
+      <p className="hint bad">Die Hausregeln brauchen noch diese Werte (sie bleiben in deinem Home Assistant, nicht im Repo):</p>
+      {names.map((n) => (
+        <label key={n} className="field">
+          <span className="mono">{n}</span>
+          <input className="input" value={values[n] ?? ""} placeholder={/ip|host/.test(n) ? "z. B. 192.168.178.40" : ""} onChange={(e) => setValues({ ...values, [n]: e.target.value })} />
+        </label>
+      ))}
+      <button type="button" className="btn small" disabled={busy || !names.some((n) => values[n]?.trim())} onClick={save}>
+        In secrets.yaml speichern
+      </button>
+    </div>
+  );
+}
+
 /** Schritt für Schritt zum fertigen Zuhause – jeder offene Punkt mit Ein-Klick-Aktion. */
 export function Wizard({ goTo }: { goTo: (tab: string) => void }) {
   const { status, entities, devices, addon, isDemo, callService, registryAvailable, refreshAddon } = useHass();
@@ -166,6 +199,13 @@ export function Wizard({ goTo }: { goTo: (tab: string) => void }) {
         >
           PV-Überschussladen, Heizzeiten, Abwesenheit, Sommerbetrieb, Warmwasser-Nachheizung und Kesselmeldungen
           {st.windowRooms > 0 && `, dazu „Fenster offen → Heizung aus“ für ${st.windowRooms} ${st.windowRooms === 1 ? "Raum" : "Räume"}`}.
+          {addon?.haus && addon.haus.files.length > 0 && (
+            <p className="hint">
+              Hausregeln:{" "}
+              {addon.haus.files.map((f) => `${f.name}${f.current ? " ✓" : f.installed ? " (Update)" : " (neu)"}`).join(", ")}
+            </p>
+          )}
+          {addon?.haus && addon.haus.secrets_missing.length > 0 && <SecretsForm names={addon.haus.secrets_missing} />}
           {st.pkg.missing.length > 0 && !st.packageCurrent && (
             <p className="hint">Ohne Zuordnung (diese Teile bleiben inaktiv): {st.pkg.missing.map((m) => SLOTS[m]?.label ?? m).join(", ")}</p>
           )}

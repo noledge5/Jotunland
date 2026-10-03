@@ -8,10 +8,10 @@ Sprache im Projekt: Deutsch (Oberfläche, Kommentare, Commit-Nachrichten).
 | Gerät | Anbindung | Bekannte Details |
 |---|---|---|
 | Enphase PV (Envoy) | HA-Integration „Enphase Envoy“ | Ab Firmware 7 Token nötig; lokal `https://<IP>/production.json?details=1` (selbst signiertes Zertifikat) |
-| Hausbatterie: 2 × Enphase Encharge (10 kWh) | HA-Integration „Enphase Envoy“ | Leistung je Einheit `sensor.encharge_<sn>_leistung`, **+ = Entladen**. Summe als Vorlage `sensor.battery_power` (in `haus/ac_thor.yaml`). Der Envoy-„Verbrauch“ ist nur PV + Netz und sieht die Batterie nicht → Überschuss immer mit Netz **und** Batterie rechnen. Envoy-Werte kommen nur ~1×/Minute. Die Energiezähler (Bezug/Einspeisung über Lebensdauer) zählen **je Phase** – der Stromzähler saldiert über alle Phasen, Envoy-Bezug und -Einspeisung liegen daher beide zu hoch. Speichermodus „backup“ mit Netzladung (am 25.09.2026 kurz auf Eigenverbrauch, auf Wunsch zurück). **1KOMMA5° Heartbeat ist aktiv** (dynamischer Tarif, lädt günstig aus dem Netz) – Speichermodus und Netzladen gehören Heartbeat, HA fasst sie nicht an |
+| Hausbatterie: 2 × Enphase Encharge (10 kWh) | HA-Integration „Enphase Envoy“ | Leistung je Einheit `sensor.encharge_<sn>_leistung`, **+ = Entladen**. Summe als Vorlage `sensor.battery_power` (in `jotunland/haus/ac_thor.yaml`). Der Envoy-„Verbrauch“ ist nur PV + Netz und sieht die Batterie nicht → Überschuss immer mit Netz **und** Batterie rechnen. Envoy-Werte kommen nur ~1×/Minute. Die Energiezähler (Bezug/Einspeisung über Lebensdauer) zählen **je Phase** – der Stromzähler saldiert über alle Phasen, Envoy-Bezug und -Einspeisung liegen daher beide zu hoch. Speichermodus „backup“ mit Netzladung (am 25.09.2026 kurz auf Eigenverbrauch, auf Wunsch zurück). **1KOMMA5° Heartbeat ist aktiv** (dynamischer Tarif, lädt günstig aus dem Netz) – Speichermodus und Netzladen gehören Heartbeat, HA fasst sie nicht an |
 | eProWallbox Move (Free2move eSolutions, Art.-Nr. F2ME.EPROSE01CXX) | OCPP 1.6J – HACS „OCPP“ (lbbrhzn/ocpp); die Wallbox verbindet sich selbst zu `ws://<HA-IP>:9000/<Name>` | **Keine lokale Web-API**, kein eingebauter Zähler (Leistung nur geschätzt oder über externen Zähler). Modbus RTU nur per Kabel. OCPP-Backend in der eSolutions-App (Bluetooth) auf „Andere“ stellen – danach geht die Cloud-Steuerung der App nicht mehr, Bluetooth schon. Das Paket war ursprünglich für go-e gebaut (`geraete.mjs` erkennt go-e weiterhin) |
 | Kiwigrid gridBox | noch offen | Energiemanager, im Heimnetz gefunden – Rolle im Haus klären |
-| my-PV AC THOR 9s (steuert Heizstab/„Tubratherm“ für Warmwasser) | Modbus TCP, geregelt von `haus/ac_thor.yaml` (→ `/config/packages/ac_thor.yaml`) | Register 1000 schreibt den Sollwert (W), gelesen = Ist-Leistung; fährt ~60 W/s. Nur **eine** Modbus-Verbindung gleichzeitig (HA hält sie). Watchdog 60 s. Rohdaten auch per `http://<IP>/data.jsn` (Temperaturen in Zehntel-Grad). Vorrang: Haus → Batterie → Auto → Warmwasser. **Fühler `temp1` misst 10–20 K zu wenig** (Messwert 60 °C ≈ real 79 °C, steigt nach dem Heizen noch nach) → Abschaltung nach Messwert über `input_number.ac_thor_max_temp_messwert` (60 °C, 5 K Hysterese), gilt auch im Handbetrieb |
+| my-PV AC THOR 9s (steuert Heizstab/„Tubratherm“ für Warmwasser) | Modbus TCP, geregelt von `jotunland/haus/ac_thor.yaml` (→ `/config/packages/ac_thor.yaml`) | Register 1000 schreibt den Sollwert (W), gelesen = Ist-Leistung; fährt ~60 W/s. Nur **eine** Modbus-Verbindung gleichzeitig (HA hält sie). Watchdog 60 s. Rohdaten auch per `http://<IP>/data.jsn` (Temperaturen in Zehntel-Grad). Vorrang: Haus → Batterie → Auto → Warmwasser. **Fühler `temp1` misst 10–20 K zu wenig** (Messwert 60 °C ≈ real 79 °C, steigt nach dem Heizen noch nach) → Abschaltung nach Messwert über `input_number.ac_thor_max_temp_messwert` (60 °C, 5 K Hysterese), gilt auch im Handbetrieb |
 | Fröling Pelletkessel | noch offen – Fröling Connect (Cloud) oder Modbus | Warmwasser-Anforderung ist im Paket nur als Meldung umgesetzt (`script.jotunland_pellet_anfordern`) |
 | Zigbee (Heizkörperthermostate, Fensterkontakte …) | ZHA oder Zigbee2MQTT | Namen oft technisch (`0x…`, `TS0601`) – die Oberfläche schlägt bessere vor |
 
@@ -32,7 +32,9 @@ tools/                          Werkzeuge für die Arbeit im Heimnetz (Node ≥ 
   auswertung.mjs                Berichte aus echten Daten: energie, tage, profil, warmwasser, heizung, entscheidungen, export
   hass.mjs                      gemeinsame Verbindung zu HA (REST/WebSocket)
   geraete.mjs                   Geräte finden, alle Netzgeräte benennen, bekannte direkt auslesen (nur lesend)
-haus/                           hausbezogene Pakete (nicht im Git, Repo ist öffentlich)
+jotunland/haus/                 Hausregeln (z. B. ac_thor.yaml) + signale.json – im Repo, das Add-on
+                                installiert sie nach /config/packages/<gleicher Name>. Repo ist öffentlich:
+                                IPs, Passwörter, Tokens nur als `!secret name` (Wert in HA-secrets.yaml)
 lokal/                          Ausgaben der Werkzeuge (nicht im Git)
 ```
 
@@ -46,23 +48,26 @@ Zugangsdaten stehen in `.env.local` (Vorlage `.env.example`), nie im Code.
    Details mit `node tools/ha.mjs get <entity_id>`.
 3. Verhalten beobachten, bevor eine Automation gebaut wird:
    `node tools/ha.mjs watch "<muster>" 600` – z. B. wie schnell die PV-Leistung schwankt.
-4. Hausbezogene Automationen in `haus/jotunland_haus.yaml` schreiben (HA-Paketformat:
-   `automation:`, `script:`, `template:` …). Allgemeine Verbesserungen gehören in die Vorlage
-   `jotunland/homeassistant/packages/jotunland.yaml` – dort nur Platzhalter, keine echten IDs.
-5. `node tools/ha.mjs validate haus/jotunland_haus.yaml` – prüft jede Automation mit dem
+4. Hausbezogene Regeln in `jotunland/haus/<name>.yaml` schreiben (HA-Paketformat:
+   `automation:`, `script:`, `template:`, `modbus:` …). Geheimes nur per `!secret name` – fehlende
+   Werte trägt der Assistent des Add-ons in die `secrets.yaml` ein. Allgemeine Verbesserungen gehören
+   in die Vorlage `jotunland/homeassistant/packages/jotunland.yaml` – dort nur Platzhalter.
+5. `node tools/ha.mjs validate jotunland/haus/<name>.yaml` – prüft jede Automation mit dem
    HA-Validator und meldet unbekannte entity_ids.
-6. `node tools/ha.mjs deploy haus/jotunland_haus.yaml` – kopiert per SSH nach
-   `/config/packages/`, prüft, lädt neu und setzt bei Fehlern automatisch zurück.
+6. Schnell testen: `node tools/ha.mjs deploy jotunland/haus/<name>.yaml` – kopiert per SSH nach
+   `/config/packages/`, prüft, lädt neu, setzt bei Fehlern zurück. Dauerhaft ausliefern: committen,
+   Add-on-Version erhöhen, nach `jotunland-smarthome` main pushen → Home Assistant bietet das Update
+   an, „Aktualisieren“ im Assistenten spielt alle Hausregeln ein.
    `packages/jotunland.yaml` gehört dem Add-on – nicht überschreiben.
 7. Testen: `watch` für die Signale, `trace <automation>` für den letzten Durchlauf
    (welcher Zweig, welche Dienstaufrufe, welche Fehler).
 8. Bewerten über Tage: `node tools/auswertung.mjs warmwasser 7` (Heizenergie aus PV/Batterie/Netz,
    ungenutzte Einspeisung), `tage`, `profil 2026-06 2026-08`, `heizung`, `entscheidungen`.
-   Welche Entität welches Signal ist, steht in `haus/signale.json` (Vorlage `tools/signale.beispiel.json`).
+   Welche Entität welches Signal ist, steht in `jotunland/haus/signale.json` (Vorlage `tools/signale.beispiel.json`).
    Regelungen schreiben ihre Entscheidungen per `logbook.log` mit Namen „Jotunland …“ – bei neuen
    Regelungen genauso machen, damit `entscheidungen` und die Seite **Verlauf** sie als
    „Entscheidung“ zeigen (Meldung kurz und mit Grund, z. B. „Hand: Sollwert 3000 W“ oder
-   „Speicher voll (Messwert 60 °C) → 0 W“). Recorder hebt 90 Tage auf (`haus/messdaten.yaml`).
+   „Speicher voll (Messwert 60 °C) → 0 W“). Recorder hebt 90 Tage auf (`jotunland/haus/messdaten.yaml`).
 
 Wichtig: `check_config` von Home Assistant meldet fehlerhafte Automationen und Template-Sensoren
 **nicht** – deshalb immer `validate` vorher und das Systemprotokoll nachher (macht `deploy` selbst).
@@ -79,7 +84,8 @@ Wichtig: `check_config` von Home Assistant meldet fehlerhafte Automationen und T
   in ID oder Namen steht. Ein Handbetrieb sollte auch ohne Überschuss den eingestellten Wert
   regelmäßig schreiben (Watchdog 60 s!) und jede Sperre ins Logbuch schreiben.
 - `configuration.yaml` in Home Assistant nicht per SSH ändern – das Add-on richtet `packages` ein.
-- Nie `.env.local`, Tokens, `haus/` oder `lokal/` committen oder in Logs ausgeben.
+- Nie `.env.local`, Tokens, `secrets.yaml` oder `lokal/` committen oder in Logs ausgeben. In
+  `jotunland/haus/` keine IP-Adressen, Passwörter oder Tokens – nur `!secret`.
 - Vor dem Commit: `cd jotunland/frontend && npm run build` (Typprüfung) und bei Paketänderungen
   `node tools/ha.mjs validate jotunland/homeassistant/packages/jotunland.yaml`.
 - Nach Änderungen am Add-on `version` in `jotunland/config.yaml` erhöhen und `CHANGELOG.md`

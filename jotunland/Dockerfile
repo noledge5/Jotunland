@@ -14,6 +14,7 @@ FROM ${BUILD_FROM}
 RUN apk add --no-cache python3 py3-aiohttp py3-yaml
 COPY server/ /app/
 COPY homeassistant/ /app/homeassistant/
+COPY haus/ /app/haus/
 COPY --from=frontend /src/frontend/dist /app/www
 # with-contenv: unter s6 sieht das Programm sonst die Add-on-Umgebung (SUPERVISOR_TOKEN) nicht
 CMD ["/usr/bin/with-contenv", "python3", "-u", "/app/jotunland_server.py"]

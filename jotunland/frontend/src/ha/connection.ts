@@ -122,6 +122,8 @@ export interface AddonStatus {
   pending_defaults: boolean;
   /** Fehler, die HA beim Laden des Pakets gemeldet hat */
   load_errors: string[];
+  /** Hausregeln aus jotunland/haus/ und fehlende Geheimwerte (secrets.yaml) */
+  haus?: { files: { name: string; installed: boolean; current: boolean }[]; secrets_missing: string[] };
   last_install?: number;
 }
 
