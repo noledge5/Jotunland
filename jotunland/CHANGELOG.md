@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1
+- AC-THOR-Karte: Bei „Speicher voll“ stehen Messwert und Temperaturgrenze im Hinweis,
+  dazu, wie die Sperre wieder freigegeben wird – und eine Warnung, falls die Sperre
+  hängt (Messwert deutlich unter der Grenze)
+
 ## 0.5.0
 - Neue Seite **Verlauf**: wann AC THOR und Wallbox gelaufen sind (Zeitstrahl je Tag,
   Dauer, kWh, Ø/max Leistung) und ein Ereignisprotokoll aus dem Logbuch – Automationen,

@@ -128,6 +128,9 @@ export function AcThorCard() {
   const todayRuns = power ? runs[power.entity_id] ?? [] : [];
 
   // Warum heizt er nicht? Speicher voll sperrt auch den Handbetrieb.
+  // Temperaturgrenze der eigenen Regelung, z. B. input_number.ac_thor_max_temp_messwert
+  const limit = controls.find((c) => (c.domain === "input_number" || c.domain === "number") && c.unit === "°C" && /max|grenze|limit/.test(c.own));
+  const limitVal = limit ? num(limit.entity) : undefined;
   const full = infos.find((i) => i.domain === "binary_sensor" && MYPV.test(i.own) && /voll|full|sperr|block/.test(i.own) && i.entity.state === "on");
   // Handbetrieb: Auswahl "Modus = Hand" oder ein Schalter "…Handbetrieb…" = an
   const hand =
@@ -143,7 +146,19 @@ export function AcThorCard() {
         <Stat label="Heizstab" value={fmtPower(w)} />
       </div>
       <Bar value={t} max={tt ?? 70} tone="water" />
-      {full && <p className="hint bad">„{full.name}“ ist an – es wird nicht geheizt, auch nicht im Handbetrieb.</p>}
+      {full && (
+        <p className="hint bad">
+          „{full.name}“ ist an – deine Regelung heizt dann nicht, auch nicht im Handbetrieb.
+          {t !== undefined && limitVal !== undefined && (
+            <>
+              {" "}Messwert {fmtTemp(t)}, Grenze {fmtTemp(limitVal)}.
+              {t < limitVal - 5
+                ? " Der Messwert liegt deutlich unter der Grenze – die Sperre müsste eigentlich aus sein. Bitte die Regelung prüfen (Verlauf)."
+                : " Die Sperre geht erst wieder aus, wenn der Messwert um die Hysterese unter die Grenze fällt. Zum Freigeben die Grenze unten erhöhen."}
+            </>
+          )}
+        </p>
+      )}
       {handButIdle && (
         <p className="hint bad">
           Handbetrieb ist seit {fmtClock(handSince!)} an, aber der Heizstab nimmt keine Leistung auf. Mögliche Gründe: Temperaturgrenze, Modbus-Verbindung
